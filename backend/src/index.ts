@@ -14,6 +14,8 @@ import { cors } from "@elysiajs/cors";
 import { authRoutes } from "./routes/auth";
 import { examRoutes } from "./routes/exam";
 import { supervisorRoutes } from "./routes/supervisor";
+import { adminExamRoutes } from "./routes/admin/exams";
+import { adminQuestionRoutes } from "./routes/admin/questions";
 import { initSocket } from "./socket";
 import { getServerConfig } from "./lib/env";
 import { assertDbConnection } from "./db";
@@ -70,7 +72,12 @@ const app = new Elysia()
   })
   .get("/health", () => ({ status: "ok", time: new Date().toISOString() }))
   .group("/api", (app) =>
-    app.use(authRoutes).use(examRoutes).use(supervisorRoutes)
+    app
+      .use(authRoutes)
+      .use(examRoutes)
+      .use(supervisorRoutes)
+      .use(adminExamRoutes)
+      .use(adminQuestionRoutes)
   );
 
 // Compile Elysia routes before using .handle() outside of .listen().

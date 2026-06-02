@@ -18,6 +18,13 @@ const log = createLogger("Seed");
 
 const PASSWORD_HASH = await bcrypt.hash("student@123", 10);
 const SUPERVISOR_HASH = await bcrypt.hash("supervisor@123", 10);
+const ADMIN_HASH = await bcrypt.hash("admin@123", 10);
+
+const PASSWORD_BY_ROLE: Record<SeedRole, string> = {
+  student: PASSWORD_HASH,
+  supervisor: SUPERVISOR_HASH,
+  admin: ADMIN_HASH,
+};
 
 // ── Users ──────────────────────────────────────────────────────────────────
 type SeedRole = "student" | "supervisor" | "admin";
@@ -32,6 +39,7 @@ const seedUsers: {
   { id: "usr_1002", nis: "67890", name: "Budi Santoso",   role: "student",    groupId: "grp_7b" },
   { id: "usr_1003", nis: "99999", name: "Citra Lestari",  role: "student",    groupId: "grp_8a" },
   { id: "usr_9001", nis: "00001", name: "Pengawas Utama", role: "supervisor", groupId: null },
+  { id: "usr_8001", nis: "88888", name: "Administrator",  role: "admin",      groupId: null },
 ];
 
 // ── Groups ───────────────────────────────────────────────────────────────────
@@ -51,7 +59,7 @@ for (const g of seedGroups) {
 
 // Users are inserted after groups so the `group_id` foreign key resolves.
 for (const u of seedUsers) {
-  const password = u.role === "supervisor" ? SUPERVISOR_HASH : PASSWORD_HASH;
+  const password = PASSWORD_BY_ROLE[u.role];
   await db
     .insert(users)
     .values({
