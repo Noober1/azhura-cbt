@@ -1,148 +1,149 @@
-# Azhura CBT Exam Client (Tauri + React + TS)
+# Azhura CBT (Monorepo)
 
-Azhura CBT (Computer-Based Test) adalah aplikasi klien ujian desktop native super aman yang dibangun di atas **Tauri 2.x** dengan frontend **React 19**, **Zustand**, **Tailwind CSS v4**, dan **shadcn/ui**. 
+**Azhura CBT** (Computer-Based Test) adalah sistem ujian berbasis komputer yang aman dan tahan-offline untuk sekolah di Indonesia. Repo ini adalah **monorepo Bun workspaces** berisi dua frontend dan satu backend:
 
-Aplikasi ini dilengkapi dengan integrasi **Mock Service Worker (MSW v2)** dan **Socket.io Mock** untuk memfasilitasi pengujian alur kerja end-to-end tanpa memerlukan koneksi server backend nyata selama fase pengembangan.
+| Workspace | Paket | Stack | Peran |
+| :--- | :--- | :--- | :--- |
+| `apps/student` | `azhura-student` | Tauri 2.x + React 19 + Zustand + Tailwind v4 + shadcn/ui | Klien ujian siswa (desktop native, terkunci, offline-first) |
+| `apps/console` | `azhura-console` | Vite + React 19 + Tailwind v4 | Web admin + supervisor (role-gated) — _scaffold_ |
+| `packages/shared` | `@azhura/shared` | TypeScript | Sumber kebenaran tipe domain (anti-drift) |
+| `backend` | `azhura-exam-backend` | Elysia + Bun + Drizzle + MySQL + Socket.io + JWT | API HTTP & realtime |
 
----
-
-## 🚀 Fitur Utama
-
-1. **Autentikasi Aman & Handal**: Login berbasis NIS dan password ujian. Dilengkapi token management yang siap diintegrasikan dengan **Tauri Stronghold** untuk enkripsi tingkat tinggi di memori.
-2. **Offline-First Answer Cache (SQLite & LocalStorage)**: Setiap jawaban yang dipilih siswa otomatis tersimpan seketika ke database lokal (SQLite via `@tauri-apps/plugin-sql` jika berjalan di native frame, atau fallback ke `localStorage` jika dibuka di browser standar).
-3. **Sinkronisasi Otomatis (Connectivity Queue)**: Jika siswa mendadak kehilangan koneksi internet, jawaban tetap aman tersimpan offline. Ketika koneksi pulih, background sync queue otomatis mengunggah seluruh jawaban tertunda secara berurutan.
-4. **Sistem Pengawasan Real-time (WebSocket)**: Mendukung push notifications pengawas (broadcast alerts), force logout (kick), dan force submission dari panel supervisor.
-5. **Keamanan Ujian Tinggi (Anti-Cheat Engine)**:
-   - **Fullscreen Lock**: Memaksa aplikasi berjalan dalam layar penuh (fullscreen).
-   - **Focus Monitoring (Alt-Tab Detection)**: Mendeteksi jika siswa menab-out atau membuka jendela lain.
-   - **Keyboard Shortcut Blocker**: Memblokir pintasan terlarang (F12, refresh halaman, copy-paste, klik kanan, dll).
+> **Kenapa dipisah:** kode admin tidak boleh ikut ter-bundle ke klien ujian siswa (memperluas attack surface), dan Tauri bukan kendaraan tepat untuk panel admin (butuh akses browser & deploy instan). `packages/shared` menjaga kedua frontend tetap sinkron dengan kontrak yang sama.
 
 ---
 
-## 📂 Struktur Folder Scaffold
+## 🚀 Fitur Utama (Klien Siswa)
+
+1. **Autentikasi Aman**: Login berbasis NIS + password. Token siap diintegrasikan dengan **Tauri Stronghold** untuk enkripsi di memori.
+2. **Offline-First Answer Cache (SQLite & LocalStorage)**: Setiap jawaban tersimpan seketika ke DB lokal — SQLite via `@tauri-apps/plugin-sql` di native frame, atau fallback `localStorage` di browser.
+3. **Sinkronisasi Otomatis (Connectivity Queue)**: Saat koneksi putus jawaban tetap aman; ketika pulih, background sync queue mengunggah jawaban tertunda.
+4. **Pengawasan Real-time (WebSocket)**: Broadcast alert pengawas, force logout (kick), dan force submission dari panel supervisor.
+5. **Anti-Cheat Engine**:
+   - **Fullscreen Lock** — memaksa layar penuh.
+   - **Focus Monitoring** — mendeteksi Alt+Tab / pindah jendela.
+   - **Keyboard Shortcut Blocker** — memblokir F12, refresh, copy-paste, klik kanan, dll.
+   - _OS-level lockdown_ (kiosk window + Windows low-level keyboard hook + code signing) direncanakan di epic #24.
+6. **Cakupan per Kelas (Group Scoping)**: Siswa hanya melihat & dapat memulai ujian yang diperuntukkan bagi kelasnya (`exam_groups`); grup dibawa pada JWT.
+
+---
+
+## 📂 Struktur Monorepo
+
+```
+azhura-exam/                       # root workspace (bun workspaces)
+├── apps/
+│   ├── student/                   # azhura-student — klien ujian Tauri + React
+│   │   ├── src/                   # aplikasi React (lihat di bawah)
+│   │   ├── src-tauri/             # shell Rust/Tauri
+│   │   └── .env, .env.example, .env.local
+│   └── console/                   # azhura-console — web admin + supervisor (scaffold)
+├── packages/
+│   └── shared/                    # @azhura/shared — tipe domain bersama (TS, tanpa build)
+├── backend/                       # azhura-exam-backend — API Elysia + Drizzle + Socket.io
+├── package.json                   # workspaces + skrip orkestrasi
+└── bun.lock
+```
+
+Struktur aplikasi siswa (`apps/student/src`):
 
 ```
 src/
 ├── components/
-│   ├── auth/
-│   │   └── LoginForm.tsx          # Form login dengan react-hook-form + zod validation
-│   ├── exam/
-│   │   ├── ExamLayout.tsx          # Container layout utama (Sidebar + Soal + Topbar)
-│   │   ├── QuestionRenderer.tsx    # Penampil soal & opsi radio button
-│   │   ├── NavigationPanel.tsx     # Kontrol navigasi (Sebelumnya, Ragu-ragu, Kumpulkan)
-│   │   ├── TimerDisplay.tsx        # Indikator countdown (HH:MM:SS) dengan blinking alert
-│   │   ├── ExamSidebar.tsx         # Grid status nomor soal (belum/terjawab/ragu)
-│   │   └── SubmitConfirmation.tsx  # Modal AlertDialog konfirmasi pengumpulan ujian
-│   │   └── ResultPage.tsx          # Tampilan skor akhir dan breakdown statistik
-│   └── layout/
-│       └── AuthLayout.tsx          # Layout landing login dengan visual premium
-│
-├── hooks/
-│   ├── useExamTimer.ts            # Hook timer & auto-submit saat waktu habis
-│   └── useSocketEvent.ts          # Hook listener socket dengan auto-cleanup
-│
-├── lib/
-│   ├── api.ts                     # Axios instance dengan JWT injection & 401 auto-logout interceptor
-│   ├── socket.ts                  # Integrasi Socket.io real-time client
-│   ├── socket.mock.ts             # Mock socket emitter untuk memicu event pengawas dari console
-│   ├── storage.ts                 # Wrapper hybrid SQLite & LocalStorage fallback
-│   └── anti-cheat-config.ts       # Controller listeners pendeteksi kecurangan
-│
-├── mocks/
-│   ├── data/
-│   │   ├── users.ts               # List kredensial 3 siswa dummy
-│   │   └── questions.ts           # 10 soal ujian tiruan pilihan ganda lengkap
-│   ├── handlers/
-│   │   ├── auth.ts                # MSW http handler untuk auth endpoints
-│   │   └── exam.ts                # MSW http handler untuk exam endpoints & scoring
-│   └── browser.ts                 # Inisialisasi MSW worker browser
-│
-├── routes/
-│   └── index.tsx                  # Konfigurasi HashRouter & halaman dasbor ujian
-│
-├── stores/                        # Zustand Global State Management
-│   ├── auth.ts                    # State autentikasi & token
-│   ├── exam.ts                    # State lembar soal & SQLite persistence
-│   ├── connectivity.ts            # State jaringan & syncing queue
-│   ├── socket.ts                  # State real-time websocket status
-│   └── anti-cheat.ts              # State logs pelanggaran siswa
-│
-├── App.tsx                        # Root layout & Sonner Toast container
-└── main.tsx                       # Bootstrap & penyiapan MSW dev environment
+│   ├── auth/        # LoginForm
+│   ├── dashboard/   # DashboardPage, DashboardNavbar, ExamListTable, ParticipantCard, StartExamDialog
+│   ├── exam/        # ExamLayout, QuestionRenderer, TimerDisplay, ExamSidebar, NavigationPanel, SubmitConfirmation, ResultPage
+│   ├── layout/      # AuthLayout
+│   └── ui/          # primitives shadcn/ui
+├── hooks/           # useExamTimer, useSocketEvent
+├── lib/             # api.ts, socket.ts, storage.ts, anti-cheat-config.ts, errors.ts, logger.ts, utils.ts
+├── routes/          # HashRouter + protected routes
+├── stores/          # Zustand: auth, exam, connectivity, socket, anti-cheat
+├── types/           # re-export @azhura/shared
+├── App.tsx
+└── main.tsx
 ```
 
 ---
 
-## 🛠️ Panduan Pengembangan (Developer Flow)
+## 🏃 Menjalankan (dari root)
 
-### 1. Kredensial Siswa Dummy (Mock Mode)
-
-Gunakan kombinasi kredensial berikut untuk login di halaman utama:
-*   **NIS**: `12345` | **Password**: `student@123` *(Nama: Ahmad Faisal)*
-*   **NIS**: `67890` | **Password**: `student@123` *(Nama: Budi Santoso)*
-*   **NIS**: `99999` | **Password**: `student@123` *(Nama: Citra Lestari)*
-
-### 2. Menguji Event Real-time Pengawas (WebSockets)
-
-Kami telah mendaftarkan objek pembantu global `window.mockSocket` di browser konsol untuk memudahkan Anda melakukan simulasi tindakan pengawas dari server:
-1.  Buka console developer tools (F12) pada browser saat berada di halaman pengerjaan ujian.
-2.  **Kirim Pesan Pengawas**:
-    ```javascript
-    window.mockSocket.triggerAlert("Harap tenang, ujian tinggal 10 menit lagi!");
-    ```
-3.  **Keluarkan Siswa Secara Paksa (Kick)**:
-    ```javascript
-    window.mockSocket.triggerKick("Melakukan pelanggaran berat.");
-    ```
-4.  **Kumpulkan Jawaban Secara Paksa**:
-    ```javascript
-    window.mockSocket.triggerForceSubmit();
-    ```
-
----
-
-## ⚙️ Konfigurasi Environment & Peralihan ke Production
-
-Salin file `.env.example` menjadi `.env.local` untuk mengonfigurasi perilaku aplikasi:
+Semua skrip dijalankan dari **root** dan diteruskan ke workspace via `bun --filter`.
 
 ```bash
-cp .env.example .env.local
+bun install                  # install semua workspace + link @azhura/shared ke tiap app
+
+# Klien siswa (apps/student)
+bun run dev                  # Vite dev server (web, port 1420)
+bun run build                # tsc + vite build → apps/student/dist
+bun run tauri:dev            # Tauri desktop, hot reload
+bun run tauri:build          # installer native (.exe / .msi / .dmg / .AppImage)
+
+# Console admin/supervisor (apps/console)
+bun run console:dev          # Vite dev server (web, port 1430)
+bun run console:build        # tsc + vite build → apps/console/dist
+
+# Backend API (backend)
+bun run backend:dev          # Elysia hot-reload
+bun run backend:start        # Elysia (tanpa watch)
 ```
 
-### Penjelasan Variabel:
+Tugas DB (dari folder `backend/`): `bun run seed`, `bun run migrate`, `bun run db:generate`, `bun run db:studio`.
+
+> Bentuk filter yang dipakai adalah `bun --filter <pkg> <script>`. Anda juga bisa `cd` ke folder workspace dan menjalankan skripnya langsung.
+
+---
+
+## 🛠️ Panduan Pengembangan
+
+### 1. Siapkan Backend & Seed
+
+```bash
+bun run backend:dev          # jalankan API (default http://localhost:3000)
+cd backend && bun run seed   # isi data awal (users, groups, exams)
+```
+
+Kredensial siswa hasil seed:
+
+| NIS | Password | Nama | Kelas |
+| :--- | :--- | :--- | :--- |
+| `12345` | `student@123` | Ahmad Faisal | 7A |
+| `67890` | `student@123` | Budi Santoso | 7B |
+| `99999` | `student@123` | Citra Lestari | 8A |
+
+### 2. Jalankan Klien Siswa
+
+```bash
+cp apps/student/.env.example apps/student/.env.local   # sesuaikan bila perlu
+bun run dev          # atau: bun run tauri:dev untuk frame desktop
+```
+
+### 3. Event Real-time Pengawas
+
+Event pengawas (`alert-message`, `force-submit`, `kick`) dikirim oleh server Socket.io di `backend/src/socket.ts`. _(Catatan: lapisan mock MSW & `window.mockSocket` dari versi lama sudah dihapus — kini selalu memakai backend asli.)_
+
+---
+
+## ⚙️ Konfigurasi Environment (apps/student)
+
+Salin `apps/student/.env.example` → `apps/student/.env.local`. Backend punya env sendiri di `backend/.env.local`.
 
 | Variabel | Deskripsi | Default Dev | Produksi |
 | :--- | :--- | :--- | :--- |
-| `VITE_USE_MOCK` | Mengaktifkan MSW dan mock socket. | `true` | `false` |
-| `VITE_API_BASE_URL` | Endpoint HTTP API server pusat. | `http://localhost:3000/api` | `https://api.sekolah.sch.id/api` |
-| `VITE_SOCKET_URL` | Endpoint websocket server pusat. | `http://localhost:3000` | `https://api.sekolah.sch.id` |
-| `VITE_ANTI_CHEAT_ENABLED` | Mengaktifkan anti-cheat master. | `false` | `true` |
+| `VITE_API_BASE_URL` | Endpoint HTTP API; URL Socket.io diturunkan dari origin-nya (`/ws`). | `http://localhost:3000/api` | `https://api.sekolah.sch.id/api` |
+| `VITE_USE_MOCK` | **Legacy** — MSW sudah dihapus, kini no-op. | `true` | `false` |
+| `VITE_ANTI_CHEAT_ENABLED` | Master anti-cheat. | `false` | `true` |
 | `VITE_ANTI_CHEAT_FULLSCREEN` | Memaksa fullscreen. | `false` | `true` |
-| `VITE_ANTI_CHEAT_BLOCK_SHORTCUTS`| Memblokir devtools, refresh, klik kanan.| `false` | `true` |
-| `VITE_ANTI_CHEAT_DETECT_FOCUS_LOSS`| Mencatat event Alt+Tab siswa. | `false` | `true` |
+| `VITE_ANTI_CHEAT_BLOCK_SHORTCUTS` | Memblokir devtools, refresh, klik kanan. | `false` | `true` |
+| `VITE_ANTI_CHEAT_DETECT_FOCUS_LOSS` | Mencatat event Alt+Tab. | `false` | `true` |
+| `VITE_ANTI_CHEAT_DETECT_MULTI_MONITOR` | Memperingatkan multi-monitor. | `false` | `true` |
 
-> 💡 **Tips Pengujian Anti-Cheat**: Set `VITE_ANTI_CHEAT_ENABLED=true` pada `.env.local` Anda untuk menguji proteksi keyboard, layar penuh, dan blur deteksi secara langsung di browser lokal Anda!
+> 💡 Set `VITE_ANTI_CHEAT_ENABLED=true` untuk menguji proteksi keyboard, fullscreen, dan deteksi blur langsung di browser.
 
 ---
 
-## 🏃 Running Commands
+## 📚 Dokumentasi Lain
 
-**Menjalankan Local Dev Server (Web Browser)**:
-```bash
-bun run dev
-```
-
-**Membangun Bundle Client Produksi**:
-```bash
-bun run build
-```
-
-**Menjalankan Tauri Desktop Developer Frame**:
-```bash
-bun run tauri dev
-```
-
-**Membangun Aplikasi Native Installer (.exe / .msi)**:
-```bash
-bun run tauri build
-```
+- `CLAUDE.md` — Panduan arsitektur & alur kerja untuk Claude Code.
+- `API_CONTRACT.md` — Spesifikasi API HTTP & WebSocket.
+- `AGENT_PROMPT_CBT_SCAFFOLDING.md` — Panduan prompting agen AI untuk codebase ini.

@@ -66,7 +66,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (nis, password) => {
     set({ isLoading: true, error: null });
     try {
-      // Intercepted by MSW in mock mode, or sent to the real server in prod.
       const response = await api.post("/auth/login", { nis, password });
       const { token, userId, user } = response.data;
 

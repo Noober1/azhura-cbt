@@ -6,8 +6,7 @@
  * - Logs request failures with structured context for easy tracing.
  * - Performs an automatic logout + redirect on `401 Unauthorized` responses.
  *
- * In mock mode (`VITE_USE_MOCK=true`) these requests are intercepted by MSW;
- * otherwise they hit the real backend at `VITE_API_BASE_URL`.
+ * Requests hit the real backend at `VITE_API_BASE_URL`.
  */
 
 import axios from "axios";

@@ -4,79 +4,119 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Azhura CBT Exam Client** is a secure, offline-capable Computer-Based Test (CBT) application built with **Tauri 2.x** (desktop), **React 19**, **TypeScript**, and **Zustand** state management. It's designed for Indonesian schools and supports both desktop (via Tauri) and web deployments with high security features (anti-cheat engine, offline-first architecture, and encrypted credential storage).
+**Azhura CBT** is a secure, offline-capable Computer-Based Test (CBT) system for Indonesian schools. It is a **Bun-workspaces monorepo** containing two frontends and a backend:
+
+- **`apps/student`** — the exam client: **Tauri 2.x** (desktop) + **React 19** + **TypeScript** + **Zustand**, locked-down (anti-cheat, fullscreen, offline-first, encrypted credential storage). Installed on exam workstations.
+- **`apps/console`** — the admin + supervisor web app (Vite + React 19, role-gated). Currently a scaffold; real features land via the admin epic (#6) and proctoring work (Fase 4).
+- **`packages/shared`** — shared domain types (and, going forward, zod schemas, api-client, socket-client). Single source of truth so the two frontends never drift.
+- **`backend`** — **Elysia + Bun** API: MySQL/MariaDB via **Drizzle ORM**, **Socket.io** realtime, **JWT** auth (`@elysiajs/jwt`), bcrypt.
+
+> **Why the split:** admin/management code must NOT bundle into the student exam client (attack surface), and Tauri is the wrong delivery vehicle for the admin console (needs browser access + instant deploy). See `packages/shared` for the contract that keeps both sides aligned.
+
+## Repository Layout
+
+```
+azhura-exam/                       # workspace root — bun workspaces, orchestration scripts
+├── apps/
+│   ├── student/                   # pkg: azhura-student  (Tauri + React exam client)
+│   │   ├── src/                   # React app (see "Student App Structure")
+│   │   ├── src-tauri/             # Rust/Tauri shell (config uses paths relative to here)
+│   │   ├── index.html, vite.config.ts, tsconfig*.json
+│   │   ├── components.json        # shadcn/ui config
+│   │   └── .env, .env.example, .env.local
+│   └── console/                   # pkg: azhura-console  (admin + supervisor web app — scaffold)
+│       ├── src/                   # App.tsx, main.tsx, index.css
+│       ├── index.html, vite.config.ts (dev port 1430), tsconfig*.json
+├── packages/
+│   └── shared/                    # pkg: @azhura/shared  (no build step; consumed as TS source)
+│       └── src/
+│           ├── index.ts           # public entrypoint — import from "@azhura/shared"
+│           └── types/index.ts     # domain models (User, Question, ExamSession, …)
+├── backend/                       # pkg: azhura-exam-backend  (Elysia API)
+│   └── src/
+│       ├── index.ts, socket.ts, migrate.ts, seed.ts
+│       ├── db/                    # Drizzle schema, client
+│       ├── routes/                # auth, exam
+│       ├── middleware/            # requireAuth (JWT plugin)
+│       └── lib/                   # errors, logger, env
+├── package.json                   # root: workspaces + scripts
+└── bun.lock                       # single lockfile (stays at root)
+```
 
 ## Development Commands
 
+All commands run from the **repo root** and delegate to a workspace via `bun --filter`:
+
 ```bash
-# Local web development (Vite dev server)
-bun run dev
+bun install                  # install all workspaces, link @azhura/shared into each app
 
-# Build production bundle
-bun run build
+# Student exam client (apps/student)
+bun run dev                  # Vite dev server (web, port 1420)
+bun run build                # tsc + vite build → apps/student/dist
+bun run tauri:dev            # Tauri desktop, hot reload (native frame)
+bun run tauri:build          # native installer (.exe / .msi / .dmg / .AppImage)
 
-# Preview production build locally
-bun run preview
+# Admin/supervisor console (apps/console)
+bun run console:dev          # Vite dev server (web, port 1430)
+bun run console:build        # tsc + vite build → apps/console/dist
 
-# Tauri desktop development (hot reload, native frame)
-bun run tauri dev
-
-# Build native installer (.exe / .msi / .dmg / .AppImage)
-bun run tauri build
+# Backend API (backend)
+bun run backend:dev          # Elysia hot-reload server
+bun run backend:start        # Elysia (no watch)
 ```
 
-## Architecture Overview
+Backend-local DB tasks (run from `backend/`): `bun run seed`, `bun run migrate`, `bun run db:generate`, `bun run db:push`, `bun run db:studio`.
 
-### High-Level Structure
+> **Note on `bun --filter`:** the working form is `bun --filter <pkg> <script>` (used by the root scripts above). The bare `bun --filter <pkg> run` / `exec` forms do **not** match in this setup. You can also `cd` into a workspace and run its script directly.
+
+## Student App Structure (`apps/student/src`)
 
 ```
 src/
-├── components/          # React UI components organized by feature
+├── components/
 │   ├── auth/           # LoginForm
+│   ├── dashboard/      # DashboardPage, DashboardNavbar, ExamListTable, ParticipantCard, StartExamDialog
 │   ├── exam/           # ExamLayout, QuestionRenderer, TimerDisplay, ExamSidebar, NavigationPanel, SubmitConfirmation, ResultPage
-│   └── layout/         # AuthLayout, shared layout wrappers
+│   ├── layout/         # AuthLayout
+│   └── ui/             # shadcn/ui primitives
 ├── hooks/              # Custom React hooks (useExamTimer, useSocketEvent)
 ├── lib/                # Core utilities & integrations
 │   ├── api.ts          # Axios instance with JWT interceptors
 │   ├── socket.ts       # Socket.io client & event handling
-│   ├── socket.mock.ts  # Mock socket emitter for testing supervisor events
 │   ├── storage.ts      # Hybrid SQLite (native) + localStorage (web) wrapper
 │   ├── anti-cheat-config.ts  # Anti-cheat event listeners & monitoring
+│   ├── errors.ts       # Client error types
+│   ├── logger.ts       # Client logger
 │   └── utils.ts        # Helper utilities
-├── mocks/              # MSW (Mock Service Worker) setup for development
-│   ├── browser.ts      # MSW worker initialization
-│   ├── handlers/       # MSW http handlers (auth, exam endpoints)
-│   └── data/           # Mock data (users, questions)
-├── routes/             # React Router configuration (HashRouter with protected routes)
+├── routes/             # React Router config (HashRouter with protected routes)
 ├── stores/             # Zustand global state (auth, exam, connectivity, socket, anti-cheat)
-├── types/              # TypeScript type definitions (User, Question, ExamAnswer, etc.)
+├── types/              # Re-exports @azhura/shared (keeps `@/types` imports working)
 ├── App.tsx             # Root layout with Toaster (Sonner)
-└── main.tsx            # Bootstrap & MSW initialization
+└── main.tsx            # Bootstrap
 ```
 
-### State Management (Zustand Stores)
+### Shared Types (`packages/shared`)
+
+Domain models (`User`, `Question`, `QuestionOption`, `ExamAnswer`, `ExamSession`, `AvailableExam`, `ExamResult`, anti-cheat types, …) live in `packages/shared/src/types/index.ts` and are exported from `@azhura/shared`. `apps/student/src/types/index.ts` re-exports them, so existing `@/types` imports still resolve. Both frontends and the backend's API contract should stay aligned with these.
+
+### State Management (Zustand Stores — `apps/student/src/stores`)
 
 - **`auth.ts`**: Authentication state (token, user, login/logout, token validation)
-- **`exam.ts`**: Exam session & answer state (questions, current question index, answers, flags, timer, results)
+- **`exam.ts`**: Exam session & answer state (questions, current index, answers, flags, timer, results)
 - **`connectivity.ts`**: Network status & background sync queue for offline resilience
 - **`socket.ts`**: WebSocket connection state & real-time supervisor events (alerts, force submit, kick)
 - **`anti-cheat.ts`**: Anti-cheat violation tracking (focus loss, fullscreen exit, shortcut attempts)
 
 ### Key Design Patterns
 
-1. **Offline-First Storage**: Answers are automatically persisted to SQLite (native) or localStorage (web) before being synced to the server. The `connectivity` store manages background syncing when connection is restored.
+1. **Offline-First Storage**: Answers persist to SQLite (native) or localStorage (web) before syncing to the server. The `connectivity` store manages background syncing on reconnect.
+2. **Hybrid Storage Abstraction** (`storage.ts`): Detects Tauri context, uses SQLite if available, else falls back to localStorage — seamless web/desktop compatibility.
+3. **Real Backend (Elysia)**: The client talks to the `backend` API over HTTP (`lib/api.ts`) and Socket.io (`lib/socket.ts`). _(The old MSW mock layer has been removed; `VITE_USE_MOCK` in `.env.example` is legacy and currently a no-op — run `bun run backend:dev` for data.)_
+4. **Protected Routes**: `routes/index.tsx` defines a `<ProtectedRoute>` wrapper redirecting unauthenticated users to `/login`.
+5. **Real-time Events via Socket.io**: The `socket` store subscribes to supervisor events (`alert-message`, `force-submit`, `kick`) from `backend/src/socket.ts`.
+6. **Anti-Cheat Engine**: Configurable via `.env`. Monitors keyboard shortcuts (F12, Ctrl+R, …), fullscreen state, focus loss (Alt+Tab), and optionally multi-monitor. OS-level lockdown (kiosk window, low-level keyboard hook) is planned in epic #24.
 
-2. **Hybrid Storage Abstraction** (`storage.ts`): Detects Tauri context and uses SQLite if available, otherwise falls back to localStorage. This enables seamless web/desktop compatibility.
-
-3. **Mock Service Worker (MSW)**: In development mode (`VITE_USE_MOCK=true`), HTTP requests are intercepted by MSW handlers. This allows testing without a backend server. MSW is conditionally initialized in `main.tsx`.
-
-4. **Protected Routes**: `routes/index.tsx` defines a `<ProtectedRoute>` wrapper that redirects unauthenticated users to `/login`.
-
-5. **Real-time Events via Socket.io**: The `socket` store subscribes to supervisor events (`alert-message`, `force-submit`, `kick`) from the server.
-
-6. **Anti-Cheat Engine**: Configurable via `.env` variables. Monitors keyboard shortcuts (F12, Ctrl+R, etc.), fullscreen state, focus loss (Alt+Tab), and optionally multi-monitor detection.
-
-## Routing & Pages
+## Routing & Pages (student)
 
 | Route | Component | Protected | Purpose |
 |-------|-----------|-----------|---------|
@@ -87,126 +127,99 @@ src/
 
 ## Configuration (Environment Variables)
 
-Create a `.env.local` file from `.env.example`:
+Each frontend and the backend has its **own** env. For the student client, copy `apps/student/.env.example` → `apps/student/.env.local`. The backend has `backend/.env.local`.
 
-```bash
-cp .env.example .env.local
-```
-
-Key variables:
+Student (`apps/student`) key variables:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `VITE_USE_MOCK` | `true` | Enable MSW mock handlers & mock socket events |
-| `VITE_API_BASE_URL` | `http://localhost:3000/api` | HTTP API endpoint; Socket.io URL diturunkan otomatis dari origin-nya (`/ws`) |
+| `VITE_API_BASE_URL` | `http://localhost:3000/api` | HTTP API endpoint; Socket.io URL is derived from its origin (`/ws`) |
+| `VITE_USE_MOCK` | `true` | **Legacy** — MSW was removed; currently a no-op |
 | `VITE_ANTI_CHEAT_ENABLED` | `false` | Activate anti-cheat engine |
 | `VITE_ANTI_CHEAT_FULLSCREEN` | `false` | Enforce fullscreen mode |
 | `VITE_ANTI_CHEAT_BLOCK_SHORTCUTS` | `false` | Block keyboard shortcuts (F12, refresh, etc.) |
 | `VITE_ANTI_CHEAT_DETECT_FOCUS_LOSS` | `false` | Detect & log Alt+Tab / window blur |
 | `VITE_ANTI_CHEAT_DETECT_MULTI_MONITOR` | `false` | Warn if multiple monitors detected |
 
-## Mock Development Credentials
+## Development Credentials (backend seed)
 
-When `VITE_USE_MOCK=true`, use these credentials to login:
+Run `bun run backend:dev` and seed the DB (`cd backend && bun run seed`). Seeded students:
 
-- **NIS**: `12345` | **Password**: `student@123` (Ahmad Faisal)
-- **NIS**: `67890` | **Password**: `student@123` (Budi Santoso)
-- **NIS**: `99999` | **Password**: `student@123` (Citra Lestari)
+- **NIS**: `12345` | **Password**: `student@123` (Ahmad Faisal — Kelas 7A)
+- **NIS**: `67890` | **Password**: `student@123` (Budi Santoso — Kelas 7B)
+- **NIS**: `99999` | **Password**: `student@123` (Citra Lestari — Kelas 8A)
 
-## Testing Supervisor Events (Browser Console)
-
-When logged into the exam page with mock mode enabled, open DevTools (F12) and use:
-
-```javascript
-// Send supervisor alert message
-window.mockSocket.triggerAlert("Ujian tinggal 10 menit!");
-
-// Force-kick student from exam
-window.mockSocket.triggerKick("Melakukan pelanggaran berat.");
-
-// Force student to submit immediately
-window.mockSocket.triggerForceSubmit();
-```
-
-These trigger mock socket events emitted from the server side.
+Students only see/start exams allowed for their group (`exam_groups`); the group is carried on the JWT.
 
 ## API Contract
 
-See `API_CONTRACT.md` for full HTTP request/response specifications:
+See `API_CONTRACT.md` for full HTTP request/response specs:
 
 - `POST /auth/login` — Student authentication
 - `GET /auth/validate` — Token validation
+- `GET /exams` — List exams the caller may take (group-scoped for students)
 - `GET /exams/:examId/questions` — Fetch questions list
+- `POST /exams/:examId/sessions` — Create a timed session (group-validated)
 - `POST /exams/:examId/answer` — Submit individual answer
-- `POST /exams/:examId/submit` — Final exam submission & scoring
+- `POST /exams/:examId/submit` — Final submission & scoring
 
-WebSocket events (Socket.io):
-- `alert-message` — Supervisor alert to student
-- `force-submit` — Force exam submission
-- `kick` — Force student logout
+WebSocket events (Socket.io): `alert-message`, `force-submit`, `kick`.
 
 ## Common Development Tasks
 
-### Add a New Store (Zustand)
+### Add a Shared Type
 
-1. Create `src/stores/my-feature.ts`
-2. Define interface extending state shape
-3. Use `create<MyState>((set, get) => ({ ... }))`
-4. Import & use hook in components: `const state = useMyFeatureStore()`
+1. Add/extend the interface in `packages/shared/src/types/index.ts`.
+2. It's exported via `@azhura/shared` automatically; consume it in either frontend.
 
-**Note**: Zustand is preferred over Context/Redux for simplicity. No async middleware needed—handle side effects in effects or callbacks.
+### Add a New Store (Zustand) — student
+
+1. Create `apps/student/src/stores/my-feature.ts`
+2. Define the state interface, then `create<MyState>((set, get) => ({ ... }))`
+3. Use in components: `const state = useMyFeatureStore()`
 
 ### Add a New API Endpoint
 
-1. Add MSW handler to `src/mocks/handlers/exam.ts` (or create new handler file)
-2. Export handler and import in `src/mocks/browser.ts`
-3. Add request/response types to `src/types/index.ts`
-4. Call via `api.post()` or `api.get()` from axios instance (`src/lib/api.ts`)
+1. Add the route in `backend/src/routes/` (or a new route file), wire it in `backend/src/index.ts`.
+2. Add/adjust request/response types in `packages/shared/src/types/index.ts`.
+3. Call it via the axios instance (`apps/student/src/lib/api.ts`) from the client.
 
-### Test Offline Storage
+### Test Offline Storage (student)
 
-1. Set `VITE_USE_MOCK=true` in `.env.local`
-2. Login and start exam, select some answers
-3. Open DevTools Network tab and throttle to "Offline"
-4. Select more answers; they should persist to localStorage
-5. Refresh page; answers should restore from localStorage
-6. Go back online (undo throttle); background sync queue should attempt upload
+1. Run the backend + student client; login and start an exam, select some answers.
+2. DevTools → Network → throttle to "Offline"; select more answers (they persist to localStorage).
+3. Refresh — answers restore from localStorage.
+4. Go back online — the background sync queue attempts upload.
 
-### Test Anti-Cheat Features
+### Test Anti-Cheat Features (student)
 
-1. Set `VITE_ANTI_CHEAT_ENABLED=true` in `.env.local`
-2. Set `VITE_ANTI_CHEAT_FULLSCREEN=true` to force fullscreen
-3. Set `VITE_ANTI_CHEAT_DETECT_FOCUS_LOSS=true` to log Alt+Tab
-4. Set `VITE_ANTI_CHEAT_BLOCK_SHORTCUTS=true` to prevent F12, Ctrl+R, etc.
-5. Start exam and try Alt+Tab or F12—check console for violations logged to `anti-cheat` store
+1. In `apps/student/.env.local`, set `VITE_ANTI_CHEAT_ENABLED=true` (+ `_FULLSCREEN`, `_DETECT_FOCUS_LOSS`, `_BLOCK_SHORTCUTS` as needed).
+2. Start an exam, try Alt+Tab / F12 — violations are logged to the `anti-cheat` store.
 
 ## TypeScript Path Aliases
 
-Import paths are aliased via `tsconfig.json`:
+Each app has its own `tsconfig.json` with `@/* → ./src/*`. Cross-package code is imported via the workspace package name, e.g. `import type { AvailableExam } from "@azhura/shared"`.
 
-```typescript
-import { useExamStore } from "@/stores/exam"  // not ../../../stores/exam
-```
+## Styling (student & console)
 
-## Styling
-
-- **Framework**: Tailwind CSS v4 via `@tailwindcss/vite` plugin
-- **Components**: shadcn/ui (headless, composable)
-- **CSS Variables**: Design tokens defined in `src/index.css`
-- **Fonts**: Geist Variable font from `@fontsource-variable/geist`
+- **Framework**: Tailwind CSS v4 via `@tailwindcss/vite`
+- **Components**: shadcn/ui (student: `apps/student/components.json`)
+- **CSS Variables**: design tokens in `apps/student/src/index.css`
+- **Fonts**: Geist Variable from `@fontsource-variable/geist`
 
 ## Notable Dependencies
 
 | Package | Purpose |
 |---------|---------|
-| `@tauri-apps/api` | Tauri JS bindings for OS integration |
-| `@tauri-apps/plugin-sql` | SQLite database access in native mode |
-| `@tauri-apps/plugin-stronghold` | Encrypted credential storage |
+| `@tauri-apps/api` | Tauri JS bindings (student) |
+| `@tauri-apps/plugin-sql` | SQLite access in native mode (student) |
+| `@tauri-apps/plugin-stronghold` | Encrypted credential storage (student) |
 | `axios` | HTTP client with JWT interceptors |
-| `socket.io-client` | WebSocket real-time communication |
+| `socket.io-client` / `socket.io` | WebSocket realtime (client / backend) |
 | `zustand` | Lightweight state management |
 | `react-hook-form` + `zod` | Form validation & submission |
-| `msw` | Mock Service Worker for API mocking |
+| `drizzle-orm` + `mysql2` | Backend ORM + MySQL driver |
+| `elysia` + `@elysiajs/jwt` | Backend framework + JWT auth |
 | `sonner` | Toast notifications |
 | `shadcn/ui` + `radix-ui` | Accessible UI components |
 | `lucide-react` | Icon library |
@@ -214,38 +227,37 @@ import { useExamStore } from "@/stores/exam"  // not ../../../stores/exam
 
 ## Important Caveats & TODOs
 
-1. **Stronghold Integration** (auth.ts): Token encryption in Tauri is stubbed with `// TODO`. Production Tauri deployment should integrate `@tauri-apps/plugin-stronghold` to securely store JWT tokens.
-
-2. **Real API Integration** (auth.ts, exam.ts): Many stores conditionally use mock scoring logic when `VITE_USE_MOCK=true`. In production, swap this for real API calls.
-
-3. **Connectivity Queue** (connectivity.ts): Background sync is not fully wired up. `submitAnswer()` saves locally but does not push to server in real time; this is by design (offline-first). Background syncing should batch pending answers and retry on reconnection.
-
-4. **Anti-Cheat Logging**: Violations are logged to the `anti-cheat` store but not uploaded to server. Production should periodically push violation logs to a supervisor dashboard endpoint.
-
-5. **SessionStorage vs LocalStorage**: Currently using `localStorage` for persistence. Consider `sessionStorage` for session-scoped data if exams should be single-use per browser tab.
+1. **Stronghold Integration** (`auth.ts`): Token encryption in Tauri is stubbed (`// TODO`). Production should integrate `@tauri-apps/plugin-stronghold` to store JWTs securely.
+2. **Connectivity Queue** (`connectivity.ts`): Background sync is not fully wired; `submitAnswer()` saves locally but does not push in real time (offline-first by design). Should batch pending answers and retry on reconnect.
+3. **Anti-Cheat Logging**: Violations are logged to the `anti-cheat` store but not uploaded to the server. Production should push violation logs to a supervisor endpoint.
+4. **Console is a scaffold**: `apps/console` only proves the workspace wiring. Real admin/supervisor features are tracked in GitHub issues (epic #6 + Fase 4).
+5. **OS-level lockdown** (epic #24): kiosk window (#26) + Windows low-level keyboard hook (#27) + code signing (#28) are planned, not yet implemented.
 
 ## Debugging Tips
 
-- **MSW Interception**: If requests aren't being mocked, check that `VITE_USE_MOCK=true` and MSW worker has started (check Network tab in DevTools for `mockServiceWorker.js`).
-- **Store State**: Use React DevTools extension + Zustand plugin to inspect store snapshots and time-travel debug.
-- **Offline Simulation**: DevTools Network tab → Throttling → "Offline" to test connectivity queue behavior.
-- **Socket Events**: Check browser console for socket connection logs and emitted events.
-- **Tauri Context**: In `anti-cheat-config.ts`, detection of Tauri is done via `__TAURI_INTERNALS__` check; ensure this is available when running in native mode.
+- **Store State**: React DevTools + Zustand plugin to inspect snapshots / time-travel.
+- **Offline Simulation**: DevTools Network → Throttling → "Offline".
+- **Socket Events**: Check the browser console for socket connection logs.
+- **Tauri Context**: In `anti-cheat-config.ts`, Tauri is detected via the `__TAURI_INTERNALS__` check.
 
 ## Build & Deployment
 
-### Web Deployment
+### Student — Web
 
 ```bash
-bun run build
-# Output: dist/ (serve statically)
+bun run build                # → apps/student/dist (serve statically)
 ```
 
-### Tauri Desktop Build
+### Student — Tauri Desktop
 
 ```bash
-bun run tauri build
-# Output: src-tauri/target/release/bundle/ (installers per OS)
+bun run tauri:build          # → apps/student/src-tauri/target/release/bundle/ (installers per OS)
+```
+
+### Console — Web
+
+```bash
+bun run console:build        # → apps/console/dist (serve statically)
 ```
 
 ## Additional Documentation

@@ -2,7 +2,6 @@
  * Azhura CBT App - Browser Entry Point
  *
  * Mounts the React application into the `#root` element under StrictMode.
- * (MSW mock-worker startup, when enabled, is initialized before render.)
  */
 
 import React from "react";

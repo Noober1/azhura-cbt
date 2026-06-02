@@ -1,7 +1,10 @@
 /**
- * Tauri CBT App - Core Type Definitions
- * Represents the baseline data models for user authentication, exam session,
- * questions, answers, and anti-cheat tracking.
+ * Azhura CBT - Core Type Definitions (shared)
+ *
+ * Single source of truth for domain models shared across the student client
+ * (`apps/student`), the admin/supervisor console (`apps/console`), and aligned
+ * with the backend (`backend/src/db/schema.ts`). Keep this in sync with the API
+ * contract so the two frontends never drift.
  */
 
 export interface User {
