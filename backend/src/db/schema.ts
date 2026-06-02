@@ -19,6 +19,7 @@ import {
   int,
   mysqlEnum,
   mysqlTable,
+  primaryKey,
   text,
   timestamp,
   tinyint,
@@ -36,7 +37,17 @@ export const users = mysqlTable("users", {
   role: mysqlEnum("role", ["student", "supervisor", "admin"])
     .notNull()
     .default("student"),
+  /** The group this user belongs to; null for supervisors/admins. */
+  groupId: varchar("group_id", { length: 36 }).references(() => groups.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/** A named group of students (e.g. a class or cohort). */
+export const groups = mysqlTable("groups", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 30 }).notNull(),
 });
 
 /** An exam definition (title + allotted duration). */
@@ -44,9 +55,34 @@ export const exams = mysqlTable("exams", {
   id: varchar("id", { length: 36 }).primaryKey(),
   title: varchar("title", { length: 200 }).notNull(),
   durationMinutes: int("duration_minutes").notNull().default(30),
-  isActive: tinyint("is_active").notNull().default(1),
+  isActive: tinyint("is_active").notNull().default(0),
+  token: varchar("token", { length: 5 }),
+  expiredAt: timestamp("expired_at").notNull().defaultNow(),
+  randomizeQuestion: tinyint("randomize_question").notNull().default(1),
+  randomizeAnswer: tinyint("randomize_answer").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+/**
+ * Junction table for the many-to-many between exams and groups: which groups
+ * are allowed to take which exam. The `(exam_id, group_id)` pair is the primary
+ * key so a group can't be linked to the same exam twice, and both foreign keys
+ * cascade so links clean up when an exam or group is deleted.
+ */
+export const examGroups = mysqlTable(
+  "exam_groups",
+  {
+    examId: varchar("exam_id", { length: 36 })
+      .notNull()
+      .references(() => exams.id, { onDelete: "cascade" }),
+    groupId: varchar("group_id", { length: 36 })
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.examId, table.groupId] }),
+  })
+);
 
 /**
  * A question belonging to an exam. `correctOptionId` is the answer key and must
@@ -127,13 +163,25 @@ export const cheatLogs = mysqlTable("cheat_logs", {
 
 // ── Relations (enable Drizzle's relational query API) ───────────────────────
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   sessions: many(examSessions),
+  group: one(groups, { fields: [users.groupId], references: [groups.id] }),
+}));
+
+export const groupsRelations = relations(groups, ({ many }) => ({
+  examGroups: many(examGroups),
+  users: many(users),
 }));
 
 export const examsRelations = relations(exams, ({ many }) => ({
   questions: many(questions),
   sessions: many(examSessions),
+  examGroups: many(examGroups),
+}));
+
+export const examGroupsRelations = relations(examGroups, ({ one }) => ({
+  exam: one(exams, { fields: [examGroups.examId], references: [exams.id] }),
+  group: one(groups, { fields: [examGroups.groupId], references: [groups.id] }),
 }));
 
 export const questionsRelations = relations(questions, ({ one, many }) => ({
@@ -175,7 +223,9 @@ export const cheatLogsRelations = relations(cheatLogs, ({ one }) => ({
 
 /** Convenience row types inferred from the schema. */
 export type User = typeof users.$inferSelect;
+export type Group = typeof groups.$inferSelect;
 export type Exam = typeof exams.$inferSelect;
+export type ExamGroup = typeof examGroups.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type ExamSession = typeof examSessions.$inferSelect;

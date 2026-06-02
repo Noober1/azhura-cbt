@@ -8,6 +8,20 @@
       "when": 1780317899666,
       "tag": "0000_wide_black_bird",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1780398424287,
+      "tag": "0001_bent_tigra",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1780398743277,
+      "tag": "0002_colorful_jane_foster",
+      "breakpoints": true
     }
   ]
 }

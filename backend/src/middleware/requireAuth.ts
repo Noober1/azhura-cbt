@@ -17,6 +17,8 @@ export interface JwtPayload {
   userId: string;
   nis: string;
   role: string;
+  /** The student's group; "" for supervisors/admins (no group). */
+  groupId: string;
 }
 
 export const authPlugin = new Elysia({ name: "auth-plugin" })

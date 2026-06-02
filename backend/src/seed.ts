@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
 import { db, pool, schema } from "./db";
 import { createLogger } from "./lib/logger";
 
-const { users, exams, questions, options } = schema;
+const { users, groups, exams, examGroups, questions, options } = schema;
 
 const log = createLogger("Seed");
 
@@ -21,19 +21,48 @@ const SUPERVISOR_HASH = await bcrypt.hash("supervisor@123", 10);
 
 // ── Users ──────────────────────────────────────────────────────────────────
 type SeedRole = "student" | "supervisor" | "admin";
-const seedUsers: { id: string; nis: string; name: string; role: SeedRole }[] = [
-  { id: "usr_1001", nis: "12345", name: "Ahmad Faisal",   role: "student" },
-  { id: "usr_1002", nis: "67890", name: "Budi Santoso",   role: "student" },
-  { id: "usr_1003", nis: "99999", name: "Citra Lestari",  role: "student" },
-  { id: "usr_9001", nis: "00001", name: "Pengawas Utama", role: "supervisor" },
+const seedUsers: {
+  id: string;
+  nis: string;
+  name: string;
+  role: SeedRole;
+  groupId: string | null;
+}[] = [
+  { id: "usr_1001", nis: "12345", name: "Ahmad Faisal",   role: "student",    groupId: "grp_7a" },
+  { id: "usr_1002", nis: "67890", name: "Budi Santoso",   role: "student",    groupId: "grp_7b" },
+  { id: "usr_1003", nis: "99999", name: "Citra Lestari",  role: "student",    groupId: "grp_8a" },
+  { id: "usr_9001", nis: "00001", name: "Pengawas Utama", role: "supervisor", groupId: null },
 ];
 
+// ── Groups ───────────────────────────────────────────────────────────────────
+const seedGroups: { id: string; name: string }[] = [
+  { id: "grp_7a", name: "Kelas 7A" },
+  { id: "grp_7b", name: "Kelas 7B" },
+  { id: "grp_8a", name: "Kelas 8A" },
+];
+
+for (const g of seedGroups) {
+  await db
+    .insert(groups)
+    .values({ id: g.id, name: g.name })
+    .onDuplicateKeyUpdate({ set: { name: g.name } });
+  log.info(`Group upserted: ${g.name} (${g.id})`);
+}
+
+// Users are inserted after groups so the `group_id` foreign key resolves.
 for (const u of seedUsers) {
   const password = u.role === "supervisor" ? SUPERVISOR_HASH : PASSWORD_HASH;
   await db
     .insert(users)
-    .values({ id: u.id, nis: u.nis, password, name: u.name, role: u.role })
-    .onDuplicateKeyUpdate({ set: { name: u.name } });
+    .values({
+      id: u.id,
+      nis: u.nis,
+      password,
+      name: u.name,
+      role: u.role,
+      groupId: u.groupId,
+    })
+    .onDuplicateKeyUpdate({ set: { name: u.name, groupId: u.groupId } });
   log.info(`User upserted: ${u.name} (${u.nis})`);
 }
 
@@ -54,6 +83,8 @@ interface SeedExam {
    * existing data upserts cleanly; new exams namespace their IDs.
    */
   idPrefix: string;
+  /** `groups.id`s allowed to take this exam (seeded into `exam_groups`). */
+  allowedGroups: string[];
   questions: SeedQuestion[];
 }
 
@@ -219,6 +250,7 @@ const seedExams: SeedExam[] = [
     title: "Ujian Akhir Semester - Pemrograman & Logika Komputer",
     durationMinutes: 30,
     idPrefix: "",
+    allowedGroups: ["grp_7a", "grp_7b"],
     questions: programmingQuestions,
   },
   {
@@ -226,6 +258,7 @@ const seedExams: SeedExam[] = [
     title: "Ujian Bahasa Inggris - English Proficiency Test",
     durationMinutes: 30,
     idPrefix: "eng_",
+    allowedGroups: ["grp_8a"],
     questions: englishQuestions,
   },
 ];
@@ -240,6 +273,19 @@ for (const exam of seedExams) {
     })
     .onDuplicateKeyUpdate({ set: { title: exam.title } });
   log.info(`Exam upserted: ${exam.id}`);
+
+  // Link exam to its allowed groups via the junction table.
+  if (exam.allowedGroups.length > 0) {
+    await db
+      .insert(examGroups)
+      .values(
+        exam.allowedGroups.map((groupId) => ({ examId: exam.id, groupId }))
+      )
+      .onDuplicateKeyUpdate({ set: { examId: sql`values(${examGroups.examId})` } });
+    log.info(
+      `[${exam.id}] Linked to groups: ${exam.allowedGroups.join(", ")}`
+    );
+  }
 
   for (let qi = 0; qi < exam.questions.length; qi++) {
     const q = exam.questions[qi]!;

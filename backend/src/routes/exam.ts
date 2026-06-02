@@ -16,10 +16,15 @@ import { randomUUID } from "crypto";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "../db";
 import { authPlugin } from "../middleware/requireAuth";
-import { NotFoundError, ConflictError, GoneError } from "../lib/errors";
+import {
+  NotFoundError,
+  ConflictError,
+  GoneError,
+  ForbiddenError,
+} from "../lib/errors";
 import { createLogger } from "../lib/logger";
 
-const { exams, questions, options, examSessions, answers } = schema;
+const { exams, questions, options, examSessions, answers, examGroups } = schema;
 
 const log = createLogger("Exam");
 
@@ -28,20 +33,44 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
   /**
    * GET /api/exams
-   * Lists the active exams a student may take, with a live question count.
-   * Returns summaries only — no question content or answer keys. Backs the
-   * dashboard exam table (`AvailableExam[]` on the client).
+   * Lists the active exams the caller may take, with a live question count.
+   * Students only see exams whose allowed groups (`exam_groups`) include their
+   * own group; supervisors/admins see every active exam. Returns summaries
+   * only — no question content or answer keys. Backs the dashboard exam table
+   * (`AvailableExam[]` on the client).
    */
-  .get("/", async () => {
-    const rows = await db
-      .select({
-        id: exams.id,
-        title: exams.title,
-        durationMinutes: exams.durationMinutes,
-        totalQuestions: sql<number>`count(${questions.id})`,
-      })
+  .get("/", async ({ user }) => {
+    // Students are scoped to their own group (carried on the JWT); a student
+    // with no group sees nothing. Supervisors/admins see every active exam.
+    let restrictGroupId: string | null = null;
+    if (user.role === "student") {
+      restrictGroupId = user.groupId || null;
+      if (!restrictGroupId) return [];
+    }
+
+    const projection = {
+      id: exams.id,
+      title: exams.title,
+      durationMinutes: exams.durationMinutes,
+      totalQuestions: sql<number>`count(distinct ${questions.id})`,
+    };
+
+    const base = db
+      .select(projection)
       .from(exams)
-      .leftJoin(questions, eq(questions.examId, exams.id))
+      .leftJoin(questions, eq(questions.examId, exams.id));
+
+    const scoped = restrictGroupId
+      ? base.innerJoin(
+          examGroups,
+          and(
+            eq(examGroups.examId, exams.id),
+            eq(examGroups.groupId, restrictGroupId)
+          )
+        )
+      : base;
+
+    const rows = await scoped
       .where(eq(exams.isActive, 1))
       .groupBy(exams.id, exams.title, exams.durationMinutes)
       .orderBy(asc(exams.createdAt));
@@ -279,6 +308,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
    * Creates a new timed session for the active exam and returns its metadata
    * (including computed `endTime`).
    * @throws {NotFoundError} when the exam does not exist or is inactive.
+   * @throws {ForbiddenError} when a student's group isn't allowed this exam.
    */
   .post("/:examId/sessions", async ({ params, user }) => {
     const { examId } = params;
@@ -289,6 +319,31 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     });
 
     if (!exam) throw new NotFoundError("Ujian tidak ditemukan atau tidak aktif.");
+
+    // Students may only start exams allowed for their group. The listing in
+    // GET /exams already filters by group, but this guards direct calls by
+    // exam id. Supervisors/admins are exempt.
+    if (user.role === "student") {
+      const groupId = user.groupId || null;
+      const allowed =
+        groupId !== null &&
+        (await db.query.examGroups.findFirst({
+          columns: { examId: true },
+          where: and(
+            eq(examGroups.examId, examId),
+            eq(examGroups.groupId, groupId)
+          ),
+        })) !== undefined;
+
+      if (!allowed) {
+        log.warn("Blocked session: exam not allowed for student's group", {
+          examId,
+          userId: user.userId,
+          groupId,
+        });
+        throw new ForbiddenError("Ujian ini tidak tersedia untuk kelas Anda.");
+      }
+    }
 
     const [{ total }] = await db
       .select({ total: sql<number>`count(*)` })

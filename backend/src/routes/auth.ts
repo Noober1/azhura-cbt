@@ -41,7 +41,14 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       const { nis, password } = body;
 
       const record = await db.query.users.findFirst({
-        columns: { id: true, nis: true, name: true, password: true, role: true },
+        columns: {
+          id: true,
+          nis: true,
+          name: true,
+          password: true,
+          role: true,
+          groupId: true,
+        },
         where: eq(users.nis, nis),
       });
 
@@ -62,6 +69,9 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         userId: record.id,
         nis: record.nis,
         role: record.role,
+        // `groupId` is null for supervisors/admins. JSON.stringify drops null
+        // in the JWT lib, so coerce to "" to keep the claim present.
+        groupId: record.groupId ?? "",
       });
 
       log.info("Login success", { userId: record.id, nis: record.nis });
