@@ -1,0 +1,150 @@
+/**
+ * Azhura CBT Backend - Server Entry Point
+ *
+ * Bootstraps a single Node.js HTTP server shared by the Elysia HTTP API and
+ * the Socket.io realtime server. Requests to /ws (and its sub-paths) are
+ * handled by Socket.io; all other requests are bridged to Elysia's fetch
+ * handler so that CORS, auth middleware, and route groups work as normal.
+ */
+
+import http from "http";
+import type { IncomingMessage, ServerResponse } from "http";
+import { Elysia } from "elysia";
+import { cors } from "@elysiajs/cors";
+import { authRoutes } from "./routes/auth";
+import { examRoutes } from "./routes/exam";
+import { supervisorRoutes } from "./routes/supervisor";
+import { initSocket } from "./socket";
+import { getServerConfig } from "./lib/env";
+import { assertDbConnection } from "./db";
+import { AppError } from "./lib/errors";
+import { createLogger } from "./lib/logger";
+import { writeAccessLog, logDirectory } from "./lib/log-files";
+
+const log = createLogger("Server");
+
+/** Per-request start time, keyed off Elysia's request-scoped store. */
+interface AccessStore {
+  requestStart: number;
+}
+
+const { port, corsOrigins } = getServerConfig();
+
+// Fail fast if the database is unreachable.
+await assertDbConnection();
+
+const app = new Elysia()
+  .use(cors({ origin: corsOrigins, credentials: true }))
+  .state("requestStart", 0)
+  .onRequest(({ store }) => {
+    (store as AccessStore).requestStart = Date.now();
+  })
+  .onAfterResponse(({ request, set, store }) => {
+    const start = (store as AccessStore).requestStart;
+    const { pathname } = new URL(request.url);
+    writeAccessLog({
+      method: request.method,
+      path: pathname,
+      status: typeof set.status === "number" ? set.status : 200,
+      durationMs: start ? Date.now() - start : 0,
+      ip: request.headers.get("x-forwarded-for") ?? undefined,
+      userAgent: request.headers.get("user-agent") ?? undefined,
+    });
+  })
+  .onError(({ code, error, set, request }) => {
+    if (error instanceof AppError) {
+      set.status = error.status;
+      return { message: error.message, code: error.code };
+    }
+    if (code === "VALIDATION") {
+      set.status = 400;
+      return { message: "Permintaan tidak valid.", code: "VALIDATION" };
+    }
+    log.error("Unhandled server error", error, {
+      code,
+      method: request.method,
+      url: request.url,
+    });
+    set.status = 500;
+    return { message: "Terjadi kesalahan pada server.", code: "INTERNAL_ERROR" };
+  })
+  .get("/health", () => ({ status: "ok", time: new Date().toISOString() }))
+  .group("/api", (app) =>
+    app.use(authRoutes).use(examRoutes).use(supervisorRoutes)
+  );
+
+// Compile Elysia routes before using .handle() outside of .listen().
+app.compile();
+
+/**
+ * Bridges a Node.js HTTP request to Elysia's Fetch API handler.
+ * Converts IncomingMessage → Request, calls app.handle(), writes Response back.
+ */
+async function handleWithElysia(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // Read body for non-GET/HEAD requests.
+  let body: Buffer | undefined;
+  const method = (req.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {
+    body = await new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("end", () => resolve(Buffer.concat(chunks)));
+      req.on("error", reject);
+    });
+  }
+
+  const headers = new Headers();
+  for (const [key, val] of Object.entries(req.headers)) {
+    if (!val) continue;
+    if (Array.isArray(val)) val.forEach((v) => headers.append(key, v));
+    else headers.set(key, val);
+  }
+
+  const fetchReq = new Request(
+    `http://localhost:${port}${req.url ?? "/"}`,
+    {
+      method: req.method ?? "GET",
+      headers,
+      body: body && body.length > 0 ? body : undefined,
+    }
+  );
+
+  try {
+    const response = await app.handle(fetchReq);
+
+    const respHeaders: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      respHeaders[key] = value;
+    });
+
+    res.writeHead(response.status, respHeaders);
+    res.end(response.body ? Buffer.from(await response.arrayBuffer()) : undefined);
+  } catch (error) {
+    log.error("Bridge handler failed", error);
+    if (!res.headersSent) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ message: "Terjadi kesalahan pada server.", code: "INTERNAL_ERROR" }));
+    }
+  }
+}
+
+// Create a single Node.js HTTP server shared by Elysia and Socket.io.
+const httpServer = http.createServer();
+
+// Attach Socket.io first so its "request" listener is registered for /ws.
+initSocket(httpServer);
+
+// Handle all other requests with Elysia. Socket.io's listener already
+// claims /ws* requests; our early return prevents double-handling.
+httpServer.on("request", async (req: IncomingMessage, res: ServerResponse) => {
+  if ((req.url ?? "").startsWith("/ws")) return;
+  await handleWithElysia(req, res);
+});
+
+httpServer.listen(port, () => {
+  log.info(`Azhura CBT Backend running at http://localhost:${port}`);
+  log.info(`Socket.io available at ws://localhost:${port}/ws`);
+  log.info(`Access/warn/error logs writing to ${logDirectory}`);
+});
+
+export type App = typeof app;
