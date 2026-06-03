@@ -137,6 +137,26 @@ export const getJwtSecret = (): string => {
   return jwtSecret;
 };
 
+/** Validated Redis/Valkey connection settings. */
+export interface RedisConfig {
+  url: string;
+}
+
+let redisConfig: RedisConfig | null = null;
+
+/**
+ * Returns the validated Redis/Valkey configuration. `REDIS_URL` is optional and
+ * defaults to a local instance, so a fresh checkout boots without extra setup
+ * while production can point at a managed Redis/Valkey.
+ */
+export const getRedisConfig = (): RedisConfig => {
+  if (redisConfig) return redisConfig;
+  redisConfig = {
+    url: optionalEnv("REDIS_URL", "redis://127.0.0.1:6379"),
+  };
+  return redisConfig;
+};
+
 /** Validated HTTP/socket server settings. */
 export interface ServerConfig {
   port: number;
