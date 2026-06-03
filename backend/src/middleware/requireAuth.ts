@@ -19,6 +19,8 @@ export interface JwtPayload {
   role: string;
   /** The student's group; "" for supervisors/admins (no group). */
   groupId: string;
+  /** Active-session id (jti) for single-session enforcement (#5); "" if unbound. */
+  sessionId?: string;
 }
 
 export const authPlugin = new Elysia({ name: "auth-plugin" })

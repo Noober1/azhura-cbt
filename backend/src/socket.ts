@@ -13,8 +13,15 @@ import { getJwtSecret, getServerConfig } from "./lib/env";
 import { createLogger } from "./lib/logger";
 import { setLogBroadcaster } from "./lib/log-files";
 import { setExamListBroadcaster } from "./lib/exam-events";
+import { sessionRegistry, CONNECTED_TTL } from "./lib/session-registry";
 
 const log = createLogger("Socket");
+
+/**
+ * How often (ms) a connected student's session TTL is refreshed. Must be safely
+ * below {@link CONNECTED_TTL} so a live socket never lets its key expire.
+ */
+const HEARTBEAT_INTERVAL_MS = (CONNECTED_TTL / 3) * 1000;
 
 /** The active Socket.io server; assigned by {@link initSocket}. */
 export let io: SocketServer;
@@ -26,6 +33,8 @@ interface SocketJwt {
   role: string;
   /** The student's group; "" for supervisors/admins (no group). */
   groupId: string;
+  /** Active-session id (jti) for single-session enforcement (#5); "" if unbound. */
+  sessionId?: string;
 }
 
 /**
@@ -72,6 +81,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       socket.data.nis = verified.nis;
       socket.data.role = verified.role;
       socket.data.groupId = verified.groupId;
+      socket.data.sessionId = verified.sessionId ?? "";
       next();
     } catch (error) {
       log.warn("Socket rejected: invalid token", {
@@ -99,8 +109,56 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       socket.join(`group:${groupId}`);
     }
 
+    // Single-session liveness (#5): bind this socket to the student's active
+    // session and keep its Redis TTL refreshed while connected. The interval is
+    // the *only* thing extending the key, so a dead socket/crashed server lets
+    // the session expire — no account can deadlock.
+    const sessionId = socket.data.sessionId as string | undefined;
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    // Guards the race where a fast disconnect fires before the async
+    // markConnected below resolves: without it the interval could be started
+    // *after* disconnect and never cleared (leaking + defeating the grace TTL).
+    let disconnected = false;
+
+    if (role === "student" && sessionId) {
+      void (async () => {
+        const owns = await sessionRegistry.markConnected(userId, sessionId, socket.id);
+        if (disconnected) return; // already gone — don't start a stray heartbeat
+        if (!owns) {
+          // The session was already replaced or expired — this device is stale.
+          log.warn("Socket session no longer active; disconnecting", { nis, socketId: socket.id });
+          socket.emit("kick", { reason: "Sesi Anda telah digantikan oleh perangkat lain." });
+          socket.disconnect(true);
+          return;
+        }
+        heartbeat = setInterval(() => {
+          void sessionRegistry.refresh(userId, sessionId).catch((error) => {
+            log.warn("Session heartbeat refresh failed", {
+              nis,
+              reason: error instanceof Error ? error.message : String(error),
+            });
+          });
+        }, HEARTBEAT_INTERVAL_MS);
+      })();
+    }
+
     socket.on("disconnect", (reason) => {
       log.info("Socket disconnected", { nis, socketId: socket.id, reason });
+      disconnected = true;
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
+      // Start the grace window: a reconnect with the same sessionId refreshes the
+      // TTL back; otherwise the key expires and the account becomes free again.
+      if (role === "student" && sessionId) {
+        void sessionRegistry.startGrace(userId, sessionId).catch((error) => {
+          log.warn("Failed to start session grace period", {
+            nis,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
     });
   });
 

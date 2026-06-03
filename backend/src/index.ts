@@ -21,6 +21,7 @@ import { adminStudentRoutes } from "./routes/admin/students";
 import { initSocket } from "./socket";
 import { getServerConfig } from "./lib/env";
 import { assertDbConnection } from "./db";
+import { closeRedis } from "./lib/redis";
 import { AppError } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { writeAccessLog, logDirectory } from "./lib/log-files";
@@ -116,7 +117,10 @@ async function handleWithElysia(req: IncomingMessage, res: ServerResponse): Prom
     {
       method: req.method ?? "GET",
       headers,
-      body: body && body.length > 0 ? body : undefined,
+      // Node's Buffer (`Buffer<ArrayBufferLike>`) isn't assignable to the Fetch
+      // `BodyInit` type, which requires a plain `ArrayBuffer`-backed view. Copy
+      // into a fresh Uint8Array (bodies are small) to get a `Uint8Array<ArrayBuffer>`.
+      body: body && body.length > 0 ? new Uint8Array(body) : undefined,
     }
   );
 
@@ -157,5 +161,18 @@ httpServer.listen(port, () => {
   log.info(`Socket.io available at ws://localhost:${port}/ws`);
   log.info(`Access/warn/error logs writing to ${logDirectory}`);
 });
+
+// Release the Redis connection on shutdown so the session registry doesn't leak
+// a socket across hot-reloads / restarts.
+let shuttingDown = false;
+const shutdown = async (signal: string): Promise<void> => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info(`Received ${signal}, shutting down…`);
+  await closeRedis();
+  httpServer.close(() => process.exit(0));
+};
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
 export type App = typeof app;

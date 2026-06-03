@@ -15,8 +15,9 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../db";
 import { getJwtSecret } from "../lib/env";
-import { AuthError } from "../lib/errors";
+import { AuthError, ConflictError } from "../lib/errors";
 import { createLogger } from "../lib/logger";
+import { sessionRegistry } from "../lib/session-registry";
 
 const { users } = schema;
 
@@ -74,6 +75,27 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         return { message: "Akun Anda dinonaktifkan. Hubungi administrator." };
       }
 
+      // Single active session per student (#5): claim a session in Redis before
+      // issuing the token. If a live session already exists for this account,
+      // reject the login (409) instead of letting two devices share the account.
+      // Only students are constrained; supervisors/admins may hold multiple
+      // sessions (e.g. several proctoring tabs).
+      let sessionId = "";
+      if (record.role === "student") {
+        sessionId = crypto.randomUUID();
+        const claimed = await sessionRegistry.tryClaim(record.id, sessionId);
+        if (!claimed) {
+          log.warn("Login blocked: account already active elsewhere", {
+            nis,
+            userId: record.id,
+          });
+          throw new ConflictError(
+            "Akun ini sedang aktif di perangkat lain. Keluar dari perangkat tersebut, " +
+              "atau tunggu beberapa saat lalu coba lagi."
+          );
+        }
+      }
+
       const token = await jwt.sign({
         userId: record.id,
         nis: record.nis,
@@ -81,6 +103,9 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         // `groupId` is null for supervisors/admins. JSON.stringify drops null
         // in the JWT lib, so coerce to "" to keep the claim present.
         groupId: record.groupId ?? "",
+        // Session id (jti) bound to the active-session registry; "" for roles
+        // not subject to single-session enforcement.
+        sessionId,
       });
 
       log.info("Login success", { userId: record.id, nis: record.nis });
