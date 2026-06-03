@@ -62,7 +62,7 @@ export const AppRouter = () => {
         path="/result"
         element={
           <ProtectedRoute>
-            <ResultPage onFinish={() => navigate("/login")} />
+            <ResultPage onFinish={() => navigate("/dashboard")} />
           </ProtectedRoute>
         }
       />

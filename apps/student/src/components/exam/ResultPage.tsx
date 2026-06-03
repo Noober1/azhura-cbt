@@ -3,35 +3,28 @@ import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "../ui/card";
 import { toast } from "sonner";
-import { createLogger } from "../../lib/logger";
-
-const log = createLogger("ResultPage");
 
 interface ResultPageProps {
-  /** Called after the session is cleaned up to navigate back to login. */
+  /** Called to navigate back to the dashboard after viewing the result. */
   onFinish: () => void;
 }
 
 /**
  * Post-exam summary screen. Renders the final score with a color band, a
  * correct/wrong/empty breakdown, and a "finish" action that resets the exam
- * state and logs the student out. Shows a fallback when no result is present.
+ * state and returns to the dashboard. The student stays logged in — finishing an
+ * exam does not end their session. Shows a fallback when no result is present.
  */
 export const ResultPage = ({ onFinish }: ResultPageProps) => {
   const { examResult, resetExam, examTitle } = useExamStore();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
 
-  const handleFinish = async () => {
-    try {
-      resetExam();
-      await logout();
-      toast.success("Sesi ujian berakhir dengan aman!");
-      onFinish();
-    } catch (error) {
-      // Navigation must still proceed even if cleanup fails.
-      log.error("Error ending session", error);
-      onFinish();
-    }
+  const handleFinish = () => {
+    // Clear the finished exam from state and go back to the dashboard. The
+    // student's auth session is intentionally left intact.
+    resetExam();
+    toast.success("Ujian selesai. Kembali ke dashboard.");
+    onFinish();
   };
 
   // If result is empty, show a fallback message
@@ -41,7 +34,7 @@ export const ResultPage = ({ onFinish }: ResultPageProps) => {
         <CardContent className="p-8 text-center space-y-4">
           <div className="text-destructive font-bold text-lg">Data hasil ujian tidak ditemukan.</div>
           <Button onClick={handleFinish} className="font-semibold px-6 py-2 rounded-xl">
-            Kembali ke Login
+            Kembali ke Dashboard
           </Button>
         </CardContent>
       </Card>
@@ -149,7 +142,7 @@ export const ResultPage = ({ onFinish }: ResultPageProps) => {
           onClick={handleFinish}
           className="w-full bg-primary hover:bg-primary/95 text-white font-bold py-3 rounded-xl shadow-lg shadow-primary/10 transition-all"
         >
-          Selesai & Keluar Sesi
+          Kembali ke Dashboard
         </Button>
       </CardFooter>
     </Card>
