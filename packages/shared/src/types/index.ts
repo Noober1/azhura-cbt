@@ -53,6 +53,13 @@ export interface AvailableExam {
   totalQuestions: number;
   /** Total working time, in minutes. */
   durationMinutes: number;
+  /**
+   * True when the caller has already submitted this exam. Completed exams stay
+   * in the list but cannot be retaken — the dashboard disables their start
+   * action and the server rejects a new session with 409. Always false for
+   * non-students (supervisors/admins do not take exams).
+   */
+  completed: boolean;
 }
 
 export interface ExamResult {
@@ -61,6 +68,19 @@ export interface ExamResult {
   totalWrong: number;
   totalEmpty: number;
 }
+
+/**
+ * Response of `GET /api/exams/sessions/active` (#4 resume-session). A discriminated
+ * union telling the client where to route a returning student:
+ * - `none`      — no in-progress session; proceed to the dashboard.
+ * - `resume`    — an unsubmitted session with time remaining; go to the exam.
+ * - `finalized` — an unsubmitted session whose time expired; it was scored
+ *                 server-side, so show the result.
+ */
+export type ActiveSessionResponse =
+  | { status: "none" }
+  | { status: "resume"; session: ExamSession }
+  | { status: "finalized"; examTitle: string; result: ExamResult };
 
 export interface ConnectivityState {
   isOnline: boolean;

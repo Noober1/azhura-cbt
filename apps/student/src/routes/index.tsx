@@ -42,7 +42,10 @@ export const AppRouter = () => {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <DashboardPage onExamStarted={() => navigate("/exam")} />
+            <DashboardPage
+              onExamStarted={() => navigate("/exam")}
+              onShowResult={() => navigate("/result")}
+            />
           </ProtectedRoute>
         }
       />

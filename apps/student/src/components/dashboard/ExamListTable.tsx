@@ -1,4 +1,4 @@
-import { ListChecks, Clock, FileText, PlayCircle, Inbox } from "lucide-react";
+import { ListChecks, Clock, FileText, PlayCircle, Inbox, CheckCircle2 } from "lucide-react";
 import type { AvailableExam } from "../../types";
 import { Card, CardHeader, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
@@ -81,15 +81,24 @@ export const ExamListTable = ({
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-right">
-                      <Button
-                        size="sm"
-                        onClick={() => onStart(exam)}
-                        disabled={startingExamId !== null}
-                        className="font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm shadow-emerald-600/10"
-                      >
-                        <PlayCircle className="w-3.5 h-3.5" />
-                        {startingExamId === exam.id ? "Memuat..." : "Mulai Ujian"}
-                      </Button>
+                      {exam.completed ? (
+                        // A submitted exam cannot be retaken — surface a clear
+                        // "done" state instead of the start action (#retake-guard).
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400 text-sm">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Sudah Dikerjakan
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => onStart(exam)}
+                          disabled={startingExamId !== null}
+                          className="font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm shadow-emerald-600/10"
+                        >
+                          <PlayCircle className="w-3.5 h-3.5" />
+                          {startingExamId === exam.id ? "Memuat..." : "Mulai Ujian"}
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}

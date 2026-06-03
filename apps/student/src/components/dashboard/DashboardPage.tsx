@@ -8,10 +8,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useExamStore } from "../../stores/exam";
 import { useSocketStore } from "../../stores/socket";
-import type { AvailableExam } from "../../types";
+import type { AvailableExam, ActiveSessionResponse } from "../../types";
 import api from "../../lib/api";
 import { toast } from "sonner";
 import { createLogger } from "../../lib/logger";
@@ -24,11 +25,13 @@ import { StartExamDialog } from "./StartExamDialog";
 const log = createLogger("Dashboard");
 
 interface DashboardPageProps {
-  /** Navigates to the exam screen once a session has been opened. */
+  /** Navigates to the exam screen once a session has been opened (or resumed). */
   onExamStarted: () => void;
+  /** Navigates to the result screen (e.g. an expired session finalized on resume). */
+  onShowResult: () => void;
 }
 
-export const DashboardPage = ({ onExamStarted }: DashboardPageProps) => {
+export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProps) => {
   const { user, token } = useAuthStore();
   const { setExamSession } = useExamStore();
   const examListVersion = useSocketStore((state) => state.examListVersion);
@@ -38,6 +41,9 @@ export const DashboardPage = ({ onExamStarted }: DashboardPageProps) => {
   const [selectedExam, setSelectedExam] = useState<AvailableExam | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [startingExamId, setStartingExamId] = useState<string | null>(null);
+  // While true, an in-progress session check (#4) is running — render a spinner
+  // so the exam list is never shown/clickable before a redirect decision.
+  const [isCheckingResume, setIsCheckingResume] = useState(true);
 
   // Track mount status so async fetches never setState after unmount.
   const isMountedRef = useRef(true);
@@ -67,20 +73,55 @@ export const DashboardPage = ({ onExamStarted }: DashboardPageProps) => {
     }
   }, []);
 
-  // Initial load.
+  // Resume guard (#4): on entry, ask the server for any in-progress session and
+  // redirect before showing the dashboard. Runs once on mount; uses store/prop
+  // callbacks captured at mount (navigation intent doesn't change mid-session).
   useEffect(() => {
-    fetchExams();
-  }, [fetchExams]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get<ActiveSessionResponse>("/exams/sessions/active");
+        if (cancelled) return;
+        if (data.status === "resume") {
+          await useExamStore.getState().setExamSession(data.session);
+          onExamStarted();
+          return;
+        }
+        if (data.status === "finalized") {
+          useExamStore.getState().applyFinalizedResult(data.result, data.examTitle);
+          onShowResult();
+          return;
+        }
+      } catch (error) {
+        // Fail-open: a resume-check failure must not lock the student out of
+        // the dashboard. Log for tracing and continue to the normal flow.
+        log.error("Resume check failed — proceeding to dashboard", error, toErrorContext(error));
+      }
+      if (!cancelled) setIsCheckingResume(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Initial load — only once the resume check cleared us to stay on the dashboard.
+  useEffect(() => {
+    if (!isCheckingResume) fetchExams();
+  }, [fetchExams, isCheckingResume]);
 
   // Open the realtime connection while on the dashboard so the server can push
   // exam-list changes (#3). Connecting here — not only during an exam — is what
   // makes the list update live; the socket disconnects when leaving the page.
+  // Deferred until the resume check clears, to avoid a connect/disconnect churn
+  // when we're about to redirect away.
   useEffect(() => {
-    if (token) useSocketStore.getState().connect(token);
+    if (isCheckingResume || !token) return;
+    useSocketStore.getState().connect(token);
     return () => {
       useSocketStore.getState().disconnect();
     };
-  }, [token]);
+  }, [token, isCheckingResume]);
 
   // When the server signals a change, refetch silently and nudge the student.
   const isFirstVersionRef = useRef(true);
@@ -119,6 +160,18 @@ export const DashboardPage = ({ onExamStarted }: DashboardPageProps) => {
       setStartingExamId(null);
     }
   };
+
+  // While the resume check is in flight, show a full-screen spinner instead of
+  // the dashboard — the exam list must not be visible or clickable until we know
+  // whether to redirect into an in-progress (or finalized) session (#4).
+  if (isCheckingResume) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-linear-to-tr from-indigo-950 via-slate-900 to-emerald-950">
+        <Loader2 className="h-8 w-8 animate-spin text-white/70" />
+        <p className="text-sm font-medium text-white/60">Memeriksa sesi ujian…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-linear-to-tr from-indigo-950 via-slate-900 to-emerald-950">
