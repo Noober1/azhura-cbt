@@ -74,6 +74,15 @@ async function getExamGroupIds(examId: string): Promise<string[]> {
   return rows.map((r) => r.groupId);
 }
 
+/** Number of questions in an exam — used to gate activation. */
+async function getQuestionCount(examId: string): Promise<number> {
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(questions)
+    .where(eq(questions.examId, examId));
+  return Number(count);
+}
+
 /**
  * Full admin detail for one exam: fields + allowed groups + questions/options
  * (including the answer key). Two flat queries are merged in memory because
@@ -260,6 +269,13 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
       const allowedGroups = body.allowedGroups ?? [];
       await assertGroupsExist(allowedGroups);
 
+      // A brand-new exam has no questions yet, so it cannot be created active.
+      if (body.isActive === true) {
+        throw new BadRequestError(
+          "Ujian tanpa soal tidak dapat diaktifkan. Simpan sebagai nonaktif, tambahkan soal, lalu aktifkan."
+        );
+      }
+
       const id = randomUUID();
       await db.transaction(async (tx) => {
         await tx.insert(exams).values({
@@ -315,6 +331,13 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
       if (!existing) throw new NotFoundError("Ujian tidak ditemukan.");
 
       if (body.allowedGroups) await assertGroupsExist(body.allowedGroups);
+
+      // Cannot activate an exam that has no questions.
+      if (body.isActive === true && (await getQuestionCount(id)) === 0) {
+        throw new BadRequestError(
+          "Ujian tanpa soal tidak dapat diaktifkan. Tambahkan minimal 1 soal terlebih dahulu."
+        );
+      }
 
       // Build a partial update only from the fields actually supplied.
       const patch: Partial<typeof exams.$inferInsert> = {};
