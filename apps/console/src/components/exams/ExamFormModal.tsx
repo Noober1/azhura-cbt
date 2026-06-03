@@ -20,7 +20,7 @@ import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { useGroups } from "../../hooks/useGroups";
 import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/format";
-import type { ExamDetail, ExamSummary } from "../../types";
+import type { AdminGroupRef, ExamDetail, ExamSummary } from "../../types";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Field, Input, Checkbox } from "../ui/Field";
@@ -94,6 +94,9 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
   const { groups } = useGroups(open);
   const [form, setForm] = useState<FormState>(() => initialState(exam));
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  // groupId -> active participant count, for groups locked because students are
+  // mid-exam (#29). Such groups can't be unchecked/removed.
+  const [lockedGroups, setLockedGroups] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
 
@@ -104,18 +107,29 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
     setErrors({});
     setBusy(false);
 
+    const applyAllowed = (allowed: AdminGroupRef[]) => {
+      setSelectedGroupIds(allowed.map((g) => g.id));
+      const locks: Record<string, number> = {};
+      for (const g of allowed) {
+        if (g.activeParticipants > 0) locks[g.id] = g.activeParticipants;
+      }
+      setLockedGroups(locks);
+    };
+
     let cancelled = false;
     if (!exam) {
       setSelectedGroupIds([]);
+      setLockedGroups({});
     } else if ("allowedGroups" in exam) {
-      setSelectedGroupIds(exam.allowedGroups.map((g) => g.id));
+      applyAllowed(exam.allowedGroups);
     } else {
       // Editing from a list row (summary, no group detail) — fetch it.
       setSelectedGroupIds([]);
+      setLockedGroups({});
       examsApi
         .get(exam.id)
         .then((detail) => {
-          if (!cancelled) setSelectedGroupIds(detail.allowedGroups.map((g) => g.id));
+          if (!cancelled) applyAllowed(detail.allowedGroups);
         })
         .catch(() => {
           /* leave empty; the list still saves other fields fine */
@@ -132,13 +146,17 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
   }
 
   function toggleGroup(id: string) {
+    if (lockedGroups[id] !== undefined) return; // locked: cannot be removed (#29)
     setSelectedGroupIds((ids) =>
       ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
     );
   }
 
   function toggleAllGroups(selectAll: boolean) {
-    setSelectedGroupIds(selectAll ? groups.map((g) => g.id) : []);
+    // Deselect-all keeps locked groups selected — they can't be removed.
+    setSelectedGroupIds(
+      selectAll ? groups.map((g) => g.id) : Object.keys(lockedGroups)
+    );
   }
 
   // An exam with no questions cannot be activated (enforced by the backend too).
@@ -316,21 +334,39 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {groups.map((g) => {
                     const checked = selectedGroupIds.includes(g.id);
+                    const lockedCount = lockedGroups[g.id];
+                    const locked = lockedCount !== undefined;
                     return (
                       <label
                         key={g.id}
-                        className={`flex cursor-pointer items-center gap-2 rounded-[var(--radius-field)] border px-3 py-2 transition-colors ${
-                          checked ? "border-accent/40 bg-accent-wash" : "border-line bg-surface hover:border-faint"
+                        title={
+                          locked
+                            ? `${lockedCount} siswa sedang mengerjakan — group tidak dapat dikeluarkan`
+                            : undefined
+                        }
+                        className={`flex items-center gap-2 rounded-[var(--radius-field)] border px-3 py-2 transition-colors ${
+                          locked
+                            ? "cursor-not-allowed border-[var(--color-warn)]/40 bg-[var(--color-warn)]/10"
+                            : checked
+                              ? "cursor-pointer border-accent/40 bg-accent-wash"
+                              : "cursor-pointer border-line bg-surface hover:border-faint"
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={checked}
+                          disabled={locked}
                           onChange={() => toggleGroup(g.id)}
-                          className="focus-ring size-4 accent-[var(--color-accent)]"
+                          className="focus-ring size-4 accent-[var(--color-accent)] disabled:cursor-not-allowed"
                         />
                         <span className="truncate text-sm text-ink">{g.name}</span>
-                        <span className="ml-auto text-xs tabular text-faint">{g.memberCount}</span>
+                        {locked ? (
+                          <span className="ml-auto whitespace-nowrap text-xs font-medium text-[var(--color-warn)]">
+                            {lockedCount} mengerjakan
+                          </span>
+                        ) : (
+                          <span className="ml-auto text-xs tabular text-faint">{g.memberCount}</span>
+                        )}
                       </label>
                     );
                   })}
@@ -342,6 +378,12 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
           <p className="text-xs text-faint">
             Hanya siswa pada group terpilih yang dapat melihat &amp; memulai ujian ini.
           </p>
+          {Object.keys(lockedGroups).length > 0 && (
+            <p className="text-xs font-medium text-[var(--color-warn)]">
+              Group bertanda kuning sedang dikerjakan siswa dan terkunci — tidak
+              dapat dikeluarkan sampai mereka selesai.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2.5 pt-1">

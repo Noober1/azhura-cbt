@@ -10,6 +10,12 @@
 export interface AdminGroupRef {
   id: string;
   name: string;
+  /**
+   * Students currently mid-exam (active, unsubmitted session) from this group.
+   * When > 0 the group is "locked" — it cannot be removed from the exam's
+   * allowed groups (#29). Present on exam detail responses.
+   */
+  activeParticipants: number;
 }
 
 /** Row shape from `GET /admin/exams` (list, with counts). */

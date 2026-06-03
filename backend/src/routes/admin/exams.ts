@@ -16,15 +16,16 @@
 
 import { Elysia, t } from "elysia";
 import { randomUUID } from "crypto";
-import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, like, sql } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
-import { BadRequestError, NotFoundError } from "../../lib/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors";
 import { notifyExamListChanged } from "../../lib/exam-events";
 import { createLogger } from "../../lib/logger";
 
-const { exams, examGroups, groups, questions, options } = schema;
+const { exams, examGroups, groups, questions, options, examSessions, users } =
+  schema;
 
 const log = createLogger("AdminExam");
 
@@ -84,6 +85,41 @@ async function getQuestionCount(examId: string): Promise<number> {
 }
 
 /**
+ * Per-group count of students *currently working* on an exam — i.e. a session
+ * that is unsubmitted (`submitted = 0`) and not yet expired (`end_time > now`).
+ * Used to (a) block removing a group while its students are mid-exam and (b) lock
+ * that group in the admin UI (#29). A session past its `end_time` is treated as
+ * over (the timer ran out), so it does not keep a group locked indefinitely.
+ *
+ * @returns a map of `groupId -> active participant count` (groups with 0 omitted).
+ */
+async function getActiveParticipantsByGroup(
+  examId: string,
+  groupIds: string[]
+): Promise<Map<string, number>> {
+  if (groupIds.length === 0) return new Map();
+  const rows = await db
+    .select({ groupId: users.groupId, count: sql<number>`count(*)` })
+    .from(examSessions)
+    .innerJoin(users, eq(users.id, examSessions.userId))
+    .where(
+      and(
+        eq(examSessions.examId, examId),
+        eq(examSessions.submitted, 0),
+        gt(examSessions.endTime, Date.now()),
+        inArray(users.groupId, groupIds)
+      )
+    )
+    .groupBy(users.groupId);
+
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    if (r.groupId) map.set(r.groupId, Number(r.count));
+  }
+  return map;
+}
+
+/**
  * Full admin detail for one exam: fields + allowed groups + questions/options
  * (including the answer key). Two flat queries are merged in memory because
  * MariaDB rejects Drizzle's relational LATERAL joins (same as the student route).
@@ -100,6 +136,13 @@ async function getExamDetail(examId: string) {
     .innerJoin(groups, eq(groups.id, examGroups.groupId))
     .where(eq(examGroups.examId, examId))
     .orderBy(asc(groups.name));
+
+  // Active-participant counts let the admin UI lock groups that can't be removed
+  // while students are mid-exam (#29).
+  const activeByGroup = await getActiveParticipantsByGroup(
+    examId,
+    groupRows.map((g) => g.id)
+  );
 
   const questionRows = await db
     .select({
@@ -146,7 +189,11 @@ async function getExamDetail(examId: string) {
     randomizeQuestion: tinyToBool(exam.randomizeQuestion),
     randomizeAnswer: tinyToBool(exam.randomizeAnswer),
     createdAt: exam.createdAt.getTime(),
-    allowedGroups: groupRows,
+    allowedGroups: groupRows.map((g) => ({
+      id: g.id,
+      name: g.name,
+      activeParticipants: activeByGroup.get(g.id) ?? 0,
+    })),
     questions: questionRows.map((q) => ({
       id: q.id,
       text: q.text,
@@ -353,6 +400,34 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
         patch.randomizeAnswer = boolToTiny(body.randomizeAnswer);
 
       const groupsBefore = await getExamGroupIds(id);
+
+      // Integrity guard (#29): refuse to remove a group from allowedGroups while
+      // any of its students are mid-exam (active, unsubmitted, unexpired session).
+      // Doing so would orphan a running attempt. Wait for them to finish, or keep
+      // the group allowed.
+      if (body.allowedGroups) {
+        const removed = groupsBefore.filter(
+          (g) => !body.allowedGroups!.includes(g)
+        );
+        if (removed.length > 0) {
+          const active = await getActiveParticipantsByGroup(id, removed);
+          const blocked = removed.filter((g) => (active.get(g) ?? 0) > 0);
+          if (blocked.length > 0) {
+            const named = await db
+              .select({ id: groups.id, name: groups.name })
+              .from(groups)
+              .where(inArray(groups.id, blocked));
+            const nameById = new Map(named.map((n) => [n.id, n.name]));
+            const detail = blocked
+              .map((g) => `${nameById.get(g) ?? g} (${active.get(g)} peserta aktif)`)
+              .join(", ");
+            throw new ConflictError(
+              `Tidak dapat mengeluarkan group yang masih memiliki peserta sedang mengerjakan: ${detail}. ` +
+                "Tunggu hingga mereka selesai, atau biarkan group tetap diizinkan."
+            );
+          }
+        }
+      }
 
       await db.transaction(async (tx) => {
         if (Object.keys(patch).length > 0) {
