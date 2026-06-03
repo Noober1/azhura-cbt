@@ -64,6 +64,13 @@ export const connectSocket = (token: string): void => {
     toast.info(`Pesan Pengawas: ${data.message}`, { duration: 8000 });
   });
 
+  // The server (admin mutation) signalled that this student's exam list changed.
+  // The payload is intentionally empty — the dashboard refetches `GET /exams`.
+  socket.on("exam-list-updated", () => {
+    log.info("Exam list updated by server — refreshing dashboard list.");
+    useSocketStore.getState().bumpExamListVersion();
+  });
+
   socket.on("force-submit", async (_data: { reason?: string }) => {
     toast.warning("Ujian dikumpulkan otomatis oleh pengawas!", { duration: 5000 });
     try {

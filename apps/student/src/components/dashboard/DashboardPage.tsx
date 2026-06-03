@@ -7,9 +7,10 @@
  * (`POST /exams/:examId/sessions`) and hands control to the exam screen.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "../../stores/auth";
 import { useExamStore } from "../../stores/exam";
+import { useSocketStore } from "../../stores/socket";
 import type { AvailableExam } from "../../types";
 import api from "../../lib/api";
 import { toast } from "sonner";
@@ -28,8 +29,9 @@ interface DashboardPageProps {
 }
 
 export const DashboardPage = ({ onExamStarted }: DashboardPageProps) => {
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const { setExamSession } = useExamStore();
+  const examListVersion = useSocketStore((state) => state.examListVersion);
 
   const [exams, setExams] = useState<AvailableExam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,30 +39,59 @@ export const DashboardPage = ({ onExamStarted }: DashboardPageProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [startingExamId, setStartingExamId] = useState<string | null>(null);
 
-  // Fetch the list of available exams on mount.
+  // Track mount status so async fetches never setState after unmount.
+  const isMountedRef = useRef(true);
   useEffect(() => {
-    let active = true;
-
-    const fetchExams = async () => {
-      setIsLoading(true);
-      try {
-        const response = await api.get<AvailableExam[]>("/exams");
-        if (active) setExams(response.data);
-      } catch (error) {
-        log.error("Failed to load available exams", error, toErrorContext(error));
-        if (active) {
-          toast.error(getErrorMessage(error, "Gagal memuat daftar ujian."));
-        }
-      } finally {
-        if (active) setIsLoading(false);
-      }
-    };
-
-    fetchExams();
+    isMountedRef.current = true;
     return () => {
-      active = false;
+      isMountedRef.current = false;
     };
   }, []);
+
+  /**
+   * Fetches the available exams. `silent` skips the loading spinner and error
+   * toast — used for realtime refreshes (#3) so the list updates unobtrusively.
+   */
+  const fetchExams = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    try {
+      const response = await api.get<AvailableExam[]>("/exams");
+      if (isMountedRef.current) setExams(response.data);
+    } catch (error) {
+      log.error("Failed to load available exams", error, toErrorContext(error));
+      if (isMountedRef.current && !silent) {
+        toast.error(getErrorMessage(error, "Gagal memuat daftar ujian."));
+      }
+    } finally {
+      if (isMountedRef.current && !silent) setIsLoading(false);
+    }
+  }, []);
+
+  // Initial load.
+  useEffect(() => {
+    fetchExams();
+  }, [fetchExams]);
+
+  // Open the realtime connection while on the dashboard so the server can push
+  // exam-list changes (#3). Connecting here — not only during an exam — is what
+  // makes the list update live; the socket disconnects when leaving the page.
+  useEffect(() => {
+    if (token) useSocketStore.getState().connect(token);
+    return () => {
+      useSocketStore.getState().disconnect();
+    };
+  }, [token]);
+
+  // When the server signals a change, refetch silently and nudge the student.
+  const isFirstVersionRef = useRef(true);
+  useEffect(() => {
+    if (isFirstVersionRef.current) {
+      isFirstVersionRef.current = false;
+      return;
+    }
+    fetchExams(true);
+    toast.info("Daftar ujian diperbarui.");
+  }, [examListVersion, fetchExams]);
 
   /** Opens the confirmation dialog for the chosen exam. */
   const handleSelectExam = (exam: AvailableExam) => {

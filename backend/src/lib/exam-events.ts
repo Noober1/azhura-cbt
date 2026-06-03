@@ -1,32 +1,46 @@
 /**
- * Azhura CBT Backend - Exam list change notifier (seam)
+ * Azhura CBT Backend - Exam list change notifier (seam, #3)
  *
  * Admin mutations that change which exams a student may see (create/update/
- * delete exam, toggle active, change allowed groups) call
- * {@link notifyExamListChanged}. For now this only logs; the realtime push to
- * per-group Socket.io rooms is implemented in issue #3. Keeping the call sites
- * wired up now means #3 only has to fill in the body here — no hunting for
- * every mutation later.
+ * delete exam, toggle active, change allowed groups, add/remove questions) call
+ * {@link notifyExamListChanged}. This module is transport-agnostic: the socket
+ * layer registers a broadcaster at startup via {@link setExamListBroadcaster}
+ * (see `socket.ts`), so route code never imports Socket.io directly. This mirrors
+ * the `setLogBroadcaster` pattern and keeps the call sites stable as endpoints
+ * grow.
  */
 
 import { createLogger } from "./logger";
 
 const log = createLogger("ExamEvents");
 
+/** Pushes an "exam list changed" signal to the given groups' students. */
+type ExamListBroadcaster = (affectedGroupIds: string[]) => void;
+
+let broadcaster: ExamListBroadcaster | null = null;
+
+/**
+ * Registers the transport that delivers exam-list-changed signals to clients.
+ * Called once at startup by the socket layer.
+ */
+export function setExamListBroadcaster(fn: ExamListBroadcaster): void {
+  broadcaster = fn;
+}
+
 /**
  * Signal that the active-exam listing changed.
  *
  * @param affectedGroupIds Groups whose students should refresh their exam list.
- *   `undefined`/empty means "potentially everyone" (e.g. an exam with no group
- *   restriction, or a change whose blast radius isn't narrowed down).
- *
- * TODO(#3): emit `exam-list-changed` to the matching per-group rooms (or
- * broadcast to all students when `affectedGroupIds` is empty).
+ *   Empty/undefined means no group is affected — and since the student-facing
+ *   `GET /api/exams` is scoped by `exam_groups`, an exam with no allowed groups
+ *   is invisible to every student, so there is simply nothing to push.
  */
 export function notifyExamListChanged(affectedGroupIds?: string[]): void {
-  const scope =
-    affectedGroupIds && affectedGroupIds.length > 0
-      ? affectedGroupIds.join(", ")
-      : "all students";
-  log.info("Exam list changed", { scope });
+  const groups = (affectedGroupIds ?? []).filter(Boolean);
+  if (groups.length === 0) {
+    log.info("Exam list changed", { scope: "none (no allowed groups)" });
+    return;
+  }
+  log.info("Exam list changed", { scope: groups.join(", ") });
+  broadcaster?.(groups);
 }

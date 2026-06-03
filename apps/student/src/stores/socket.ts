@@ -12,6 +12,11 @@ import { connectSocket, disconnectSocket } from "../lib/socket";
 interface SocketState {
   isConnected: boolean;
   lastServerMessage: string | null;
+  /**
+   * Monotonic counter bumped whenever the server signals the exam list changed
+   * (`exam-list-updated`, #3). The dashboard watches this to trigger a refetch.
+   */
+  examListVersion: number;
   /** Opens the realtime connection using the given JWT. */
   connect: (token: string) => void;
   /** Closes the realtime connection. */
@@ -20,11 +25,14 @@ interface SocketState {
   setConnected: (connected: boolean) => void;
   /** Stores the most recent supervisor message. */
   setLastMessage: (message: string) => void;
+  /** Signals that the active-exam list changed server-side (triggers refetch). */
+  bumpExamListVersion: () => void;
 }
 
 export const useSocketStore = create<SocketState>((set) => ({
   isConnected: false,
   lastServerMessage: null,
+  examListVersion: 0,
 
   connect: (token) => {
     connectSocket(token);
@@ -41,5 +49,9 @@ export const useSocketStore = create<SocketState>((set) => ({
 
   setLastMessage: (message) => {
     set({ lastServerMessage: message });
+  },
+
+  bumpExamListVersion: () => {
+    set((state) => ({ examListVersion: state.examListVersion + 1 }));
   },
 }));

@@ -12,6 +12,7 @@ import jwt from "jsonwebtoken";
 import { getJwtSecret, getServerConfig } from "./lib/env";
 import { createLogger } from "./lib/logger";
 import { setLogBroadcaster } from "./lib/log-files";
+import { setExamListBroadcaster } from "./lib/exam-events";
 
 const log = createLogger("Socket");
 
@@ -23,6 +24,8 @@ interface SocketJwt {
   userId: string;
   nis: string;
   role: string;
+  /** The student's group; "" for supervisors/admins (no group). */
+  groupId: string;
 }
 
 /**
@@ -46,6 +49,15 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     io.to("supervisors").emit("log-entry", entry);
   });
 
+  // Wire the exam-list change seam (#3) to per-group room emits: when an admin
+  // mutation changes the active-exam listing, the affected groups' students are
+  // told to refetch. A minimal signal (no payload) avoids leaking data over WS.
+  setExamListBroadcaster((affectedGroupIds) => {
+    for (const groupId of affectedGroupIds) {
+      io.to(`group:${groupId}`).emit("exam-list-updated");
+    }
+  });
+
   // Handshake auth: verify the JWT before allowing the connection.
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
@@ -59,6 +71,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       socket.data.userId = verified.userId;
       socket.data.nis = verified.nis;
       socket.data.role = verified.role;
+      socket.data.groupId = verified.groupId;
       next();
     } catch (error) {
       log.warn("Socket rejected: invalid token", {
@@ -76,6 +89,14 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     socket.join(`user:${userId}`);
     if (role === "supervisor" || role === "admin") {
       socket.join("supervisors");
+    }
+
+    // Students join their group room so targeted exam-list updates (#3) reach
+    // only the students eligible for the changed exam. `groupId` is "" for
+    // non-students (no group), so they simply never join a group room.
+    const groupId = socket.data.groupId as string | undefined;
+    if (role === "student" && groupId) {
+      socket.join(`group:${groupId}`);
     }
 
     socket.on("disconnect", (reason) => {
