@@ -105,3 +105,18 @@ export const KeyIcon = svg(
     <path d="m10.5 12.5 8-8M17 5l2 2M15 7l2 2" />
   </>
 );
+
+export const UsersIcon = svg(
+  <>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+  </>
+);
+
+export const LayersIcon = svg(
+  <>
+    <path d="m12 2 9 5-9 5-9-5 9-5Z" />
+    <path d="m3 12 9 5 9-5M3 17l9 5 9-5" />
+  </>
+);

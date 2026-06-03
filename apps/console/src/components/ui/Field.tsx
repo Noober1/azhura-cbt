@@ -56,21 +56,25 @@ interface CheckboxProps {
   onChange: (checked: boolean) => void;
   label: string;
   hint?: string;
+  disabled?: boolean;
 }
 
-export function Checkbox({ checked, onChange, label, hint }: CheckboxProps) {
+export function Checkbox({ checked, onChange, label, hint, disabled = false }: CheckboxProps) {
   const id = useId();
   return (
     <label
       htmlFor={id}
-      className="flex cursor-pointer items-start gap-3 rounded-[var(--radius-field)] border border-line bg-surface px-3 py-2.5 transition-colors hover:border-faint"
+      className={`flex items-start gap-3 rounded-[var(--radius-field)] border border-line bg-surface px-3 py-2.5 transition-colors ${
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-faint"
+      }`}
     >
       <input
         id={id}
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="focus-ring mt-0.5 size-4 accent-[var(--color-accent)]"
+        className="focus-ring mt-0.5 size-4 accent-[var(--color-accent)] disabled:cursor-not-allowed"
       />
       <span className="flex flex-col">
         <span className="text-sm text-ink">{label}</span>

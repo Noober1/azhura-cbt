@@ -35,6 +35,9 @@ export function ConfirmDialog({
     try {
       await onConfirm();
       onClose();
+    } catch {
+      // Keep the dialog open on failure; the caller surfaces the reason
+      // (e.g. a toast) so the user can see why and decide what to do next.
     } finally {
       setBusy(false);
     }

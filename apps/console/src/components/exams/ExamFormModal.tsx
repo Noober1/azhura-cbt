@@ -5,14 +5,20 @@
  * (mirroring the backend's token + duration rules) before calling the API, then
  * reports success via toast and hands the saved exam back to the caller.
  *
- * Note: group assignment (`allowedGroups`) is intentionally omitted until the
- * groups admin API lands in #15 — there is no endpoint to enumerate groups yet.
+ * Group assignment (`allowedGroups`) is wired now that the groups admin API
+ * exists (#15): only students in the selected groups may see/start the exam. When
+ * editing from the list (a summary without `allowedGroups`), the current
+ * assignment is fetched on open so checkboxes prefill correctly.
+ *
+ * State resets every time the modal opens, so reusing the (always-mounted) modal
+ * for a different exam never shows stale data.
  */
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { examsApi } from "../../lib/exams-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
+import { useGroups } from "../../hooks/useGroups";
 import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/format";
 import type { ExamDetail, ExamSummary } from "../../types";
 import { Modal } from "../ui/Modal";
@@ -85,20 +91,76 @@ function validate(form: FormState): Errors {
 
 export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalProps) {
   const isEdit = Boolean(exam);
+  const { groups } = useGroups(open);
   const [form, setForm] = useState<FormState>(() => initialState(exam));
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
+
+  // Reset form + group selection each time the modal opens.
+  useEffect(() => {
+    if (!open) return;
+    setForm(initialState(exam));
+    setErrors({});
+    setBusy(false);
+
+    let cancelled = false;
+    if (!exam) {
+      setSelectedGroupIds([]);
+    } else if ("allowedGroups" in exam) {
+      setSelectedGroupIds(exam.allowedGroups.map((g) => g.id));
+    } else {
+      // Editing from a list row (summary, no group detail) — fetch it.
+      setSelectedGroupIds([]);
+      examsApi
+        .get(exam.id)
+        .then((detail) => {
+          if (!cancelled) setSelectedGroupIds(detail.allowedGroups.map((g) => g.id));
+        })
+        .catch(() => {
+          /* leave empty; the list still saves other fields fine */
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [open, exam?.id]);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
     if (errors[key]) setErrors((e) => ({ ...e, [key]: undefined }));
   }
 
+  function toggleGroup(id: string) {
+    setSelectedGroupIds((ids) =>
+      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+    );
+  }
+
+  function toggleAllGroups(selectAll: boolean) {
+    setSelectedGroupIds(selectAll ? groups.map((g) => g.id) : []);
+  }
+
+  // An exam with no questions cannot be activated (enforced by the backend too).
+  // Count comes from the detail's questions array, or a summary's totalQuestions;
+  // a not-yet-created exam has none.
+  const questionCount = exam
+    ? "questions" in exam
+      ? exam.questions.length
+      : exam.totalQuestions
+    : 0;
+  const canActivate = questionCount > 0;
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const found = validate(form);
     if (Object.keys(found).length > 0) {
       setErrors(found);
+      return;
+    }
+
+    if (form.isActive && !canActivate) {
+      toast.error("Tidak bisa mengaktifkan ujian tanpa soal. Tambahkan minimal 1 soal.");
       return;
     }
 
@@ -110,6 +172,7 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
       isActive: form.isActive,
       randomizeQuestion: form.randomizeQuestion,
       randomizeAnswer: form.randomizeAnswer,
+      allowedGroups: selectedGroupIds,
     };
 
     setBusy(true);
@@ -206,12 +269,92 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
           )}
         </Field>
 
+        {/* Group assignment */}
+        <div className="flex flex-col gap-2 pt-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[0.8125rem] font-medium text-ink">
+              Group yang diizinkan
+            </span>
+            {groups.length > 0 && (
+              <span className="text-xs tabular text-faint">
+                {selectedGroupIds.length}/{groups.length} dipilih
+              </span>
+            )}
+          </div>
+
+          {groups.length === 0 ? (
+            <p className="rounded-[var(--radius-field)] border border-line bg-canvas px-3 py-2 text-xs text-faint">
+              Belum ada group. Buat di menu <span className="font-medium">Group</span>{" "}
+              untuk menetapkannya ke ujian.
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-[var(--radius-card)] border border-line">
+              {/* Fixed select-all header (indeterminate when partially selected). */}
+              <label className="flex cursor-pointer items-center gap-2 border-b border-line bg-canvas px-3 py-2.5 transition-colors hover:bg-canvas/60">
+                <input
+                  type="checkbox"
+                  ref={(el) => {
+                    if (el) {
+                      el.indeterminate =
+                        selectedGroupIds.length > 0 &&
+                        selectedGroupIds.length < groups.length;
+                    }
+                  }}
+                  checked={selectedGroupIds.length === groups.length}
+                  onChange={(e) => toggleAllGroups(e.target.checked)}
+                  className="focus-ring size-4 accent-[var(--color-accent)]"
+                />
+                <span className="text-sm font-medium text-ink">Semua group</span>
+                <span className="ml-auto text-xs tabular text-faint">
+                  {groups.length} group
+                </span>
+              </label>
+
+              {/* Scroll body — fixed height so a large group list never blows up
+                  the modal; the grid inside reflows to 2–3 columns. */}
+              <div className="max-h-52 overflow-y-auto bg-surface p-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {groups.map((g) => {
+                    const checked = selectedGroupIds.includes(g.id);
+                    return (
+                      <label
+                        key={g.id}
+                        className={`flex cursor-pointer items-center gap-2 rounded-[var(--radius-field)] border px-3 py-2 transition-colors ${
+                          checked ? "border-accent/40 bg-accent-wash" : "border-line bg-surface hover:border-faint"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleGroup(g.id)}
+                          className="focus-ring size-4 accent-[var(--color-accent)]"
+                        />
+                        <span className="truncate text-sm text-ink">{g.name}</span>
+                        <span className="ml-auto text-xs tabular text-faint">{g.memberCount}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <p className="text-xs text-faint">
+            Hanya siswa pada group terpilih yang dapat melihat &amp; memulai ujian ini.
+          </p>
+        </div>
+
         <div className="flex flex-col gap-2.5 pt-1">
           <Checkbox
             checked={form.isActive}
             onChange={(v) => set("isActive", v)}
             label="Aktif"
-            hint="Siswa pada group yang diizinkan dapat melihat & memulai ujian."
+            disabled={!canActivate && !form.isActive}
+            hint={
+              canActivate
+                ? "Siswa pada group yang diizinkan dapat melihat & memulai ujian."
+                : "Tambahkan minimal 1 soal untuk mengaktifkan ujian."
+            }
           />
           <Checkbox
             checked={form.randomizeQuestion}
@@ -224,10 +367,6 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
             label="Acak urutan opsi jawaban"
           />
         </div>
-
-        <p className="rounded-[var(--radius-field)] border border-line bg-canvas px-3 py-2 text-xs text-faint">
-          Penetapan group siswa akan tersedia bersama modul Siswa &amp; Group (#15).
-        </p>
       </form>
     </Modal>
   );

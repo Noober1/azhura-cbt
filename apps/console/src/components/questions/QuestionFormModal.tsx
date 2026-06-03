@@ -8,7 +8,7 @@
  * keeps the index→id mapping unambiguous.
  */
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { examsApi } from "../../lib/exams-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
@@ -68,6 +68,17 @@ export function QuestionFormModal({
   const [correctIndex, setCorrectIndex] = useState(() => initialCorrectIndex(question));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Reset on each open so the reused (always-mounted) modal never shows stale
+  // state when switching between add and editing different questions.
+  useEffect(() => {
+    if (!open) return;
+    setText(question?.text ?? "");
+    setOptions(initialOptions(question));
+    setCorrectIndex(initialCorrectIndex(question));
+    setError(null);
+    setBusy(false);
+  }, [open, question?.id]);
 
   function updateOption(key: string, value: string) {
     setOptions((opts) => opts.map((o) => (o.key === key ? { ...o, text: value } : o)));

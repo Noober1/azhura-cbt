@@ -11,7 +11,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/Button";
-import { FileTextIcon, ShieldIcon, LogOutIcon } from "../ui/icons";
+import { FileTextIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon } from "../ui/icons";
 
 interface NavItem {
   to: string;
@@ -23,13 +23,8 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" /> },
-  {
-    to: "/students",
-    label: "Siswa & Group",
-    icon: <ShieldIcon className="size-[18px]" />,
-    disabled: true,
-    hint: "Segera (#15)",
-  },
+  { to: "/students", label: "Siswa", icon: <UsersIcon className="size-[18px]" /> },
+  { to: "/groups", label: "Group", icon: <LayersIcon className="size-[18px]" /> },
 ];
 
 export function AppShell() {

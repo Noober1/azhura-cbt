@@ -14,6 +14,8 @@ import { LoginPage } from "../components/auth/LoginPage";
 import { AppShell } from "../components/layout/AppShell";
 import { ExamListPage } from "../components/exams/ExamListPage";
 import { ExamDetailPage } from "../components/exams/ExamDetailPage";
+import { StudentListPage } from "../components/students/StudentListPage";
+import { GroupListPage } from "../components/groups/GroupListPage";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -37,6 +39,8 @@ export function AppRoutes() {
       >
         <Route path="/exams" element={<ExamListPage />} />
         <Route path="/exams/:examId" element={<ExamDetailPage />} />
+        <Route path="/students" element={<StudentListPage />} />
+        <Route path="/groups" element={<GroupListPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/exams" replace />} />
       <Route path="*" element={<Navigate to="/exams" replace />} />

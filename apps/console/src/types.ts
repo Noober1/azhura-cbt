@@ -90,3 +90,58 @@ export interface QuestionUpdateInput {
   options?: { text: string }[];
   correctOptionIndex?: number;
 }
+
+// ── Groups (#15) ────────────────────────────────────────────────────────────
+
+/** Row from `GET /admin/groups` (and the shape returned by create/update). */
+export interface GroupSummary {
+  id: string;
+  name: string;
+  memberCount: number;
+}
+
+export interface GroupListResponse {
+  data: GroupSummary[];
+  meta: { total: number; page: number; limit: number };
+}
+
+export interface GroupCreateInput {
+  name: string;
+}
+
+export type GroupUpdateInput = { name: string };
+
+// ── Students (#15) ──────────────────────────────────────────────────────────
+
+/** Row from `GET /admin/students` (and the shape returned by get/create/update). */
+export interface StudentSummary {
+  id: string;
+  nis: string;
+  name: string;
+  groupId: string | null;
+  groupName: string | null;
+  isActive: boolean;
+  createdAt: number;
+}
+
+export interface StudentListResponse {
+  data: StudentSummary[];
+  meta: { total: number; page: number; limit: number };
+}
+
+export interface StudentCreateInput {
+  nis: string;
+  name: string;
+  password: string;
+  groupId?: string | null;
+  isActive?: boolean;
+}
+
+/** Body for `PATCH /admin/students/:studentId` (all optional). */
+export interface StudentUpdateInput {
+  nis?: string;
+  name?: string;
+  password?: string;
+  groupId?: string | null;
+  isActive?: boolean;
+}
