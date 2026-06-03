@@ -41,6 +41,11 @@ interface ExamState {
   submitError: string | null;
 
   setExamSession: (session: ExamSession) => Promise<void>;
+  /**
+   * Loads a server-finalized result (e.g. an expired session scored on resume,
+   * #4) into state so the result page can render it without a manual submit.
+   */
+  applyFinalizedResult: (result: ExamResult, examTitle: string) => void;
   setQuestions: (questions: Question[]) => void;
   setCurrentQuestionIndex: (index: number) => void;
   submitAnswer: (questionId: string, selectedOptionId: string | null) => Promise<void>;
@@ -115,6 +120,13 @@ export const useExamStore = create<ExamState>((set, get) => ({
       examResult: null,
     });
     await get().loadPersistedAnswers();
+  },
+
+  applyFinalizedResult: (result, examTitle) => {
+    if (isBrowser) {
+      localStorage.setItem("cbt_exam_title", examTitle);
+    }
+    set({ examResult: result, examTitle });
   },
 
   setQuestions: (questions) => {

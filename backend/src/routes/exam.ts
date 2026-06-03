@@ -23,6 +23,7 @@ import {
   ForbiddenError,
 } from "../lib/errors";
 import { createLogger } from "../lib/logger";
+import { gradeAgainstKey, findActiveSession, finalizeSession } from "../lib/exam-scoring";
 
 const { exams, questions, options, examSessions, answers, examGroups } = schema;
 
@@ -53,12 +54,16 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       title: exams.title,
       durationMinutes: exams.durationMinutes,
       totalQuestions: sql<number>`count(distinct ${questions.id})`,
+      // 1 when the caller has any submitted session for this exam (joined below).
+      // max(case ...) collapses the per-session rows the join multiplies out.
+      completed: sql<number>`max(case when ${examSessions.userId} = ${user.userId} and ${examSessions.submitted} = 1 then 1 else 0 end)`,
     };
 
     const base = db
       .select(projection)
       .from(exams)
-      .leftJoin(questions, eq(questions.examId, exams.id));
+      .leftJoin(questions, eq(questions.examId, exams.id))
+      .leftJoin(examSessions, eq(examSessions.examId, exams.id));
 
     const scoped = restrictGroupId
       ? base.innerJoin(
@@ -80,7 +85,42 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       title: row.title,
       totalQuestions: Number(row.totalQuestions),
       durationMinutes: row.durationMinutes,
+      completed: Number(row.completed) === 1,
     }));
+  })
+
+  /**
+   * GET /api/exams/sessions/active
+   * Authoritative check for the caller's in-progress exam session (#4 resume).
+   * - No unsubmitted session            → `{ status: "none" }`.
+   * - Unsubmitted & time remaining      → `{ status: "resume", session }` (client → /exam).
+   * - Unsubmitted but `endTime` elapsed → finalize server-side & return
+   *   `{ status: "finalized", examTitle, result }` (client → /result).
+   *
+   * Static path; declared before `/:examId/questions` for clarity (it cannot be
+   * captured by that route since the second segment differs).
+   */
+  .get("/sessions/active", async ({ user }) => {
+    const active = await findActiveSession(user.userId);
+    if (!active) return { status: "none" as const };
+
+    if (Date.now() > active.endTime) {
+      const result = await finalizeSession(active);
+      return { status: "finalized" as const, examTitle: active.examTitle, result };
+    }
+
+    return {
+      status: "resume" as const,
+      session: {
+        id: active.id,
+        examId: active.examId,
+        userId: user.userId,
+        examTitle: active.examTitle,
+        totalQuestions: active.totalQuestions,
+        startTime: active.startTime,
+        endTime: active.endTime,
+      },
+    };
   })
 
   /**
@@ -223,14 +263,9 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
         .from(questions)
         .where(eq(questions.examId, examId));
 
-      const totalQuestions = key.length;
       const answerByQuestion = new Map(submitted.map((a) => [a.questionId, a]));
 
-      let totalCorrect = 0;
-      let totalWrong = 0;
-      let totalEmpty = 0;
-
-      // Persist all answers and grade them atomically.
+      // Persist all answers and mark submitted atomically.
       try {
         await db.transaction(async (tx) => {
           for (const q of key) {
@@ -254,14 +289,6 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
                   isFlagged: ans?.isFlagged ? 1 : 0,
                 },
               });
-
-            if (!selected) {
-              totalEmpty++;
-            } else if (selected === q.correctOptionId) {
-              totalCorrect++;
-            } else {
-              totalWrong++;
-            }
           }
 
           await tx
@@ -279,14 +306,20 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
         throw error;
       }
 
-      // Guard against division by zero if an exam somehow has no questions.
-      const score =
-        totalQuestions > 0
-          ? Math.round((totalCorrect / totalQuestions) * 100)
-          : 0;
+      // Grade from the same key + selections (shared with expired-session
+      // finalization in lib/exam-scoring.ts so both paths score identically).
+      const selectedByQuestion = new Map<string, string | null>(
+        key.map((q) => [q.id, answerByQuestion.get(q.id)?.selectedOptionId ?? null])
+      );
+      const result = gradeAgainstKey(key, selectedByQuestion);
 
-      log.info("Exam submitted", { examId, sessionId, userId: user.userId, score });
-      return { score, totalCorrect, totalWrong, totalEmpty };
+      log.info("Exam submitted", {
+        examId,
+        sessionId,
+        userId: user.userId,
+        score: result.score,
+      });
+      return result;
     },
     {
       body: t.Object({
@@ -319,6 +352,36 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     });
 
     if (!exam) throw new NotFoundError("Ujian tidak ditemukan atau tidak aktif.");
+
+    // A submitted exam may never be retaken. Authoritative backstop for the
+    // dashboard's disabled "Mulai Ujian" button — also guards direct API calls.
+    const alreadyCompleted = await db.query.examSessions.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(examSessions.userId, user.userId),
+        eq(examSessions.examId, examId),
+        eq(examSessions.submitted, 1)
+      ),
+    });
+    if (alreadyCompleted) {
+      throw new ConflictError(
+        "Anda sudah menyelesaikan ujian ini dan tidak dapat mengulanginya."
+      );
+    }
+
+    // Block starting another exam while one is still in progress (#4). An
+    // expired-but-unsubmitted session is finalized here first so it can never
+    // permanently block the account (the resume guard would route the student
+    // to /result for it; this is the authoritative backstop for direct calls).
+    const inProgress = await findActiveSession(user.userId);
+    if (inProgress) {
+      if (Date.now() <= inProgress.endTime) {
+        throw new ConflictError(
+          "Anda masih memiliki ujian yang sedang berlangsung. Selesaikan ujian tersebut dahulu."
+        );
+      }
+      await finalizeSession(inProgress);
+    }
 
     // Students may only start exams allowed for their group. The listing in
     // GET /exams already filters by group, but this guards direct calls by
