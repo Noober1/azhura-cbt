@@ -21,9 +21,11 @@ import {
   ConflictError,
   GoneError,
   ForbiddenError,
+  BadRequestError,
 } from "../lib/errors";
 import { createLogger } from "../lib/logger";
 import { gradeAgainstKey, findActiveSession, finalizeSession } from "../lib/exam-scoring";
+import { checkExamToken } from "../lib/exam-token";
 
 const { exams, questions, options, examSessions, answers, examGroups } = schema;
 
@@ -57,6 +59,9 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       // 1 when the caller has any submitted session for this exam (joined below).
       // max(case ...) collapses the per-session rows the join multiplies out.
       completed: sql<number>`max(case when ${examSessions.userId} = ${user.userId} and ${examSessions.submitted} = 1 then 1 else 0 end)`,
+      // 1 when the exam is token-gated. The raw token is deliberately never
+      // projected/returned — only this boolean is exposed to the client (#1).
+      requiresToken: sql<number>`(${exams.token} is not null)`,
     };
 
     const base = db
@@ -86,6 +91,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       totalQuestions: Number(row.totalQuestions),
       durationMinutes: row.durationMinutes,
       completed: Number(row.completed) === 1,
+      requiresToken: Number(row.requiresToken) === 1,
     }));
   })
 
@@ -341,13 +347,15 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
    * Creates a new timed session for the active exam and returns its metadata
    * (including computed `endTime`).
    * @throws {NotFoundError} when the exam does not exist or is inactive.
-   * @throws {ForbiddenError} when a student's group isn't allowed this exam.
+   * @throws {ForbiddenError} when a student's group isn't allowed this exam, or
+   *   the exam's access token is required and the supplied one doesn't match.
+   * @throws {BadRequestError} when a required token is missing or malformed.
    */
-  .post("/:examId/sessions", async ({ params, user }) => {
+  .post("/:examId/sessions", async ({ params, user, body }) => {
     const { examId } = params;
 
     const exam = await db.query.exams.findFirst({
-      columns: { id: true, title: true, durationMinutes: true },
+      columns: { id: true, title: true, durationMinutes: true, token: true },
       where: and(eq(exams.id, examId), eq(exams.isActive, 1)),
     });
 
@@ -408,6 +416,24 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       }
     }
 
+    // Access-token gate (#1): a token-protected exam requires an exact,
+    // case-sensitive, alphanumeric match before a session can be created. The
+    // raw token never leaves the server — only verified here.
+    switch (checkExamToken(exam.token, body?.token)) {
+      case "missing":
+        throw new BadRequestError("Token akses ujian wajib diisi.");
+      case "invalid_format":
+        throw new BadRequestError(
+          "Token hanya boleh berisi huruf dan angka, maksimal 5 karakter."
+        );
+      case "mismatch":
+        log.warn("Blocked session: wrong exam access token", {
+          examId,
+          userId: user.userId,
+        });
+        throw new ForbiddenError("Token akses ujian salah.");
+    }
+
     const [{ total }] = await db
       .select({ total: sql<number>`count(*)` })
       .from(questions)
@@ -435,4 +461,8 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       startTime: now,
       endTime,
     };
+  }, {
+    // Body is optional so open exams can post nothing; the token (when present)
+    // is format/match-checked in the handler via checkExamToken for clear errors.
+    body: t.Optional(t.Object({ token: t.Optional(t.String()) })),
   });

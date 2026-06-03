@@ -140,13 +140,20 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
     setIsDialogOpen(true);
   };
 
-  /** Opens a session for the selected exam, then navigates to the exam screen. */
-  const handleConfirmStart = async () => {
+  /**
+   * Opens a session for the selected exam, then navigates to the exam screen.
+   * `token` is the access token for token-gated exams (#1); the dialog is kept
+   * open on failure so a wrong token can be corrected and retried.
+   */
+  const handleConfirmStart = async (token?: string) => {
     if (!selectedExam) return;
 
     setStartingExamId(selectedExam.id);
     try {
-      const response = await api.post(`/exams/${selectedExam.id}/sessions`);
+      const response = await api.post(
+        `/exams/${selectedExam.id}/sessions`,
+        token ? { token } : {}
+      );
       await setExamSession(response.data);
       setIsDialogOpen(false);
       onExamStarted();

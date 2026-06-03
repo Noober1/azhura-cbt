@@ -1,4 +1,5 @@
-import { TriangleAlert, FileText, Clock } from "lucide-react";
+import { useEffect, useState } from "react";
+import { TriangleAlert, FileText, Clock, KeyRound } from "lucide-react";
 import type { AvailableExam } from "../../types";
 import {
   AlertDialog,
@@ -10,14 +11,22 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "../ui/alert-dialog";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+
+/** Mirrors the server rule: 1–5 alphanumeric characters (see lib/exam-token.ts). */
+const TOKEN_PATTERN = /^[A-Za-z0-9]{1,5}$/;
 
 interface StartExamDialogProps {
   /** The exam awaiting confirmation, or `null` when the dialog is closed. */
   exam: AvailableExam | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Invoked when the student confirms they want to begin the exam. */
-  onConfirm: () => void;
+  /**
+   * Invoked when the student confirms they want to begin the exam. Carries the
+   * entered access token when the exam is token-gated (`undefined` otherwise).
+   */
+  onConfirm: (token?: string) => void;
   /** When `true`, disables actions and shows a loading label. */
   isStarting: boolean;
 }
@@ -34,6 +43,25 @@ export const StartExamDialog = ({
   onConfirm,
   isStarting,
 }: StartExamDialogProps) => {
+  const requiresToken = exam?.requiresToken ?? false;
+  const [token, setToken] = useState("");
+
+  // Reset the token field whenever the dialog targets a different exam (or
+  // reopens) so a previous entry never carries over.
+  useEffect(() => {
+    setToken("");
+  }, [exam?.id, open]);
+
+  const tokenValid = !requiresToken || TOKEN_PATTERN.test(token);
+  // Show the inline format hint only once the student has typed something.
+  const showFormatError = requiresToken && token.length > 0 && !tokenValid;
+
+  const handleConfirm = () => {
+    if (!exam || isStarting) return;
+    if (requiresToken && !tokenValid) return;
+    onConfirm(requiresToken ? token : undefined);
+  };
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent size="default" className="p-6">
@@ -76,6 +104,47 @@ export const StartExamDialog = ({
           </p>
         </div>
 
+        {/* Access token gate (#1): only for token-protected exams. */}
+        {requiresToken && (
+          <div className="mt-4 space-y-1.5">
+            <Label
+              htmlFor="exam-token"
+              className="flex items-center gap-1.5 text-sm font-semibold text-neutral-700 dark:text-neutral-300"
+            >
+              <KeyRound className="w-4 h-4 text-indigo-500" />
+              Token Akses Ujian
+            </Label>
+            <Input
+              id="exam-token"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleConfirm();
+              }}
+              maxLength={5}
+              autoFocus
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              disabled={isStarting}
+              placeholder="Masukkan token dari pengawas"
+              aria-invalid={showFormatError}
+              className="font-mono tracking-widest"
+            />
+            <p
+              className={`text-xs font-medium ${
+                showFormatError
+                  ? "text-destructive"
+                  : "text-neutral-500 dark:text-neutral-400"
+              }`}
+            >
+              {showFormatError
+                ? "Token hanya boleh huruf dan angka, maksimal 5 karakter."
+                : "Token bersifat case-sensitive (huruf besar/kecil dibedakan)."}
+            </p>
+          </div>
+        )}
+
         <AlertDialogFooter className="flex gap-2">
           <AlertDialogCancel
             disabled={isStarting}
@@ -86,9 +155,9 @@ export const StartExamDialog = ({
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault(); // Confirm programmatically; keep dialog controlled.
-              onConfirm();
+              handleConfirm();
             }}
-            disabled={isStarting || !exam}
+            disabled={isStarting || !exam || (requiresToken && !tokenValid)}
             className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
           >
             {isStarting ? "Mempersiapkan sesi..." : "Lanjutkan"}
