@@ -48,6 +48,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
           password: true,
           role: true,
           groupId: true,
+          isActive: true,
         },
         where: eq(users.nis, nis),
       });
@@ -63,6 +64,14 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         log.warn("Login failed: wrong password", { nis, userId: record.id });
         set.status = 401;
         return { message: "NIS atau password salah." };
+      }
+
+      // Reject deactivated accounts only AFTER verifying the password, so an
+      // unauthenticated probe cannot learn which NIS are active vs disabled.
+      if (record.isActive !== 1) {
+        log.warn("Login blocked: inactive account", { nis, userId: record.id });
+        set.status = 403;
+        return { message: "Akun Anda dinonaktifkan. Hubungi administrator." };
       }
 
       const token = await jwt.sign({

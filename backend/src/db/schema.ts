@@ -37,6 +37,8 @@ export const users = mysqlTable("users", {
   role: mysqlEnum("role", ["student", "supervisor", "admin"])
     .notNull()
     .default("student"),
+  /** Whether the account may sign in. Inactive accounts are rejected at login. */
+  isActive: tinyint("is_active").notNull().default(1),
   /** The group this user belongs to; null for supervisors/admins. */
   groupId: varchar("group_id", { length: 36 }).references(() => groups.id, {
     onDelete: "set null",

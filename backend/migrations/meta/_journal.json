@@ -22,6 +22,13 @@
       "when": 1780398743277,
       "tag": "0002_colorful_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1780480611155,
+      "tag": "0003_cool_yellow_claw",
+      "breakpoints": true
     }
   ]
 }
