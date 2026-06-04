@@ -59,9 +59,17 @@ export const connectSocket = (token: string): void => {
     useSocketStore.getState().setConnected(false);
   });
 
-  socket.on("alert-message", (data: { message: string }) => {
-    useSocketStore.getState().setLastMessage(data.message);
-    toast.info(`Pesan Pengawas: ${data.message}`, { duration: 8000 });
+  socket.on("alert-message", (data: { message: string; variant?: "toast" | "modal" }) => {
+    const store = useSocketStore.getState();
+    store.setLastMessage(data.message);
+    // A `modal` broadcast (#13) is shown as a blocking dialog the student must
+    // acknowledge; everything else (and legacy payloads without a variant) is a
+    // non-intrusive toast.
+    if (data.variant === "modal") {
+      store.setSupervisorModal(data.message);
+    } else {
+      toast.info(`Pesan Pengawas: ${data.message}`, { duration: 8000 });
+    }
   });
 
   // The server (admin mutation) signalled that this student's exam list changed.
