@@ -1,4 +1,4 @@
-import { User as UserIcon, IdCard, ShieldCheck } from "lucide-react";
+import { User as UserIcon, IdCard, Users as GroupIcon, ShieldCheck } from "lucide-react";
 import type { User } from "../../types";
 import { Card, CardContent, CardHeader } from "../ui/card";
 
@@ -40,6 +40,11 @@ export const ParticipantCard = ({ user }: ParticipantCardProps) => {
           icon={<UserIcon className="w-4 h-4 text-neutral-400" />}
           label="Nama Lengkap"
           value={user?.name ?? "-"}
+        />
+        <InfoRow
+          icon={<GroupIcon className="w-4 h-4 text-neutral-400" />}
+          label="Kelas / Group"
+          value={user?.groupName ?? "-"}
         />
         <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200/60 bg-emerald-50/60 px-3 py-2.5 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-400">
           <ShieldCheck className="w-4 h-4 shrink-0" />
