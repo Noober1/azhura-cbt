@@ -186,12 +186,13 @@ Menyerahkan lembar jawaban final siswa untuk dikunci dan dinilai secara permanen
 Ketika klien tersambung ke namespace root `/` pada Socket.io server, klien mengirimkan `token` di payload `auth` jabat-tangan (handshake). Server dapat mengontrol sesi ujian klien secara real-time dengan memicu event-event berikut:
 
 ### 3.1 Server Emitter: `alert-message`
-Menampilkan pesan peringatan mengambang dari pengawas di layar siswa.
+Menampilkan pesan dari pengawas di layar siswa (#13). `variant` menentukan tampilan: `toast` (notifikasi ringan, default) atau `modal` (dialog yang harus ditutup siswa). Diarahkan ke room sesuai target (lihat §4.5).
 *   **Event Name**: `alert-message`
-*   **Payload Shape**:
+*   **Payload Shape** (`SupervisorMessage` dari `@azhura/shared`):
     ```json
     {
-      "message": "Ujian tersisa 10 menit. Periksa kembali jawaban Anda!"
+      "message": "Ujian tersisa 10 menit. Periksa kembali jawaban Anda!",
+      "variant": "toast"
     }
     ```
 
@@ -214,3 +215,76 @@ Mengeluarkan siswa langsung dari sesi ujian dan menghapus seluruh token login (m
       "reason": "Anda terdeteksi melakukan tindakan kecurangan Alt+Tab sebanyak 3 kali."
     }
     ```
+
+### 3.4 Server Emitter: `roster-update` (#7)
+Mendorong perubahan inkremental roster ke room `supervisors` (admin/pengawas). Roster mencakup **semua siswa yang login**: yang sedang ujian dan yang **idle di dashboard** (`exam: null`). Konsumen utama: halaman **Status Peserta**. Patch diskriminatif:
+*   **Event Name**: `roster-update`
+*   **Payload Shape** (`RosterPatch` dari `@azhura/shared`):
+    ```jsonc
+    // peserta muncul/berpindah grup (login→dashboard, mulai ujian, submit→balik dashboard)
+    { "type": "upsert", "participant": { /* RosterParticipant */ } }
+    // peserta keluar dari roster (dashboard student disconnect / logout)
+    { "type": "remove", "userId": "uuid" }
+    // status koneksi exam-taker berubah saat disconnect/reconnect mid-exam
+    { "type": "connection", "userId": "uuid", "connection": "disconnected", "lastSeen": 1717500000000 }
+    ```
+
+## 4. Supervisor HTTP Endpoints
+
+Semua endpoint di-gate ke role `supervisor`/`admin` (`onBeforeHandle`).
+
+### 4.1 `GET /api/supervisor/roster` (#7)
+Backfill roster: gabungan **exam-takers** (sesi `exam_sessions` aktif: belum submit & belum lewat `endTime`) dan **dashboard students** (punya sesi registry aktif tapi tidak sedang ujian). `exam` bernilai `null` untuk peserta di dashboard. Console memanggilnya sekali saat halaman dibuka, lalu live lewat `roster-update`.
+*   **Response Shape** (`RosterSnapshot` dari `@azhura/shared`):
+    ```jsonc
+    {
+      "participants": [
+        { // sedang ujian
+          "userId": "uuid", "nis": "12345", "name": "Ahmad Faisal", "groupName": "Kelas 7A",
+          "exam": { "examId": "uuid", "examTitle": "UAS Matematika",
+                    "startTime": 1717500000000, "endTime": 1717503600000 },
+          "connection": "connected", "lastSeen": 1717500120000
+        },
+        { // idle di dashboard
+          "userId": "uuid2", "nis": "67890", "name": "Budi", "groupName": "Kelas 7B",
+          "exam": null, "connection": "connected", "lastSeen": 1717500130000
+        }
+      ],
+      "serverTime": 1717500200000
+    }
+    ```
+
+### 4.2 `POST /api/supervisor/dashboard-logout` (#7)
+Remote-logout siswa yang **idle di dashboard**. Dengan `userId` → logout satu siswa; tanpa `userId` → logout **semua** siswa di dashboard. Siswa yang sedang ujian **ditolak** (guard server-side, bukan hanya UI) — untuk itu pakai kick / remote-submit. Memicu event `kick` ke siswa, melepas sesi registry, dan emit `roster-update` `remove`.
+*   **Request Body**: `{ "userId"?: "uuid", "reason"?: "string" }`
+*   **Response**: `{ "success": true, "count": 2 }` — jumlah siswa yang ter-logout.
+*   **Error**: `400` bila `userId` menunjuk siswa yang sedang mengerjakan ujian.
+
+### 4.3 `POST /api/supervisor/force-submit` (#12)
+Remote finish: menyuruh client siswa **mengumpulkan ujian saat itu juga** lalu diarahkan ke halaman hasil (`/result`). Siswa **tetap login** (beda dengan kick). `reason` opsional **ditampilkan ke siswa** (default sopan bila kosong) via event `force-submit`. Tercatat di logger.
+*   **Request Body**: `{ "userId": "uuid", "reason"?: "string" }`
+*   **Response**: `{ "success": true }`
+*   **Catatan**: pengumpulan bersifat client-driven (skor dari response submit ditampilkan di `/result`). Untuk finalisasi yang dijamin server-side meski client offline, gunakan kick (§4.4).
+
+### 4.4 `POST /api/supervisor/kick` (#11)
+Kick **server-authoritative**: dalam satu aksi (1) **finalisasi sesi ujian server-side** — menilai jawaban yang sudah tersimpan & menandai `submitted`, berjalan walau client sudah offline; (2) melepas sesi registry (#5, akun bisa login lagi); (3) emit event `kick` (client menampilkan `reason` lalu logout); (4) emit `roster-update` `remove`. Aman juga untuk siswa idle dashboard (tanpa sesi ujian → finalisasi dilewati). Tercatat di logger (audit).
+*   **Request Body**: `{ "userId": "uuid", "reason"?: "string" }`
+*   **Response**: `{ "success": true, "finalized": true }` — `finalized` true bila ada sesi ujian yang dinilai server-side; false untuk siswa dashboard.
+
+### 4.5 `POST /api/supervisor/alert` (#13)
+Broadcast pesan ke siswa dengan **target** dan **tampilan** pilihan. Diarahkan ke room yang tepat (`all` → semua siswa, `user` → `user:{id}`, `group` → tiap `group:{id}`) lewat event `alert-message` (§3.1). Tercatat di logger.
+*   **Request Body** (`target` = `BroadcastTarget`, `variant` = `SupervisorMessageVariant`):
+    ```jsonc
+    {
+      "message": "Pengumuman penting",       // wajib, minLength 1
+      "variant": "toast",                     // "toast" (default) | "modal"
+      "target": { "type": "all" }             // | { "type":"user","userId":"uuid" }
+                                              // | { "type":"group","groupIds":["uuid", ...] }
+    }
+    ```
+*   **Response**: `{ "success": true }`
+*   **Error**: `400/422` bila `message` kosong atau `target` tidak valid.
+
+### 4.6 `GET /api/supervisor/groups` (#13)
+Daftar group (id + nama) untuk pemilih target broadcast. Tersedia untuk `supervisor`/`admin` (berbeda dari CRUD `/admin/groups` yang admin-only).
+*   **Response Shape** (`GroupOption[]` dari `@azhura/shared`): `[{ "id": "uuid", "name": "Kelas 7A" }, ...]`

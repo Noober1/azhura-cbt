@@ -13,7 +13,11 @@ import { getJwtSecret, getServerConfig } from "./lib/env";
 import { createLogger } from "./lib/logger";
 import { setLogBroadcaster } from "./lib/log-files";
 import { setExamListBroadcaster } from "./lib/exam-events";
+import { setRosterBroadcaster, notifyRosterPatch } from "./lib/roster-events";
+import { buildRosterParticipant, hasActiveExam } from "./lib/roster";
 import { sessionRegistry, CONNECTED_TTL } from "./lib/session-registry";
+import { resolveBroadcast } from "./lib/broadcast";
+import type { BroadcastTarget, SupervisorMessage, SupervisorMessageVariant } from "@azhura/shared";
 
 const log = createLogger("Socket");
 
@@ -45,12 +49,17 @@ interface SocketJwt {
  * @returns The started {@link SocketServer} instance.
  */
 export function initSocket(httpServer: HttpServer): SocketServer {
-  const { corsOrigins } = getServerConfig();
+  const { corsOrigins, pingIntervalMs, pingTimeoutMs } = getServerConfig();
   const jwtSecret = getJwtSecret();
 
   io = new SocketServer(httpServer, {
     path: "/ws",
     cors: { origin: corsOrigins, methods: ["GET", "POST"] },
+    // Engine.io ping/pong drives reliable liveness detection (#9): a missed pong
+    // within the timeout fires `disconnect`, which flips roster status (#7) and
+    // starts the session grace period (#5).
+    pingInterval: pingIntervalMs,
+    pingTimeout: pingTimeoutMs,
   });
 
   // Stream warn/error/access log entries live to the supervisor dashboard.
@@ -65,6 +74,13 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     for (const groupId of affectedGroupIds) {
       io.to(`group:${groupId}`).emit("exam-list-updated");
     }
+  });
+
+  // Push live participant-roster changes (#7) to the supervisor dashboard. The
+  // exam routes and the connect/disconnect handlers below call notifyRosterPatch;
+  // this is the only place that touches Socket.io, mirroring the seams above.
+  setRosterBroadcaster((patch) => {
+    io.to("supervisors").emit("roster-update", patch);
   });
 
   // Handshake auth: verify the JWT before allowing the connection.
@@ -131,6 +147,21 @@ export function initSocket(httpServer: HttpServer): SocketServer {
           socket.disconnect(true);
           return;
         }
+        // Roster (#7): this student is now live — surface them to supervisors.
+        // An upsert (not just a connection flag) makes them appear on the roster
+        // even when idle on the dashboard, not only once they start an exam.
+        void buildRosterParticipant(userId)
+          .then((participant) => {
+            if (participant && !disconnected) {
+              notifyRosterPatch({ type: "upsert", participant });
+            }
+          })
+          .catch((error) => {
+            log.warn("Roster upsert on connect failed", {
+              nis,
+              reason: error instanceof Error ? error.message : String(error),
+            });
+          });
         heartbeat = setInterval(() => {
           void sessionRegistry.refresh(userId, sessionId).catch((error) => {
             log.warn("Session heartbeat refresh failed", {
@@ -152,6 +183,23 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       // Start the grace window: a reconnect with the same sessionId refreshes the
       // TTL back; otherwise the key expires and the account becomes free again.
       if (role === "student" && sessionId) {
+        // Roster (#7): an exam-taker who drops stays visible as `disconnected`
+        // (proctoring needs to see mid-exam drops); a dashboard student who
+        // drops is simply removed from the list.
+        void hasActiveExam(userId)
+          .then((inExam) => {
+            notifyRosterPatch(
+              inExam
+                ? { type: "connection", userId, connection: "disconnected", lastSeen: Date.now() }
+                : { type: "remove", userId }
+            );
+          })
+          .catch((error) => {
+            log.warn("Roster patch on disconnect failed", {
+              nis,
+              reason: error instanceof Error ? error.message : String(error),
+            });
+          });
         void sessionRegistry.startGrace(userId, sessionId).catch((error) => {
           log.warn("Failed to start session grace period", {
             nis,
@@ -171,13 +219,25 @@ export function initSocket(httpServer: HttpServer): SocketServer {
  * All target rooms established in {@link initSocket}.
  */
 export const supervisorActions = {
-  /** Broadcasts an alert to every non-supervisor client. */
-  alertAll: (message: string) => {
-    io.except("supervisors").emit("alert-message", { message });
-  },
-  /** Sends an alert to a single user's room. */
-  alertUser: (userId: string, message: string) => {
-    io.to(`user:${userId}`).emit("alert-message", { message });
+  /**
+   * Broadcasts a supervisor message (#13) to the target's rooms with the chosen
+   * display variant. `all` reaches every non-supervisor client; `user`/`group`
+   * reach their respective rooms (established in {@link initSocket}).
+   */
+  broadcastMessage: (
+    target: BroadcastTarget,
+    message: string,
+    variant: SupervisorMessageVariant
+  ) => {
+    const { toAllStudents, rooms } = resolveBroadcast(target);
+    const payload: SupervisorMessage = { message, variant };
+    if (toAllStudents) {
+      io.except("supervisors").emit("alert-message", payload);
+      return;
+    }
+    for (const room of rooms) {
+      io.to(room).emit("alert-message", payload);
+    }
   },
   /** Forces a single user's client to submit their exam. */
   forceSubmitUser: (userId: string, reason?: string) => {

@@ -120,3 +120,7 @@ export const LayersIcon = svg(
     <path d="m3 12 9 5 9-5M3 17l9 5 9-5" />
   </>
 );
+
+export const ActivityIcon = svg(
+  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+);

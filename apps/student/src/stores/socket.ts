@@ -13,6 +13,11 @@ interface SocketState {
   isConnected: boolean;
   lastServerMessage: string | null;
   /**
+   * An active supervisor broadcast (#13) to show as a blocking modal; null when
+   * none. Toast-variant messages do not set this (they go straight to a toast).
+   */
+  supervisorModal: string | null;
+  /**
    * Monotonic counter bumped whenever the server signals the exam list changed
    * (`exam-list-updated`, #3). The dashboard watches this to trigger a refetch.
    */
@@ -25,6 +30,10 @@ interface SocketState {
   setConnected: (connected: boolean) => void;
   /** Stores the most recent supervisor message. */
   setLastMessage: (message: string) => void;
+  /** Shows a supervisor broadcast as a blocking modal (#13). */
+  setSupervisorModal: (message: string) => void;
+  /** Dismisses the active supervisor modal. */
+  dismissSupervisorModal: () => void;
   /** Signals that the active-exam list changed server-side (triggers refetch). */
   bumpExamListVersion: () => void;
 }
@@ -32,6 +41,7 @@ interface SocketState {
 export const useSocketStore = create<SocketState>((set) => ({
   isConnected: false,
   lastServerMessage: null,
+  supervisorModal: null,
   examListVersion: 0,
 
   connect: (token) => {
@@ -49,6 +59,14 @@ export const useSocketStore = create<SocketState>((set) => ({
 
   setLastMessage: (message) => {
     set({ lastServerMessage: message });
+  },
+
+  setSupervisorModal: (message) => {
+    set({ supervisorModal: message });
+  },
+
+  dismissSupervisorModal: () => {
+    set({ supervisorModal: null });
   },
 
   bumpExamListVersion: () => {

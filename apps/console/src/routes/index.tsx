@@ -16,6 +16,7 @@ import { ExamListPage } from "../components/exams/ExamListPage";
 import { ExamDetailPage } from "../components/exams/ExamDetailPage";
 import { StudentListPage } from "../components/students/StudentListPage";
 import { GroupListPage } from "../components/groups/GroupListPage";
+import { StatusPesertaPage } from "../components/monitoring/StatusPesertaPage";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -41,6 +42,7 @@ export function AppRoutes() {
         <Route path="/exams/:examId" element={<ExamDetailPage />} />
         <Route path="/students" element={<StudentListPage />} />
         <Route path="/groups" element={<GroupListPage />} />
+        <Route path="/monitoring" element={<StatusPesertaPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/exams" replace />} />
       <Route path="*" element={<Navigate to="/exams" replace />} />

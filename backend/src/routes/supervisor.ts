@@ -10,10 +10,41 @@
  */
 
 import { Elysia, t } from "elysia";
+import { asc } from "drizzle-orm";
+import { db, schema } from "../db";
 import { authPlugin } from "../middleware/requireAuth";
 import { supervisorActions } from "../socket";
-import { ForbiddenError } from "../lib/errors";
+import { ForbiddenError, BadRequestError } from "../lib/errors";
 import { getRecentLogs } from "../lib/log-files";
+import { buildRosterSnapshot, hasActiveExam, listDashboardUserIds } from "../lib/roster";
+import { sessionRegistry } from "../lib/session-registry";
+import { notifyRosterPatch } from "../lib/roster-events";
+import { kickStudent } from "../lib/proctor-actions";
+import { createLogger } from "../lib/logger";
+
+const { groups } = schema;
+
+const log = createLogger("Supervisor");
+
+const DEFAULT_LOGOUT_REASON =
+  "Anda dikeluarkan dari dashboard oleh pengawas. Silakan login kembali bila perlu.";
+
+const DEFAULT_KICK_REASON = "Anda dikeluarkan dari ujian oleh pengawas.";
+
+/**
+ * Logs a single dashboard student out: releases their registry session, fires
+ * the `kick` event (the client signs out), and removes them from the roster.
+ * Returns false (and does nothing) if the student is mid-exam — those must be
+ * handled via kick/remote-submit, never a plain dashboard logout (#7).
+ */
+async function logoutDashboardUser(userId: string, reason: string): Promise<boolean> {
+  if (await hasActiveExam(userId)) return false;
+  const active = await sessionRegistry.getActive(userId);
+  if (active) await sessionRegistry.release(userId, active.sessionId);
+  supervisorActions.kickUser(userId, reason);
+  notifyRosterPatch({ type: "remove", userId });
+  return true;
+}
 
 export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
   .use(authPlugin)
@@ -27,35 +58,57 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
 
   /**
    * POST /api/supervisor/alert
-   * Sends an alert to a specific `userId`, or broadcasts to all students when
-   * `userId` is omitted.
+   * Broadcasts a message (#13) to a target — one student, one or more groups, or
+   * everyone — shown on the client as a toast (default) or a modal. Logged for
+   * audit.
    */
   .post(
     "/alert",
-    ({ body }) => {
-      if (body.userId) {
-        supervisorActions.alertUser(body.userId, body.message);
-      } else {
-        supervisorActions.alertAll(body.message);
-      }
+    ({ body, user }) => {
+      const variant = body.variant ?? "toast";
+      supervisorActions.broadcastMessage(body.target, body.message, variant);
+      log.info("Broadcast", { by: user.userId, target: body.target.type, variant });
       return { success: true };
     },
     {
       body: t.Object({
         message: t.String({ minLength: 1 }),
-        userId: t.Optional(t.String()),
+        variant: t.Optional(t.Union([t.Literal("toast"), t.Literal("modal")])),
+        target: t.Union([
+          t.Object({ type: t.Literal("all") }),
+          t.Object({ type: t.Literal("user"), userId: t.String() }),
+          t.Object({
+            type: t.Literal("group"),
+            groupIds: t.Array(t.String(), { minItems: 1 }),
+          }),
+        ]),
       }),
     }
   )
 
   /**
+   * GET /api/supervisor/groups
+   * Lists groups (id + name) for the broadcast target picker. Available to
+   * supervisors (unlike the admin-only `/admin/groups` CRUD).
+   */
+  .get("/groups", async () => {
+    return await db
+      .select({ id: groups.id, name: groups.name })
+      .from(groups)
+      .orderBy(asc(groups.name));
+  })
+
+  /**
    * POST /api/supervisor/force-submit
-   * Instructs the targeted student's client to submit their exam immediately.
+   * Remote finish (#12): tells the targeted student's client to submit their
+   * exam immediately, carrying an optional `reason` the client displays. The
+   * student stays signed in and is routed to their result — unlike `kick`.
    */
   .post(
     "/force-submit",
-    ({ body }) => {
+    ({ body, user }) => {
       supervisorActions.forceSubmitUser(body.userId, body.reason);
+      log.info("Force submit", { target: body.userId, by: user.userId });
       return { success: true };
     },
     {
@@ -68,17 +121,69 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
 
   /**
    * POST /api/supervisor/kick
-   * Revokes the targeted student's exam access (client logs out).
+   * Server-authoritative kick (#11): finalizes the student's exam server-side
+   * (score computed even if the client never submitted), frees the single-session
+   * lock (#5), tells the client to log out with the given reason, and removes the
+   * student from the roster (#7). Works even if the student is already offline.
    */
   .post(
     "/kick",
-    ({ body }) => {
-      supervisorActions.kickUser(body.userId, body.reason);
-      return { success: true };
+    async ({ body, user }) => {
+      const reason = body.reason?.trim() || DEFAULT_KICK_REASON;
+      const { finalized } = await kickStudent(body.userId, reason);
+      log.info("Kick", { target: body.userId, by: user.userId, finalized });
+      return { success: true, finalized };
     },
     {
       body: t.Object({
         userId: t.String(),
+        reason: t.Optional(t.String()),
+      }),
+    }
+  )
+
+  /**
+   * GET /api/supervisor/roster
+   * Backfills the live participant roster (#7): every student currently working
+   * on an exam, with connection status and remaining-time bounds. The console
+   * fetches this once on mount, then stays live via the `roster-update` event.
+   */
+  .get("/roster", async () => await buildRosterSnapshot())
+
+  /**
+   * POST /api/supervisor/dashboard-logout
+   * Remote-logs-out students idle on the dashboard (#7). With `userId`, logs out
+   * that one student; without it, logs out everyone currently on the dashboard.
+   * Students who are mid-exam are never affected — that guard is enforced here,
+   * not just in the UI, to prevent accidentally signing out an active test-taker.
+   */
+  .post(
+    "/dashboard-logout",
+    async ({ body, user }) => {
+      const reason = body.reason?.trim() || DEFAULT_LOGOUT_REASON;
+
+      if (body.userId) {
+        const ok = await logoutDashboardUser(body.userId, reason);
+        if (!ok) {
+          throw new BadRequestError(
+            "Peserta sedang mengerjakan ujian. Gunakan kick atau remote submit, bukan logout dashboard."
+          );
+        }
+        log.info("Dashboard logout (single)", { target: body.userId, by: user.userId });
+        return { success: true, count: 1 };
+      }
+
+      const dashboardUserIds = await listDashboardUserIds();
+      const results = await Promise.all(
+        dashboardUserIds.map((id) => logoutDashboardUser(id, reason))
+      );
+      const count = results.filter(Boolean).length;
+      log.info("Dashboard logout (all)", { count, by: user.userId });
+      return { success: true, count };
+    },
+    {
+      body: t.Object({
+        userId: t.Optional(t.String()),
         reason: t.Optional(t.String()),
       }),
     }

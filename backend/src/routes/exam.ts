@@ -26,6 +26,8 @@ import {
 import { createLogger } from "../lib/logger";
 import { gradeAgainstKey, findActiveSession, finalizeSession } from "../lib/exam-scoring";
 import { checkExamToken } from "../lib/exam-token";
+import { notifyRosterPatch } from "../lib/roster-events";
+import { buildRosterParticipant } from "../lib/roster";
 import { shuffle, applyQuestionOrder } from "../lib/question-order";
 
 const { exams, questions, options, examSessions, answers, examGroups, sessionQuestions } =
@@ -370,6 +372,24 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
         userId: user.userId,
         score: result.score,
       });
+      // Roster (#7): the exam is done, but the student is usually still logged
+      // in — move them back to the "Dashboard" group (upsert resolves to a
+      // dashboard entry now that no exam session is active). If their socket is
+      // already gone, buildRosterParticipant returns null → remove them.
+      void buildRosterParticipant(user.userId)
+        .then((participant) => {
+          notifyRosterPatch(
+            participant
+              ? { type: "upsert", participant }
+              : { type: "remove", userId: user.userId }
+          );
+        })
+        .catch((error) => {
+          log.warn("Roster patch after submit failed", {
+            userId: user.userId,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        });
       return result;
     },
     {
@@ -530,6 +550,14 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       userId: user.userId,
       randomizedQuestions: persistQuestionOrder,
     });
+
+    // Roster (#7): push the new participant to supervisors. Built after insert so
+    // it carries the live DB state; null only if the session vanished immediately.
+    const rosterEntry = await buildRosterParticipant(user.userId);
+    if (rosterEntry) {
+      notifyRosterPatch({ type: "upsert", participant: rosterEntry });
+    }
+
     return {
       id: sessionId,
       examId: exam.id,

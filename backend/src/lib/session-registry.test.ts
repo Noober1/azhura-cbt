@@ -93,6 +93,30 @@ describe("refresh (heartbeat)", () => {
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(CONNECTED_TTL);
   });
+
+  it("advances lastSeen on each refresh (roster freshness, #7)", async () => {
+    await registry.tryClaim(USER, SESSION_A);
+    await registry.markConnected(USER, SESSION_A, "socket-1");
+    const before = Number((await registry.getActive(USER))?.lastSeen);
+
+    // Wait a tick so the timestamp is guaranteed to differ.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(await registry.refresh(USER, SESSION_A)).toBe(true);
+
+    const after = Number((await registry.getActive(USER))?.lastSeen);
+    expect(after).toBeGreaterThan(before);
+  });
+
+  it("does not change lastSeen for a non-owning refresh", async () => {
+    await registry.tryClaim(USER, SESSION_A);
+    await registry.markConnected(USER, SESSION_A, "socket-1");
+    const before = (await registry.getActive(USER))?.lastSeen;
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(await registry.refresh(USER, SESSION_B)).toBe(false);
+
+    expect((await registry.getActive(USER))?.lastSeen).toBe(before ?? "");
+  });
 });
 
 describe("startGrace (disconnect)", () => {
@@ -121,6 +145,32 @@ describe("release (logout)", () => {
 
     expect(await registry.release(USER, SESSION_A)).toBe(true);
     expect(await registry.getActive(USER)).toBeNull();
+  });
+});
+
+describe("listActive (roster enumeration, #7)", () => {
+  it("returns an empty list when no sessions are alive", async () => {
+    expect(await registry.listActive()).toEqual([]);
+  });
+
+  it("enumerates every live session with its userId and status", async () => {
+    await registry.tryClaim("user-a", "sess-a");
+    await registry.tryClaim("user-b", "sess-b");
+    await registry.markConnected("user-b", "sess-b", "socket-b");
+
+    const active = await registry.listActive();
+    expect(active.length).toBe(2);
+
+    const byUser = new Map(active.map((e) => [e.userId, e]));
+    expect(byUser.get("user-a")?.status).toBe("pending");
+    expect(byUser.get("user-b")?.status).toBe("connected");
+    expect(byUser.get("user-b")?.sessionId).toBe("sess-b");
+  });
+
+  it("omits a released session", async () => {
+    await registry.tryClaim("user-a", "sess-a");
+    await registry.release("user-a", "sess-a");
+    expect(await registry.listActive()).toEqual([]);
   });
 });
 
