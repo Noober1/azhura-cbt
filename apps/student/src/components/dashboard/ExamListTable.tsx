@@ -1,4 +1,4 @@
-import { ListChecks, Clock, FileText, PlayCircle, Inbox, CheckCircle2 } from "lucide-react";
+import { ListChecks, Clock, FileText, PlayCircle, Inbox, CheckCircle2, Lock } from "lucide-react";
 import type { AvailableExam } from "../../types";
 import { Card, CardHeader, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
@@ -66,7 +66,18 @@ export const ExamListTable = ({
                     className="border-b border-neutral-100 last:border-0 transition-colors hover:bg-neutral-50/80 dark:border-neutral-800/60 dark:hover:bg-neutral-800/30"
                   >
                     <td className="px-4 py-3.5 font-semibold text-neutral-900 dark:text-neutral-100">
-                      {exam.title}
+                      <span className="inline-flex items-center gap-1.5">
+                        {exam.title}
+                        {exam.requiresToken && !exam.completed && (
+                          <span
+                            title="Ujian ini memerlukan token akses"
+                            className="inline-flex items-center gap-1 rounded-md bg-indigo-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400"
+                          >
+                            <Lock className="w-3 h-3" />
+                            Token
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td className="px-3 py-3.5 text-center whitespace-nowrap text-neutral-600 dark:text-neutral-300">
                       <span className="inline-flex items-center gap-1.5 font-medium">

@@ -60,6 +60,12 @@ export interface AvailableExam {
    * non-students (supervisors/admins do not take exams).
    */
   completed: boolean;
+  /**
+   * True when this exam is gated by an access token: the student must enter a
+   * matching token before a session can be created. The token value itself is
+   * never sent to the client — only this flag — and verification is server-side.
+   */
+  requiresToken: boolean;
 }
 
 export interface ExamResult {
