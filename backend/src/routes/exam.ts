@@ -26,8 +26,10 @@ import {
 import { createLogger } from "../lib/logger";
 import { gradeAgainstKey, findActiveSession, finalizeSession } from "../lib/exam-scoring";
 import { checkExamToken } from "../lib/exam-token";
+import { shuffle, applyQuestionOrder } from "../lib/question-order";
 
-const { exams, questions, options, examSessions, answers, examGroups } = schema;
+const { exams, questions, options, examSessions, answers, examGroups, sessionQuestions } =
+  schema;
 
 const log = createLogger("Exam");
 
@@ -133,10 +135,24 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
    * GET /api/exams/:examId/questions
    * Returns the question list with options, grouped per question. The
    * `correctOptionId` column is deliberately never sent to the client.
+   *
+   * Ordering (#2 randomization):
+   * - Question order follows the caller's in-progress session order persisted
+   *   at first start (`session_questions`); with no such session/order it falls
+   *   back to `questions.order_index`. This keeps the order stable across
+   *   relogin/reconnect without ever reshuffling.
+   * - Answer options are shuffled per request when the exam has
+   *   `randomize_answer = 1`. Option order is never persisted: answers are keyed
+   *   by `selected_option_id`, so reshuffling each load is safe.
    * @throws {NotFoundError} when the exam has no questions.
    */
-  .get("/:examId/questions", async ({ params }) => {
+  .get("/:examId/questions", async ({ params, user }) => {
     const { examId } = params;
+
+    const exam = await db.query.exams.findFirst({
+      columns: { randomizeAnswer: true },
+      where: eq(exams.id, examId),
+    });
 
     // Drizzle's relational `with` clause generates a LATERAL JOIN which MariaDB
     // does not support. Two plain queries + an in-memory merge is equivalent.
@@ -150,12 +166,38 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       throw new NotFoundError("Soal ujian tidak ditemukan.");
     }
 
-    const questionIds = questionRows.map((q) => q.id);
+    const questionById = new Map(questionRows.map((q) => [q.id, q]));
+    const canonicalIds = questionRows.map((q) => q.id);
+
+    // Reuse the persisted shuffled order from the caller's in-progress session
+    // for this exam (if any) so relogin/reconnect replays the same order.
+    const session = await db.query.examSessions.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(examSessions.userId, user.userId),
+        eq(examSessions.examId, examId),
+        eq(examSessions.submitted, 0)
+      ),
+      orderBy: (s, { desc }) => desc(s.createdAt),
+    });
+
+    let orderedIds = canonicalIds;
+    if (session) {
+      const persisted = await db
+        .select({ questionId: sessionQuestions.questionId })
+        .from(sessionQuestions)
+        .where(eq(sessionQuestions.sessionId, session.id))
+        .orderBy(asc(sessionQuestions.orderIndex));
+      orderedIds = applyQuestionOrder(
+        canonicalIds,
+        persisted.map((p) => p.questionId)
+      );
+    }
 
     const optionRows = await db
       .select({ id: options.id, questionId: options.questionId, text: options.text })
       .from(options)
-      .where(inArray(options.questionId, questionIds))
+      .where(inArray(options.questionId, canonicalIds))
       .orderBy(asc(options.id));
 
     const optionsByQuestion = new Map<string, { id: string; text: string }[]>();
@@ -166,11 +208,14 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     }
 
     // correctOptionId intentionally excluded from the projection above.
-    return questionRows.map((q) => ({
-      id: q.id,
-      text: q.text,
-      options: optionsByQuestion.get(q.id) ?? [],
-    }));
+    return orderedIds.map((id) => {
+      const opts = optionsByQuestion.get(id) ?? [];
+      return {
+        id,
+        text: questionById.get(id)!.text,
+        options: exam?.randomizeAnswer ? shuffle(opts) : opts,
+      };
+    });
   })
 
   /**
@@ -355,7 +400,13 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     const { examId } = params;
 
     const exam = await db.query.exams.findFirst({
-      columns: { id: true, title: true, durationMinutes: true, token: true },
+      columns: {
+        id: true,
+        title: true,
+        durationMinutes: true,
+        token: true,
+        randomizeQuestion: true,
+      },
       where: and(eq(exams.id, examId), eq(exams.isActive, 1)),
     });
 
@@ -434,30 +485,57 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
         throw new ForbiddenError("Token akses ujian salah.");
     }
 
-    const [{ total }] = await db
-      .select({ total: sql<number>`count(*)` })
+    // Question ids in their canonical (order_index) order. Used to size the
+    // session and, when randomization is on, as the basis for the shuffled
+    // order persisted below (#2).
+    const questionIdRows = await db
+      .select({ id: questions.id })
       .from(questions)
-      .where(eq(questions.examId, examId));
+      .where(eq(questions.examId, examId))
+      .orderBy(asc(questions.orderIndex));
+    const questionIds = questionIdRows.map((q) => q.id);
 
     const sessionId = randomUUID();
     const now = Date.now();
     const endTime = now + exam.durationMinutes * 60 * 1000;
 
-    await db.insert(examSessions).values({
-      id: sessionId,
-      examId,
-      userId: user.userId,
-      startTime: now,
-      endTime,
+    // Persist the session and (when enabled) its one-time shuffled question
+    // order atomically: a session must never exist without the order it was
+    // created with, so relogin always replays the same sequence.
+    const persistQuestionOrder = exam.randomizeQuestion === 1 && questionIds.length > 0;
+    await db.transaction(async (tx) => {
+      await tx.insert(examSessions).values({
+        id: sessionId,
+        examId,
+        userId: user.userId,
+        startTime: now,
+        endTime,
+      });
+
+      if (persistQuestionOrder) {
+        const shuffled = shuffle(questionIds);
+        await tx.insert(sessionQuestions).values(
+          shuffled.map((questionId, index) => ({
+            sessionId,
+            questionId,
+            orderIndex: index,
+          }))
+        );
+      }
     });
 
-    log.info("Exam session created", { examId, sessionId, userId: user.userId });
+    log.info("Exam session created", {
+      examId,
+      sessionId,
+      userId: user.userId,
+      randomizedQuestions: persistQuestionOrder,
+    });
     return {
       id: sessionId,
       examId: exam.id,
       userId: user.userId,
       examTitle: exam.title,
-      totalQuestions: Number(total),
+      totalQuestions: questionIds.length,
       startTime: now,
       endTime,
     };
