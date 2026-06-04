@@ -19,7 +19,7 @@ import { AuthError, ConflictError } from "../lib/errors";
 import { createLogger } from "../lib/logger";
 import { sessionRegistry } from "../lib/session-registry";
 
-const { users } = schema;
+const { users, groups } = schema;
 
 const log = createLogger("Auth");
 
@@ -96,6 +96,18 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         }
       }
 
+      // Resolve the group display name for the dashboard participant card. A
+      // plain PK lookup (not a relational `with`, which Drizzle compiles to a
+      // LATERAL JOIN MariaDB rejects). Null for users without a group.
+      let groupName: string | null = null;
+      if (record.groupId) {
+        const group = await db.query.groups.findFirst({
+          columns: { name: true },
+          where: eq(groups.id, record.groupId),
+        });
+        groupName = group?.name ?? null;
+      }
+
       const token = await jwt.sign({
         userId: record.id,
         nis: record.nis,
@@ -116,6 +128,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
           id: record.id,
           nis: record.nis,
           name: record.name,
+          groupName,
         },
       };
     },

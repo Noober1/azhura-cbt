@@ -126,6 +126,32 @@ export const examSessions = mysqlTable("exam_sessions", {
 });
 
 /**
+ * Per-session persisted question order (#2 randomization). When an exam has
+ * `randomize_question = 1`, the question order is shuffled once at the first
+ * session start and stored here so relogin/reconnect/crash replays the same
+ * order. The `(session_id, question_id)` pair is the primary key (a question
+ * appears once per session); both foreign keys cascade so rows clean up when a
+ * session or question is deleted. No rows are written when randomization is off
+ * — the questions endpoint then falls back to `questions.order_index`.
+ */
+export const sessionQuestions = mysqlTable(
+  "session_questions",
+  {
+    sessionId: varchar("session_id", { length: 36 })
+      .notNull()
+      .references(() => examSessions.id, { onDelete: "cascade" }),
+    questionId: varchar("question_id", { length: 36 })
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    /** Position of this question within the session's shuffled order (0-based). */
+    orderIndex: int("order_index").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.sessionId, table.questionId] }),
+  })
+);
+
+/**
  * A student's answer to one question within a session. The
  * `(session_id, question_id)` pair is unique so answers upsert cleanly during
  * offline-first sync.
@@ -203,6 +229,18 @@ export const examSessionsRelations = relations(examSessions, ({ one, many }) => 
   user: one(users, { fields: [examSessions.userId], references: [users.id] }),
   answers: many(answers),
   cheatLogs: many(cheatLogs),
+  sessionQuestions: many(sessionQuestions),
+}));
+
+export const sessionQuestionsRelations = relations(sessionQuestions, ({ one }) => ({
+  session: one(examSessions, {
+    fields: [sessionQuestions.sessionId],
+    references: [examSessions.id],
+  }),
+  question: one(questions, {
+    fields: [sessionQuestions.questionId],
+    references: [questions.id],
+  }),
 }));
 
 export const answersRelations = relations(answers, ({ one }) => ({
@@ -231,4 +269,5 @@ export type ExamGroup = typeof examGroups.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type ExamSession = typeof examSessions.$inferSelect;
+export type SessionQuestion = typeof sessionQuestions.$inferSelect;
 export type Answer = typeof answers.$inferSelect;

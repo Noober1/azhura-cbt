@@ -11,6 +11,12 @@ export interface User {
   id: string;
   nis: string;
   name: string;
+  /**
+   * Display name of the student's group/class (e.g. "Kelas 7A"). Null for users
+   * without a group (supervisors/admins) and absent on sessions cached before
+   * this field existed — render a fallback when missing.
+   */
+  groupName?: string | null;
 }
 
 export interface QuestionOption {
