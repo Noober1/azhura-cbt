@@ -71,8 +71,11 @@ export const connectSocket = (token: string): void => {
     useSocketStore.getState().bumpExamListVersion();
   });
 
-  socket.on("force-submit", async (_data: { reason?: string }) => {
-    toast.warning("Ujian dikumpulkan otomatis oleh pengawas!", { duration: 5000 });
+  socket.on("force-submit", async (data: { reason?: string }) => {
+    // Surface the supervisor's reason (#12); fall back to a polite default when
+    // none was given.
+    const reason = data.reason?.trim() || "Ujian Anda diselesaikan oleh pengawas.";
+    toast.warning(reason, { duration: 6000 });
     try {
       await useExamStore.getState().submitExam();
     } catch (error) {
