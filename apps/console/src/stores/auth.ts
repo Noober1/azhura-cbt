@@ -105,10 +105,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ isLoading: false, error: "Token tidak valid dari server." });
         return false;
       }
-      if (claims.role !== "admin") {
+      // The console is for staff: admins (full management) and supervisors
+      // (proctoring/monitoring, #7). Students are rejected client-side; the
+      // backend independently enforces per-endpoint authorization regardless.
+      if (claims.role !== "admin" && claims.role !== "supervisor") {
         set({
           isLoading: false,
-          error: "Akun ini bukan admin. Panel ini khusus admin.",
+          error: "Akun ini tidak punya akses. Panel ini khusus admin/pengawas.",
         });
         return false;
       }

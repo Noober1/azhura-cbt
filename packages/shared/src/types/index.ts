@@ -88,6 +88,101 @@ export type ActiveSessionResponse =
   | { status: "resume"; session: ExamSession }
   | { status: "finalized"; examTitle: string; result: ExamResult };
 
+/**
+ * Live connection state of a participant on the supervisor roster (#7).
+ * - `connected`    — session has a live WebSocket attached.
+ * - `disconnected` — no active session entry (socket gone / expired).
+ * - `pending`      — session claimed at login but the WebSocket has not
+ *                    attached yet (brief window before the exam socket connects).
+ */
+export type RosterConnection = "connected" | "disconnected" | "pending";
+
+/** The exam a roster participant is actively working on. */
+export interface RosterExam {
+  examId: string;
+  examTitle: string;
+  /** Session start, ms epoch. */
+  startTime: number;
+  /** Session end, ms epoch. The console derives the live countdown from this. */
+  endTime: number;
+}
+
+/**
+ * One row of the live participant roster shown to supervisors/admins (#7).
+ *
+ * The roster spans every logged-in student: those mid-exam (sourced from active
+ * `exam_sessions`) and those idle on the dashboard (sourced from the Redis
+ * session registry). `exam` is null for dashboard students — the console groups
+ * them under a "Dashboard" section so a supervisor can remote-logout anyone who
+ * forgot to sign out. `connection`/`lastSeen` are overlaid from the registry.
+ */
+export interface RosterParticipant {
+  userId: string;
+  nis: string;
+  name: string;
+  groupName: string | null;
+  /** Exam being worked on; null means the student is idle on the dashboard. */
+  exam: RosterExam | null;
+  connection: RosterConnection;
+  /** Last liveness timestamp (ms epoch); null when no active registry entry. */
+  lastSeen: number | null;
+}
+
+/**
+ * Initial roster snapshot returned by `GET /api/supervisor/roster` (backfill).
+ * The console fetches this once, then stays live via the `roster-update` event.
+ */
+export interface RosterSnapshot {
+  participants: RosterParticipant[];
+  /** Server clock at snapshot time (ms epoch) for client-side skew correction. */
+  serverTime: number;
+}
+
+/**
+ * Incremental roster change pushed over the `roster-update` Socket.io event to
+ * the `supervisors` room. Patches avoid resending the full roster on every change.
+ * - `upsert`     — a participant started (or is refreshed) in the roster.
+ * - `remove`     — a participant left the roster (submitted / expired / kicked).
+ * - `connection` — a participant's liveness changed (connect/disconnect).
+ */
+export type RosterPatch =
+  | { type: "upsert"; participant: RosterParticipant }
+  | { type: "remove"; userId: string }
+  | {
+      type: "connection";
+      userId: string;
+      connection: RosterConnection;
+      lastSeen: number;
+    };
+
+/**
+ * How a supervisor broadcast (#13) is displayed on the student client:
+ * - `toast`  — a non-intrusive notification (default).
+ * - `modal`  — a lightly-blocking dialog the student must acknowledge.
+ */
+export type SupervisorMessageVariant = "toast" | "modal";
+
+/** Payload of the `alert-message` Socket.io event pushed to students (#13). */
+export interface SupervisorMessage {
+  message: string;
+  variant: SupervisorMessageVariant;
+}
+
+/**
+ * Who a supervisor broadcast targets (#13). Resolved server-side to socket rooms:
+ * `all` → every student, `user` → `user:{id}`, `group` → each `group:{id}`.
+ */
+export type BroadcastTarget =
+  | { type: "all" }
+  | { type: "user"; userId: string }
+  | { type: "group"; groupIds: string[] };
+
+/** A group option for the broadcast target picker (`GET /supervisor/groups`). */
+export interface GroupOption {
+  id: string;
+  name: string;
+}
+
 export interface ConnectivityState {
   isOnline: boolean;
   isSyncing: boolean;

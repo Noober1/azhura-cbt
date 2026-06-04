@@ -1,0 +1,375 @@
+/**
+ * Azhura CBT Console — Status Peserta (live participant monitoring, #7).
+ *
+ * Shows every logged-in student, grouped into sections:
+ * - **Dashboard** — idle students (logged in, not in an exam). Each has a remote
+ *   logout button, plus a "Logout semua" action, for students who forgot to sign
+ *   out. The server refuses to logout anyone mid-exam.
+ * - **One section per exam** — students actively working, with a live connection
+ *   status, remaining-time countdown, and proctor actions: **Selesaikan**
+ *   (remote finish, #12) and **Keluarkan** (kick = submit + logout, #11).
+ *
+ * Backfilled over HTTP then kept live by `roster-update` socket patches via
+ * {@link useRoster}. Available to supervisors and admins.
+ */
+
+import { useMemo, useState } from "react";
+import type { RosterConnection, RosterParticipant } from "@azhura/shared";
+import { useRoster } from "./useRoster";
+import { monitoringApi } from "../../lib/monitoring-api";
+import { getErrorMessage } from "../../lib/errors";
+import { toast } from "../../stores/toast";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { Spinner, CenterState } from "../ui/Spinner";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { ReasonDialog } from "../ui/ReasonDialog";
+import { BroadcastDialog } from "./BroadcastDialog";
+import { ActivityIcon, LogOutIcon, CheckIcon, XIcon, AlertIcon } from "../ui/icons";
+
+/** A pending proctor action on an exam-taker, awaiting reason + confirmation. */
+type PendingAction = { kind: "kick" | "finish"; participant: RosterParticipant };
+
+/** Formats a remaining-time duration (ms) as H:MM:SS / M:SS, floored at 0. */
+function formatRemaining(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+const CONNECTION_LABEL: Record<RosterConnection, string> = {
+  connected: "Online",
+  disconnected: "Terputus",
+  pending: "Menyambung",
+};
+
+function ConnectionBadge({ connection }: { connection: RosterConnection }) {
+  const tone =
+    connection === "connected" ? "positive" : connection === "pending" ? "warn" : "danger";
+  return (
+    <Badge tone={tone}>
+      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+      {CONNECTION_LABEL[connection]}
+    </Badge>
+  );
+}
+
+function RemainingTime({ endTime, remainingMs }: { endTime: number; remainingMs: (e: number) => number }) {
+  const ms = remainingMs(endTime);
+  const urgent = ms > 0 && ms <= 5 * 60 * 1000;
+  const expired = ms <= 0;
+  return (
+    <span className={`tabular font-medium ${expired ? "text-faint" : urgent ? "text-danger" : "text-ink"}`}>
+      {expired ? "Habis" : formatRemaining(ms)}
+    </span>
+  );
+}
+
+function IdentityCells({ p }: { p: RosterParticipant }) {
+  return (
+    <>
+      <td className="px-4 py-3 font-medium text-ink">{p.name}</td>
+      <td className="tabular px-4 py-3 text-ink-soft">{p.nis}</td>
+      <td className="hidden px-4 py-3 md:table-cell">
+        {p.groupName ? <Badge tone="accent">{p.groupName}</Badge> : <span className="text-faint">—</span>}
+      </td>
+      <td className="px-4 py-3">
+        <ConnectionBadge connection={p.connection} />
+      </td>
+    </>
+  );
+}
+
+function SectionHeader({ title, count, action }: { title: string; count: number; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-ink">{title}</h2>
+        <span className="tabular rounded-full bg-canvas px-2 py-0.5 text-xs font-medium text-faint">{count}</span>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function StatusPesertaPage() {
+  const { participants, loading, error, wsConnected, reload, remainingMs } = useRoster();
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+
+  const { dashboard, examSections } = useMemo(() => {
+    const dash: RosterParticipant[] = [];
+    const byExam = new Map<string, RosterParticipant[]>();
+    for (const p of participants) {
+      if (!p.exam) {
+        dash.push(p);
+      } else {
+        const list = byExam.get(p.exam.examTitle) ?? [];
+        list.push(p);
+        byExam.set(p.exam.examTitle, list);
+      }
+    }
+    return {
+      dashboard: dash,
+      examSections: [...byExam.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+    };
+  }, [participants]);
+
+  const setBusy = (userId: string, on: boolean) =>
+    setBusyIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+
+  async function logoutOne(p: RosterParticipant) {
+    setBusy(p.userId, true);
+    try {
+      await monitoringApi.logoutDashboard(p.userId);
+      toast.success(`${p.name} dikeluarkan dari dashboard.`);
+      // The row disappears live via the `roster-update` remove patch.
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal mengeluarkan peserta."));
+    } finally {
+      setBusy(p.userId, false);
+    }
+  }
+
+  async function logoutAllDashboard() {
+    // ConfirmDialog owns the busy state and closes on success; rethrow on error
+    // so it stays open while the toast explains why.
+    try {
+      const count = await monitoringApi.logoutDashboard();
+      toast.success(`${count} peserta dikeluarkan dari dashboard.`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal mengeluarkan peserta dashboard."));
+      throw err;
+    }
+  }
+
+  // Runs the confirmed exam-taker action. ReasonDialog owns busy/close and
+  // rethrows on error so it stays open while the toast explains why. The row
+  // updates live via `roster-update` (kick → remove; finish → student submits
+  // then disconnects → remove).
+  async function runPendingAction(reason: string) {
+    if (!pendingAction) return;
+    const { kind, participant } = pendingAction;
+    try {
+      if (kind === "kick") {
+        await monitoringApi.kickStudent(participant.userId, reason);
+        toast.success(`${participant.name} dikeluarkan dari ujian.`);
+      } else {
+        await monitoringApi.forceSubmit(participant.userId, reason);
+        toast.success(`Ujian ${participant.name} diselesaikan.`);
+      }
+    } catch (err) {
+      toast.error(
+        getErrorMessage(
+          err,
+          kind === "kick" ? "Gagal mengeluarkan peserta." : "Gagal menyelesaikan ujian peserta."
+        )
+      );
+      throw err;
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Status Peserta</h1>
+          <p className="mt-1 text-sm text-faint">
+            {participants.length > 0
+              ? `${participants.length} peserta online`
+              : "Pemantauan peserta ujian secara realtime"}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span
+            className="inline-flex items-center gap-2 text-xs font-medium text-faint"
+            title={wsConnected ? "Terhubung ke server realtime" : "Koneksi realtime terputus"}
+          >
+            <span className={`size-2 rounded-full ${wsConnected ? "bg-positive" : "bg-danger"}`} aria-hidden="true" />
+            {wsConnected ? "Realtime aktif" : "Realtime terputus"}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setBroadcastOpen(true)}
+            leadingIcon={<AlertIcon className="size-4" />}
+          >
+            Kirim Pesan
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="mt-6 overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+          <CenterState>
+            <Spinner className="size-6 text-accent" />
+            <span>Memuat daftar peserta…</span>
+          </CenterState>
+        </div>
+      ) : error ? (
+        <div className="mt-6 overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+          <CenterState>
+            <span className="text-danger">{error}</span>
+            <Button variant="secondary" size="sm" onClick={reload}>
+              Coba lagi
+            </Button>
+          </CenterState>
+        </div>
+      ) : participants.length === 0 ? (
+        <div className="mt-6 overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+          <CenterState>
+            <span className="grid size-12 place-items-center rounded-full bg-canvas text-faint">
+              <ActivityIcon className="size-6" />
+            </span>
+            <span>Belum ada peserta yang sedang online.</span>
+          </CenterState>
+        </div>
+      ) : (
+        <div className="mt-6 space-y-5">
+          {/* Dashboard (idle) section */}
+          {dashboard.length > 0 && (
+            <section className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+              <SectionHeader
+                title="Dashboard"
+                count={dashboard.length}
+                action={
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setConfirmBulk(true)}
+                    leadingIcon={<LogOutIcon className="size-4" />}
+                  >
+                    Logout semua
+                  </Button>
+                }
+              />
+              <table className="w-full border-t border-line text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs font-medium uppercase tracking-wide text-faint">
+                    <th className="px-4 py-2.5 font-medium">Nama</th>
+                    <th className="px-4 py-2.5 font-medium">NIS</th>
+                    <th className="hidden px-4 py-2.5 font-medium md:table-cell">Group</th>
+                    <th className="px-4 py-2.5 font-medium">Koneksi</th>
+                    <th className="px-4 py-2.5 text-right font-medium">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboard.map((p) => (
+                    <tr key={p.userId} className="border-b border-line/70 transition-colors last:border-0 hover:bg-canvas/60">
+                      <IdentityCells p={p} />
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          busy={busyIds.has(p.userId)}
+                          onClick={() => logoutOne(p)}
+                          leadingIcon={<LogOutIcon className="size-4" />}
+                        >
+                          Logout
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {/* One section per exam */}
+          {examSections.map(([title, rows]) => (
+            <section key={title} className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+              <SectionHeader title={title} count={rows.length} />
+              <table className="w-full border-t border-line text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs font-medium uppercase tracking-wide text-faint">
+                    <th className="px-4 py-2.5 font-medium">Nama</th>
+                    <th className="px-4 py-2.5 font-medium">NIS</th>
+                    <th className="hidden px-4 py-2.5 font-medium md:table-cell">Group</th>
+                    <th className="px-4 py-2.5 font-medium">Koneksi</th>
+                    <th className="px-4 py-2.5 font-medium">Sisa waktu</th>
+                    <th className="px-4 py-2.5 text-right font-medium">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((p) => (
+                    <tr key={p.userId} className="border-b border-line/70 transition-colors last:border-0 hover:bg-canvas/60">
+                      <IdentityCells p={p} />
+                      <td className="px-4 py-3">
+                        {p.exam && <RemainingTime endTime={p.exam.endTime} remainingMs={remainingMs} />}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setPendingAction({ kind: "finish", participant: p })}
+                            leadingIcon={<CheckIcon className="size-4" />}
+                          >
+                            Selesaikan
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-danger hover:bg-danger/10 hover:text-danger"
+                            onClick={() => setPendingAction({ kind: "kick", participant: p })}
+                            leadingIcon={<XIcon className="size-4" />}
+                          >
+                            Keluarkan
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ))}
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmBulk}
+        title="Logout semua peserta di Dashboard?"
+        message={`${dashboard.length} peserta yang sedang berada di dashboard (tidak sedang ujian) akan dikeluarkan dan harus login kembali. Peserta yang sedang mengerjakan ujian tidak terpengaruh.`}
+        confirmLabel="Logout semua"
+        tone="danger"
+        onConfirm={logoutAllDashboard}
+        onClose={() => setConfirmBulk(false)}
+      />
+
+      <ReasonDialog
+        open={pendingAction !== null}
+        title={
+          pendingAction?.kind === "kick"
+            ? `Keluarkan ${pendingAction.participant.name} dari ujian?`
+            : `Selesaikan ujian ${pendingAction?.participant.name ?? ""}?`
+        }
+        message={
+          pendingAction?.kind === "kick"
+            ? "Ujian peserta akan dikumpulkan & dinilai otomatis, lalu peserta dikeluarkan paksa (logout). Akun bisa login kembali sesuai aturan."
+            : "Ujian peserta akan dikumpulkan & dinilai otomatis, lalu peserta diarahkan ke halaman hasil. Peserta tetap login."
+        }
+        confirmLabel={pendingAction?.kind === "kick" ? "Keluarkan" : "Selesaikan"}
+        tone={pendingAction?.kind === "kick" ? "danger" : "primary"}
+        onConfirm={runPendingAction}
+        onClose={() => setPendingAction(null)}
+      />
+
+      <BroadcastDialog
+        open={broadcastOpen}
+        participants={participants}
+        onClose={() => setBroadcastOpen(false)}
+      />
+    </div>
+  );
+}

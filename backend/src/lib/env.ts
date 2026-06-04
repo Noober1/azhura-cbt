@@ -161,11 +161,19 @@ export const getRedisConfig = (): RedisConfig => {
 export interface ServerConfig {
   port: number;
   corsOrigins: string[];
+  /**
+   * Socket.io engine ping/pong tuning (#9 liveness foundation). The server pings
+   * every `pingIntervalMs`; if no pong arrives within `pingTimeoutMs` the socket
+   * is considered dead and `disconnect` fires — which drives roster connection
+   * status (#7) and the session grace period (#5).
+   */
+  pingIntervalMs: number;
+  pingTimeoutMs: number;
 }
 
 let serverConfig: ServerConfig | null = null;
 
-/** Returns validated server settings (port + CORS origins). */
+/** Returns validated server settings (port + CORS origins + socket ping tuning). */
 export const getServerConfig = (): ServerConfig => {
   if (serverConfig) return serverConfig;
   const corsOrigins = optionalEnv("CORS_ORIGIN", "http://localhost:5173")
@@ -176,6 +184,8 @@ export const getServerConfig = (): ServerConfig => {
   serverConfig = {
     port: numberEnv("PORT", 3000),
     corsOrigins,
+    pingIntervalMs: numberEnv("SOCKET_PING_INTERVAL_MS", 25000),
+    pingTimeoutMs: numberEnv("SOCKET_PING_TIMEOUT_MS", 20000),
   };
   log.debug("Server configuration loaded.", { ...serverConfig });
   return serverConfig;

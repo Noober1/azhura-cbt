@@ -11,7 +11,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/Button";
-import { FileTextIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon } from "../ui/icons";
+import { FileTextIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon } from "../ui/icons";
 
 interface NavItem {
   to: string;
@@ -25,11 +25,13 @@ const NAV: NavItem[] = [
   { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" /> },
   { to: "/students", label: "Siswa", icon: <UsersIcon className="size-[18px]" /> },
   { to: "/groups", label: "Group", icon: <LayersIcon className="size-[18px]" /> },
+  { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon className="size-[18px]" /> },
 ];
 
 export function AppShell() {
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, role, logout } = useAuthStore();
+  const roleLabel = role === "supervisor" ? "Pengawas" : "Administrator";
 
   function handleLogout() {
     logout();
@@ -100,7 +102,7 @@ export function AppShell() {
               <p className="truncate text-sm font-medium leading-tight">
                 {user?.name ?? "Admin"}
               </p>
-              <p className="truncate text-xs text-rail-soft">Administrator</p>
+              <p className="truncate text-xs text-rail-soft">{roleLabel}</p>
             </div>
           </div>
         </div>

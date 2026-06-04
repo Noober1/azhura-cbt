@@ -33,8 +33,12 @@ export const CONNECTED_TTL = 30;
 /** Seconds a disconnected session lingers before the account is freed. */
 export const GRACE_TTL = 10;
 
+/** Redis key prefix for active-session entries. */
+const KEY_PREFIX = "session:active:";
 /** Redis key for a user's active-session entry. */
-const keyFor = (userId: string): string => `session:active:${userId}`;
+const keyFor = (userId: string): string => `${KEY_PREFIX}${userId}`;
+/** Extracts the userId from an active-session key. */
+const userIdFromKey = (key: string): string => key.slice(KEY_PREFIX.length);
 
 /** Snapshot of an active session entry (as stored in the Redis hash). */
 export interface ActiveSession {
@@ -43,6 +47,9 @@ export interface ActiveSession {
   socketId: string | null;
   lastSeen: string;
 }
+
+/** An {@link ActiveSession} paired with the userId it belongs to. */
+export type ActiveSessionWithUser = ActiveSession & { userId: string };
 
 // --- Lua scripts (atomic compare-and-set on the `sessionId` field) ----------
 
@@ -64,9 +71,22 @@ if redis.call('hget', KEYS[1], 'sessionId') == ARGV[1] then
 end
 return 0`;
 
-/** Extend TTL only if sessionId matches (heartbeat / grace). */
+/** Extend TTL only if sessionId matches (grace period). */
 const EXPIRE_IF_OWNER_SCRIPT = `
 if redis.call('hget', KEYS[1], 'sessionId') == ARGV[1] then
+  redis.call('expire', KEYS[1], ARGV[2])
+  return 1
+end
+return 0`;
+
+/**
+ * Heartbeat refresh: extend TTL *and* stamp `lastSeen` only if sessionId matches.
+ * Updating `lastSeen` here (not just at claim/connect) lets the supervisor roster
+ * (#7) reflect connection freshness while a socket stays alive.
+ */
+const REFRESH_SCRIPT = `
+if redis.call('hget', KEYS[1], 'sessionId') == ARGV[1] then
+  redis.call('hset', KEYS[1], 'lastSeen', ARGV[3])
   redis.call('expire', KEYS[1], ARGV[2])
   return 1
 end
@@ -87,6 +107,11 @@ export interface SessionRegistry {
   startGrace(userId: string, sessionId: string): Promise<boolean>;
   release(userId: string, sessionId: string): Promise<boolean>;
   getActive(userId: string): Promise<ActiveSession | null>;
+  /**
+   * Enumerates every live session (all logged-in students). Used by the roster
+   * (#7) to surface students idle on the dashboard, not just exam-takers.
+   */
+  listActive(): Promise<ActiveSessionWithUser[]>;
 }
 
 /**
@@ -124,11 +149,12 @@ export const createSessionRegistry = (client: Redis): SessionRegistry => {
 
     async refresh(userId, sessionId) {
       const result = await client.eval(
-        EXPIRE_IF_OWNER_SCRIPT,
+        REFRESH_SCRIPT,
         1,
         keyFor(userId),
         sessionId,
-        String(CONNECTED_TTL)
+        String(CONNECTED_TTL),
+        now()
       );
       return result === 1;
     },
@@ -158,6 +184,40 @@ export const createSessionRegistry = (client: Redis): SessionRegistry => {
         socketId: hash.socketId ? hash.socketId : null,
         lastSeen: hash.lastSeen ?? "",
       };
+    },
+
+    async listActive() {
+      // SCAN (not KEYS) so enumeration never blocks Redis on a large keyspace.
+      const keys: string[] = [];
+      let cursor = "0";
+      do {
+        const [next, batch] = await client.scan(
+          cursor,
+          "MATCH",
+          `${KEY_PREFIX}*`,
+          "COUNT",
+          100
+        );
+        cursor = next;
+        keys.push(...batch);
+      } while (cursor !== "0");
+
+      if (keys.length === 0) return [];
+
+      const entries = await Promise.all(
+        keys.map(async (key) => {
+          const hash = await client.hgetall(key);
+          if (!hash || !hash.sessionId) return null;
+          return {
+            userId: userIdFromKey(key),
+            sessionId: hash.sessionId,
+            status: hash.status === "connected" ? "connected" : "pending",
+            socketId: hash.socketId ? hash.socketId : null,
+            lastSeen: hash.lastSeen ?? "",
+          } satisfies ActiveSessionWithUser;
+        })
+      );
+      return entries.filter((e): e is ActiveSessionWithUser => e !== null);
     },
   };
 };
