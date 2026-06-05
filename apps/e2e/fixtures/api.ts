@@ -2,7 +2,7 @@
 
 const API = () => process.env.E2E_API_URL ?? "http://localhost:3000/api";
 
-interface LoginResponse {
+export interface LoginResponse {
   token: string;
   user: { id: string; nis: string; name: string; role: string; groupId: string | null };
 }
@@ -20,22 +20,32 @@ export async function apiLogin(nis: string, password: string): Promise<LoginResp
   return res.json() as Promise<LoginResponse>;
 }
 
-export async function apiStartSession(
-  credentials: { nis: string; password: string },
+/** Start a session using an already-obtained JWT (avoids a second login call). */
+export async function apiStartSessionWithToken(
   examId: string,
-  token?: string
+  jwt: string,
+  examToken?: string
 ): Promise<void> {
-  const { token: jwt } = await apiLogin(credentials.nis, credentials.password);
   const res = await fetch(`${API()}/exams/${examId}/sessions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${jwt}`,
     },
-    body: token !== undefined ? JSON.stringify({ token }) : JSON.stringify({}),
+    body: examToken !== undefined ? JSON.stringify({ token: examToken }) : JSON.stringify({}),
   });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`[e2e] apiStartSession(${examId}) failed ${res.status}: ${text}`);
   }
+}
+
+/** @deprecated Use apiStartSessionWithToken to avoid a redundant login call. */
+export async function apiStartSession(
+  credentials: { nis: string; password: string },
+  examId: string,
+  token?: string
+): Promise<void> {
+  const { token: jwt } = await apiLogin(credentials.nis, credentials.password);
+  await apiStartSessionWithToken(examId, jwt, token);
 }
