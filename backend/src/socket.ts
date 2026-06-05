@@ -15,17 +15,12 @@ import { setLogBroadcaster } from "./lib/log-files";
 import { setExamListBroadcaster } from "./lib/exam-events";
 import { setRosterBroadcaster, notifyRosterPatch } from "./lib/roster-events";
 import { buildRosterParticipant, hasActiveExam } from "./lib/roster";
-import { sessionRegistry, CONNECTED_TTL } from "./lib/session-registry";
+import { sessionRegistry } from "./lib/session-registry";
+import { createHeartbeatTracker } from "./lib/heartbeat";
 import { resolveBroadcast } from "./lib/broadcast";
 import type { BroadcastTarget, SupervisorMessage, SupervisorMessageVariant } from "@azhura/shared";
 
 const log = createLogger("Socket");
-
-/**
- * How often (ms) a connected student's session TTL is refreshed. Must be safely
- * below {@link CONNECTED_TTL} so a live socket never lets its key expire.
- */
-const HEARTBEAT_INTERVAL_MS = (CONNECTED_TTL / 3) * 1000;
 
 /** The active Socket.io server; assigned by {@link initSocket}. */
 export let io: SocketServer;
@@ -49,15 +44,17 @@ interface SocketJwt {
  * @returns The started {@link SocketServer} instance.
  */
 export function initSocket(httpServer: HttpServer): SocketServer {
-  const { corsOrigins, pingIntervalMs, pingTimeoutMs } = getServerConfig();
+  const { corsOrigins, pingIntervalMs, pingTimeoutMs, heartbeatPingIntervalMs, heartbeatMaxMisses } =
+    getServerConfig();
   const jwtSecret = getJwtSecret();
 
   io = new SocketServer(httpServer, {
     path: "/ws",
     cors: { origin: corsOrigins, methods: ["GET", "POST"] },
-    // Engine.io ping/pong drives reliable liveness detection (#9): a missed pong
-    // within the timeout fires `disconnect`, which flips roster status (#7) and
-    // starts the session grace period (#5).
+    // Transport-level liveness backstop: a missed engine pong within the timeout
+    // fires `disconnect` for hard drops (network loss, killed process). The
+    // app-level heartbeat below (#9) catches the subtler case the transport
+    // can't — a client whose JS has frozen but whose socket still answers.
     pingInterval: pingIntervalMs,
     pingTimeout: pingTimeoutMs,
   });
@@ -126,9 +123,10 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     }
 
     // Single-session liveness (#5): bind this socket to the student's active
-    // session and keep its Redis TTL refreshed while connected. The interval is
-    // the *only* thing extending the key, so a dead socket/crashed server lets
-    // the session expire — no account can deadlock.
+    // session and keep its Redis TTL refreshed while connected. Only a genuine
+    // `heartbeat:pong` (below) extends the key, so a dead socket/crashed server
+    // — or a frozen client that can't answer — lets the session expire; no
+    // account can deadlock.
     const sessionId = socket.data.sessionId as string | undefined;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
     // Guards the race where a fast disconnect fires before the async
@@ -137,6 +135,23 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     let disconnected = false;
 
     if (role === "student" && sessionId) {
+      // App-level heartbeat (#9): a pong proves the client's JS is genuinely
+      // alive (not just its transport). Each pong refreshes the session TTL and
+      // `lastSeen`; a run of unanswered pings flatlines the connection. This
+      // replaces the old blind interval refresh, which kept a frozen client's
+      // session pinned for as long as its socket merely stayed open.
+      const tracker = createHeartbeatTracker({ maxMisses: heartbeatMaxMisses });
+
+      socket.on("heartbeat:pong", () => {
+        tracker.recordPong();
+        void sessionRegistry.refresh(userId, sessionId).catch((error) => {
+          log.warn("Session heartbeat refresh failed", {
+            nis,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        });
+      });
+
       void (async () => {
         const owns = await sessionRegistry.markConnected(userId, sessionId, socket.id);
         if (disconnected) return; // already gone — don't start a stray heartbeat
@@ -163,13 +178,26 @@ export function initSocket(httpServer: HttpServer): SocketServer {
             });
           });
         heartbeat = setInterval(() => {
-          void sessionRegistry.refresh(userId, sessionId).catch((error) => {
-            log.warn("Session heartbeat refresh failed", {
+          const flatlined = tracker.recordPing();
+          if (flatlined) {
+            // The client stopped answering. Force the disconnect so the handler
+            // below becomes the single source of truth for "gone": it flips the
+            // roster to `disconnected` (#7) and starts the session grace period
+            // (#5). Clearing the interval first prevents any further ticks.
+            log.warn("Heartbeat flatlined; disconnecting unresponsive socket", {
               nis,
-              reason: error instanceof Error ? error.message : String(error),
+              socketId: socket.id,
+              misses: tracker.misses,
             });
-          });
-        }, HEARTBEAT_INTERVAL_MS);
+            if (heartbeat) {
+              clearInterval(heartbeat);
+              heartbeat = null;
+            }
+            socket.disconnect(true);
+            return;
+          }
+          socket.emit("heartbeat:ping");
+        }, heartbeatPingIntervalMs);
       })();
     }
 

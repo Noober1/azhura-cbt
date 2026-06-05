@@ -59,6 +59,15 @@ export const connectSocket = (token: string): void => {
     useSocketStore.getState().setConnected(false);
   });
 
+  // App-level heartbeat (#9): the server pings to confirm our JS is actually
+  // responsive — not just that the transport is up. Answering keeps the session
+  // alive and fresh on the supervisor roster; going silent for N pings flatlines
+  // us server-side and starts the session grace period. This runs purely in the
+  // socket layer (no store churn) so it keeps ticking even mid-render.
+  socket.on("heartbeat:ping", () => {
+    socket?.emit("heartbeat:pong");
+  });
+
   socket.on("alert-message", (data: { message: string; variant?: "toast" | "modal" }) => {
     const store = useSocketStore.getState();
     store.setLastMessage(data.message);
