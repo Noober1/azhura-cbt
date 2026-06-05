@@ -5,6 +5,7 @@ import { ExamPage } from "../pages/ExamPage.ts";
 import { ResultPage } from "../pages/ResultPage.ts";
 import { apiLogin } from "./api.ts";
 import { E2E_STUDENT } from "../data/users.ts";
+import { clearE2ERedisClaimsForE2EUsers } from "../setup/redis-utils.ts";
 
 interface E2EFixtures {
   loginPage: LoginPage;
@@ -13,6 +14,8 @@ interface E2EFixtures {
   resultPage: ResultPage;
   /** Page pre-authenticated as E2E_STUDENT, already navigated to /#/dashboard. */
   authedPage: Page;
+  /** Auto-runs after every test: clears Redis session claims so the next test can log in. */
+  _redisCleanup: void;
 }
 
 export const test = base.extend<E2EFixtures>({
@@ -37,6 +40,17 @@ export const test = base.extend<E2EFixtures>({
     await page.goto("/#/dashboard");
     await use(page);
   },
+
+  // Runs automatically after every test in files that import this custom `test`.
+  // Clears the Redis session-claim keys so the anti-multi-login guard (30s TTL)
+  // doesn't block the next test's login.
+  _redisCleanup: [
+    async ({}, use) => {
+      await use();
+      await clearE2ERedisClaimsForE2EUsers();
+    },
+    { auto: true },
+  ],
 });
 
 export { expect };
