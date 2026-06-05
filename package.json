@@ -16,6 +16,10 @@
     "console:dev": "bun --filter azhura-console dev",
     "console:build": "bun --filter azhura-console build",
     "backend:dev": "bun --filter azhura-exam-backend dev",
-    "backend:start": "bun --filter azhura-exam-backend start"
+    "backend:start": "bun --filter azhura-exam-backend start",
+    "e2e": "bun --filter azhura-e2e test",
+    "e2e:ui": "bun --filter azhura-e2e test:ui",
+    "e2e:report": "bun --filter azhura-e2e report",
+    "e2e:install": "bun --filter azhura-e2e install:browsers"
   }
 }
