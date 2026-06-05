@@ -10,6 +10,7 @@ import { ExamSidebar } from "./ExamSidebar";
 import { NavigationPanel } from "./NavigationPanel";
 import { TimerDisplay } from "./TimerDisplay";
 import { SubmitConfirmation } from "./SubmitConfirmation";
+import { ProcessingOverlay } from "./ProcessingOverlay";
 import { toast } from "sonner";
 import api from "../../lib/api";
 import { createLogger } from "../../lib/logger";
@@ -34,8 +35,10 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
     questions,
     currentQuestionIndex,
     setQuestions,
-    submitExam,
+    finalizeExam,
     isSubmitting,
+    finalizing,
+    examResult,
   } = useExamStore();
 
   const { user, token } = useAuthStore();
@@ -98,17 +101,23 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
     };
   }, [config.enabled, config.fullscreen]);
 
-  // 3. Confirm Final Submit
-  const handleConfirmSubmit = async () => {
-    const result = await submitExam();
-    if (result) {
-      toast.success("Ujian Anda telah berhasil dikumpulkan!");
-      setShowSubmitModal(false);
-      onExamSubmitted();
-    } else {
-      toast.error("Terjadi kegagalan saat mengirim jawaban ke server.");
-    }
+  // 3. Confirm Final Submit — hand off to finalizeExam, which shows the blocking
+  // Processing overlay and retries until the server accepts (idempotent). The
+  // modal closes immediately; navigation happens via the examResult effect below.
+  const handleConfirmSubmit = () => {
+    setShowSubmitModal(false);
+    void finalizeExam();
   };
+
+  // Route to the result page once a score lands — whether it came from a manual
+  // submit, the timer expiring, or a supervisor force-finish (all funnel through
+  // finalizeExam). Centralizing navigation here avoids racing the retry loop.
+  useEffect(() => {
+    if (examResult) {
+      toast.success("Ujian Anda telah berhasil dikumpulkan!");
+      onExamSubmitted();
+    }
+  }, [examResult, onExamSubmitted]);
 
   if (isLoading) {
     return (
@@ -214,8 +223,11 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
         open={showSubmitModal}
         onOpenChange={setShowSubmitModal}
         onConfirm={handleConfirmSubmit}
-        isSubmitting={isSubmitting}
+        isSubmitting={isSubmitting || finalizing}
       />
+
+      {/* Blocking finalize overlay (#8): locks the screen while submitting/retrying. */}
+      <ProcessingOverlay />
     </div>
   );
 };

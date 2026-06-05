@@ -25,7 +25,8 @@ import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { ReasonDialog } from "../ui/ReasonDialog";
 import { BroadcastDialog } from "./BroadcastDialog";
-import { ActivityIcon, LogOutIcon, CheckIcon, XIcon, AlertIcon } from "../ui/icons";
+import { TimeChangeDialog } from "./TimeChangeDialog";
+import { ActivityIcon, LogOutIcon, CheckIcon, XIcon, AlertIcon, ClockIcon } from "../ui/icons";
 
 /** A pending proctor action on an exam-taker, awaiting reason + confirmation. */
 type PendingAction = { kind: "kick" | "finish"; participant: RosterParticipant };
@@ -101,6 +102,9 @@ export function StatusPesertaPage() {
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [broadcastOpen, setBroadcastOpen] = useState(false);
+  // Time change (#8): null = closed; "picker" = page-level dialog with the full
+  // target picker; a participant = per-row dialog locked to that exam-taker.
+  const [timeChange, setTimeChange] = useState<"picker" | RosterParticipant | null>(null);
 
   const { dashboard, examSections } = useMemo(() => {
     const dash: RosterParticipant[] = [];
@@ -198,6 +202,14 @@ export function StatusPesertaPage() {
             <span className={`size-2 rounded-full ${wsConnected ? "bg-positive" : "bg-danger"}`} aria-hidden="true" />
             {wsConnected ? "Realtime aktif" : "Realtime terputus"}
           </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setTimeChange("picker")}
+            leadingIcon={<ClockIcon className="size-4" />}
+          >
+            Ubah Waktu
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -312,6 +324,14 @@ export function StatusPesertaPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => setTimeChange(p)}
+                            leadingIcon={<ClockIcon className="size-4" />}
+                          >
+                            Ubah waktu
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setPendingAction({ kind: "finish", participant: p })}
                             leadingIcon={<CheckIcon className="size-4" />}
                           >
@@ -369,6 +389,13 @@ export function StatusPesertaPage() {
         open={broadcastOpen}
         participants={participants}
         onClose={() => setBroadcastOpen(false)}
+      />
+
+      <TimeChangeDialog
+        open={timeChange !== null}
+        fixedParticipant={timeChange === "picker" ? null : timeChange}
+        participants={participants}
+        onClose={() => setTimeChange(null)}
       />
     </div>
   );

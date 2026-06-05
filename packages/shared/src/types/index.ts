@@ -88,11 +88,26 @@ export interface ExamResult {
  * - `resume`    — an unsubmitted session with time remaining; go to the exam.
  * - `finalized` — an unsubmitted session whose time expired; it was scored
  *                 server-side, so show the result.
+ *
+ * The `resume` branch carries `serverTime` (server clock at response) so the
+ * client can capture clock skew and keep its offline-tolerant countdown aligned
+ * with the authoritative `endTime` (#8).
  */
 export type ActiveSessionResponse =
   | { status: "none" }
-  | { status: "resume"; session: ExamSession }
+  | { status: "resume"; session: ExamSession; serverTime: number }
   | { status: "finalized"; examTitle: string; result: ExamResult };
+
+/**
+ * Payload of the `time-change` Socket.io event pushed to a student (#8). Emitted
+ * when a supervisor adds/subtracts that student's remaining time. `endTime` is the
+ * new authoritative session end (ms epoch); `serverTime` is the server clock at
+ * emit so the client can re-derive its clock-skew offset before applying it.
+ */
+export interface TimeChangeEvent {
+  endTime: number;
+  serverTime: number;
+}
 
 /**
  * Live connection state of a participant on the supervisor roster (#7).

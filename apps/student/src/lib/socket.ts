@@ -88,16 +88,26 @@ export const connectSocket = (token: string): void => {
     useSocketStore.getState().bumpExamListVersion();
   });
 
+  // A supervisor changed this student's remaining time (#8). Apply the new
+  // authoritative endTime + server clock so the countdown updates live; the timer
+  // hook re-derives remaining time from it on the next tick.
+  socket.on("time-change", (data: { endTime: number; serverTime: number }) => {
+    useExamStore.getState().applyTimeChange(data.endTime, data.serverTime);
+    toast.info("Pengawas mengubah sisa waktu ujian Anda.", { duration: 6000 });
+  });
+
   socket.on("force-submit", async (data: { reason?: string }) => {
     // Surface the supervisor's reason (#12); fall back to a polite default when
     // none was given.
     const reason = data.reason?.trim() || "Ujian Anda diselesaikan oleh pengawas.";
     toast.warning(reason, { duration: 6000 });
     try {
-      await useExamStore.getState().submitExam();
+      // finalizeExam (#8) shows the Processing lock and retries until accepted,
+      // so a force-finish never strands the student on a transient failure.
+      await useExamStore.getState().finalizeExam();
     } catch (error) {
-      // submitExam is already defensive, but guard the handler so a failure
-      // here cannot leave the socket callback in an unhandled-rejection state.
+      // finalizeExam is defensive, but guard the handler so a failure here cannot
+      // leave the socket callback in an unhandled-rejection state.
       log.error("Force-submit handler failed", error);
     }
     if (typeof window !== "undefined") window.location.hash = "/result";

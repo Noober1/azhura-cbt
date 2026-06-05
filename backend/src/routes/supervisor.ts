@@ -16,15 +16,33 @@ import { authPlugin } from "../middleware/requireAuth";
 import { supervisorActions } from "../socket";
 import { ForbiddenError, BadRequestError } from "../lib/errors";
 import { getRecentLogs } from "../lib/log-files";
-import { buildRosterSnapshot, hasActiveExam, listDashboardUserIds } from "../lib/roster";
+import { buildRosterSnapshot, hasActiveExam, listDashboardUserIds, buildRosterParticipant } from "../lib/roster";
 import { sessionRegistry } from "../lib/session-registry";
 import { notifyRosterPatch } from "../lib/roster-events";
 import { kickStudent } from "../lib/proctor-actions";
+import { applyTimeChange } from "../lib/time-control";
 import { createLogger } from "../lib/logger";
 
 const { groups } = schema;
 
 const log = createLogger("Supervisor");
+
+/**
+ * Shared Elysia schema for a broadcast/time-change target: one student, one or
+ * more groups, or everyone. Reused by `/alert` (#13) and `/time-change` (#8) so
+ * the two stay in lockstep.
+ */
+const broadcastTargetSchema = t.Union([
+  t.Object({ type: t.Literal("all") }),
+  t.Object({ type: t.Literal("user"), userId: t.String() }),
+  t.Object({
+    type: t.Literal("group"),
+    groupIds: t.Array(t.String(), { minItems: 1 }),
+  }),
+]);
+
+/** Largest single time adjustment (minutes) a supervisor may apply (#8). */
+const MAX_TIME_CHANGE_MINUTES = 180;
 
 const DEFAULT_LOGOUT_REASON =
   "Anda dikeluarkan dari dashboard oleh pengawas. Silakan login kembali bila perlu.";
@@ -74,14 +92,55 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
       body: t.Object({
         message: t.String({ minLength: 1 }),
         variant: t.Optional(t.Union([t.Literal("toast"), t.Literal("modal")])),
-        target: t.Union([
-          t.Object({ type: t.Literal("all") }),
-          t.Object({ type: t.Literal("user"), userId: t.String() }),
-          t.Object({
-            type: t.Literal("group"),
-            groupIds: t.Array(t.String(), { minItems: 1 }),
-          }),
-        ]),
+        target: broadcastTargetSchema,
+      }),
+    }
+  )
+
+  /**
+   * POST /api/supervisor/time-change
+   * Live time control (#8): adds or subtracts `deltaMinutes` of remaining time
+   * for a target — one student, one or more groups, or everyone mid-exam. Each
+   * affected student's client gets a `time-change` event (its countdown updates
+   * live) and the supervisor roster is refreshed so the new remaining time shows
+   * immediately. `end_time` is the source of truth; the adjustment is auditable
+   * as `end_time − (start_time + duration·60000)` — no extra storage.
+   */
+  .post(
+    "/time-change",
+    async ({ body, user }) => {
+      const { target, deltaMinutes } = body;
+      if (deltaMinutes === 0) {
+        throw new BadRequestError("Perubahan waktu tidak boleh nol.");
+      }
+      if (Math.abs(deltaMinutes) > MAX_TIME_CHANGE_MINUTES) {
+        throw new BadRequestError(
+          `Perubahan waktu maksimal ${MAX_TIME_CHANGE_MINUTES} menit per aksi.`
+        );
+      }
+
+      const affected = await applyTimeChange(target, Math.round(deltaMinutes * 60_000));
+
+      for (const session of affected) {
+        // Push the new endTime live so the student's countdown updates instantly.
+        supervisorActions.timeChangeUser(session.userId, session.endTime);
+        // Refresh the monitoring roster row (its countdown derives from endTime).
+        const participant = await buildRosterParticipant(session.userId);
+        if (participant) notifyRosterPatch({ type: "upsert", participant });
+      }
+
+      log.info("Time change", {
+        by: user.userId,
+        target: target.type,
+        deltaMinutes,
+        count: affected.length,
+      });
+      return { success: true, count: affected.length };
+    },
+    {
+      body: t.Object({
+        target: broadcastTargetSchema,
+        deltaMinutes: t.Number(),
       }),
     }
   )

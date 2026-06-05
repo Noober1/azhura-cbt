@@ -271,6 +271,14 @@ export const supervisorActions = {
   forceSubmitUser: (userId: string, reason?: string) => {
     io.to(`user:${userId}`).emit("force-submit", { reason });
   },
+  /**
+   * Pushes a live time change (#8) to a single user's client: the new
+   * authoritative `endTime` plus the server clock so the client can correct
+   * clock skew before applying it to its countdown.
+   */
+  timeChangeUser: (userId: string, endTime: number) => {
+    io.to(`user:${userId}`).emit("time-change", { endTime, serverTime: Date.now() });
+  },
   /** Revokes a single user's access (client logs out). */
   kickUser: (userId: string, reason?: string) => {
     io.to(`user:${userId}`).emit("kick", { reason });
