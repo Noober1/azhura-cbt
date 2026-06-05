@@ -5,10 +5,14 @@ const CONSOLE_URL = process.env.E2E_CONSOLE_URL ?? "http://localhost:1430";
 
 export default defineConfig({
   testDir: "./tests",
-  fullyParallel: true,
+  // Sequential workers: e2e tests share real user accounts (2 e2e users), and
+  // the backend's anti-multi-login guard (30s Redis TTL) blocks concurrent logins
+  // for the same account. The _redisCleanup auto-fixture releases claims after
+  // each test, but only works reliably when tests run one-at-a-time.
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: process.env.CI
     ? [["github"], ["html", { open: "never" }]]
     : [["html", { open: "never" }]],

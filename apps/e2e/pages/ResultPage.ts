@@ -4,7 +4,8 @@ export class ResultPage {
   constructor(private readonly page: Page) {}
 
   heading() {
-    return this.page.getByRole("heading", { name: "Hasil Ujian Selesai" });
+    // CardTitle renders as <div>, not <h*>, so use text instead of role heading
+    return this.page.getByText("Hasil Ujian Selesai", { exact: true });
   }
 
   backButton() {

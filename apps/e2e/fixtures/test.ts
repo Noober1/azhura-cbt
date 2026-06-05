@@ -5,7 +5,7 @@ import { ExamPage } from "../pages/ExamPage.ts";
 import { ResultPage } from "../pages/ResultPage.ts";
 import { apiLogin } from "./api.ts";
 import { E2E_STUDENT } from "../data/users.ts";
-import { clearE2ERedisClaimsForE2EUsers } from "../setup/redis-utils.ts";
+import { resetE2ESessions } from "../setup/reset-e2e-sessions.ts";
 
 interface E2EFixtures {
   loginPage: LoginPage;
@@ -14,8 +14,8 @@ interface E2EFixtures {
   resultPage: ResultPage;
   /** Page pre-authenticated as E2E_STUDENT, already navigated to /#/dashboard. */
   authedPage: Page;
-  /** Auto-runs after every test: clears Redis session claims so the next test can log in. */
-  _redisCleanup: void;
+  /** Auto-runs after every test: resets MySQL sessions + Redis claims for both e2e users. */
+  _sessionCleanup: void;
 }
 
 export const test = base.extend<E2EFixtures>({
@@ -42,12 +42,13 @@ export const test = base.extend<E2EFixtures>({
   },
 
   // Runs automatically after every test in files that import this custom `test`.
-  // Clears the Redis session-claim keys so the anti-multi-login guard (30s TTL)
-  // doesn't block the next test's login.
-  _redisCleanup: [
+  // Full reset: deletes e2e user's MySQL sessions/answers AND clears Redis claims
+  // so neither the "active session" check nor the anti-multi-login guard (30s TTL)
+  // can block the next test.
+  _sessionCleanup: [
     async ({}, use) => {
       await use();
-      await clearE2ERedisClaimsForE2EUsers();
+      await resetE2ESessions();
     },
     { auto: true },
   ],
