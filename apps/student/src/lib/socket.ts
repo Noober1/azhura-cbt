@@ -14,6 +14,7 @@
 import { io, Socket } from "socket.io-client";
 import { useSocketStore } from "../stores/socket";
 import { useExamStore } from "../stores/exam";
+import { useConnectivityStore } from "../stores/connectivity";
 import { useAuthStore } from "../stores/auth";
 import { toast } from "sonner";
 import { createLogger } from "./logger";
@@ -46,6 +47,10 @@ export const connectSocket = (token: string): void => {
   socket.on("connect", () => {
     log.info("Connected to realtime server.");
     useSocketStore.getState().setConnected(true);
+    // Socket (re)connect is the most reliable "back online" signal post-#9
+    // heartbeat — flush any answers queued while disconnected (#10). This also
+    // covers server-down-while-network-up, which `navigator.onLine` misses.
+    void useConnectivityStore.getState().syncAnswers();
   });
 
   socket.on("disconnect", (reason) => {
