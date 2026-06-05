@@ -160,7 +160,8 @@ See `API_CONTRACT.md` for full HTTP request/response specs:
 - `GET /exams` — List exams the caller may take (group-scoped for students)
 - `GET /exams/:examId/questions` — Fetch questions list
 - `POST /exams/:examId/sessions` — Create a timed session (group-validated)
-- `POST /exams/:examId/answer` — Submit individual answer
+- `POST /exams/:examId/answer` — Submit individual answer (idempotent upsert)
+- `POST /exams/:examId/answers/batch` — Flush a batch of queued answers (offline-first sync; idempotent upsert per question)
 - `POST /exams/:examId/submit` — Final submission & scoring
 
 WebSocket events (Socket.io): `alert-message`, `force-submit`, `kick`.
@@ -228,7 +229,7 @@ Each app has its own `tsconfig.json` with `@/* → ./src/*`. Cross-package code 
 ## Important Caveats & TODOs
 
 1. **Stronghold Integration** (`auth.ts`): Token encryption in Tauri is stubbed (`// TODO`). Production should integrate `@tauri-apps/plugin-stronghold` to store JWTs securely.
-2. **Connectivity Queue** (`connectivity.ts`): Background sync is not fully wired; `submitAnswer()` saves locally but does not push in real time (offline-first by design). Should batch pending answers and retry on reconnect.
+2. **Connectivity Queue** (`connectivity.ts`): Wired (#10). `submitAnswer()` saves locally immediately and debounces a per-answer push to the server; failures/offline enqueue in `pendingAnswers`. The queue flushes as one idempotent **batch** (`POST /exams/:examId/answers/batch`) on three triggers — browser `online`, socket reconnect (`lib/socket.ts`), and an exponential-backoff retry. Terminal failures (session submitted → 409, exam expired → 410) drop the queue instead of retrying. Final submit reconciles the in-memory superset and clears the queue.
 3. **Anti-Cheat Logging**: Violations are logged to the `anti-cheat` store but not uploaded to the server. Production should push violation logs to a supervisor endpoint.
 4. **Console is a scaffold**: `apps/console` only proves the workspace wiring. Real admin/supervisor features are tracked in GitHub issues (epic #6 + Fase 4).
 5. **OS-level lockdown** (epic #24): kiosk window (#26) + Windows low-level keyboard hook (#27) + code signing (#28) are planned, not yet implemented.

@@ -18,10 +18,21 @@ import { useConnectivityStore } from "./connectivity";
 import api from "../lib/api";
 import { createLogger } from "../lib/logger";
 import { safeJsonParse, toErrorContext } from "../lib/errors";
+import { createKeyedDebouncer } from "../lib/debounce";
 
 const log = createLogger("Exam");
 
 const isBrowser = typeof window !== "undefined";
+
+/**
+ * Trailing delay (ms) before an answer change is pushed to the server. The
+ * local save is immediate; this only debounces the *network* write so rapidly
+ * toggling options on one question collapses into a single POST (#10).
+ */
+const ANSWER_SYNC_DEBOUNCE_MS = 600;
+
+/** Debounces the outbound answer POST per `questionId` (singleton store). */
+const answerSyncDebouncer = createKeyedDebouncer<string>(ANSWER_SYNC_DEBOUNCE_MS);
 
 interface ExamState {
   examSessionId: string | null;
@@ -117,7 +128,40 @@ const SESSION_KEYS = [
   "cbt_server_time_offset",
 ] as const;
 
-export const useExamStore = create<ExamState>((set, get) => ({
+export const useExamStore = create<ExamState>((set, get) => {
+  /**
+   * Pushes the latest answer for a question to the server. Reads from state at
+   * call time so the debounced trailing call always sends the most recent
+   * selection. On failure/offline the answer is queued for batch re-sync.
+   */
+  const pushAnswerToServer = async (questionId: string): Promise<void> => {
+    const { examId, examSessionId, answers } = get();
+    const answer = answers[questionId];
+    if (!answer) return;
+
+    const isOnline = useConnectivityStore.getState().isOnline;
+    if (isOnline && examId && examSessionId) {
+      try {
+        await api.post(`/exams/${examId}/answer`, {
+          sessionId: examSessionId,
+          questionId,
+          selectedOptionId: answer.selectedOptionId ?? null,
+          timestamp: answer.timestamp,
+        });
+      } catch (error) {
+        // Network/server failure: queue for background re-sync instead of losing it.
+        log.warn("Answer sync failed — queued for retry", {
+          questionId,
+          ...toErrorContext(error),
+        });
+        useConnectivityStore.getState().addPendingAnswer(answer);
+      }
+    } else {
+      useConnectivityStore.getState().addPendingAnswer(answer);
+    }
+  };
+
+  return {
   examSessionId: isBrowser ? localStorage.getItem("cbt_exam_session_id") : null,
   examId: isBrowser ? localStorage.getItem("cbt_exam_id") : null,
   examTitle: isBrowser ? localStorage.getItem("cbt_exam_title") : null,
@@ -202,28 +246,11 @@ export const useExamStore = create<ExamState>((set, get) => ({
     // Persist locally first (offline-first); storage layer never throws.
     await saveAnswerToLocalDb(newAnswer);
 
-    const { examId, examSessionId } = get();
-    const isOnline = useConnectivityStore.getState().isOnline;
-
-    if (isOnline && examId && examSessionId) {
-      try {
-        await api.post(`/exams/${examId}/answer`, {
-          sessionId: examSessionId,
-          questionId,
-          selectedOptionId: selectedOptionId ?? null,
-          timestamp,
-        });
-      } catch (error) {
-        // Network/server failure: queue for background re-sync instead of losing it.
-        log.warn("Answer sync failed — queued for retry", {
-          questionId,
-          ...toErrorContext(error),
-        });
-        useConnectivityStore.getState().addPendingAnswer(newAnswer);
-      }
-    } else {
-      useConnectivityStore.getState().addPendingAnswer(newAnswer);
-    }
+    // Debounce only the network write — local state/storage are already current.
+    // Rapid option changes on the same question collapse into one POST.
+    answerSyncDebouncer.schedule(questionId, () => {
+      void pushAnswerToServer(questionId);
+    });
   },
 
   toggleFlagQuestion: async (questionId) => {
@@ -265,6 +292,12 @@ export const useExamStore = create<ExamState>((set, get) => ({
         answers: allAnswers,
       });
       const result: ExamResult = response.data;
+
+      // Submit reconciled every answer (`allAnswers` is the in-memory superset,
+      // including queued ones). Cancel pending debounced pushes and drop the
+      // sync queue so nothing re-fires against the now-submitted session (#10).
+      answerSyncDebouncer.cancelAll();
+      useConnectivityStore.getState().clearPendingAnswers();
 
       // Clearing the local cache is best-effort and must not fail the submit.
       await clearLocalDbAnswers();
@@ -338,6 +371,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
   },
 
   resetExam: () => {
+    answerSyncDebouncer.cancelAll();
     if (isBrowser) {
       SESSION_KEYS.forEach((k) => localStorage.removeItem(k));
     }
@@ -387,4 +421,5 @@ export const useExamStore = create<ExamState>((set, get) => ({
       timeRemaining: secondsUntil(endTime, offset),
     });
   },
-}));
+  };
+});

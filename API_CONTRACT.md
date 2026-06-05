@@ -152,6 +152,35 @@ Mengirimkan satu jawaban siswa ke server secara real-time (tiap kali siswa mengk
 
 ---
 
+### 2.2b POST `/exams/:examId/answers/batch`
+Menyinkronkan **sekumpulan** jawaban antrean dalam satu request idempoten — dipakai klien untuk menguras antrean offline (`connectivity` store) saat kembali online / socket reconnect (#10). Setiap baris di-upsert via unique `(session_id, question_id)`; duplikat dalam satu batch dikecilkan (jawaban dengan `timestamp` terbaru menang). Guard sesi identik dengan `/answer`.
+
+*   **URL**: `/api/exams/:examId/answers/batch`
+*   **Method**: `POST`
+*   **Headers**:
+    *   `Authorization: Bearer <JWT_TOKEN>`
+*   **Request Body** (maks. 500 item):
+    ```json
+    {
+      "sessionId": "sess_abc",
+      "answers": [
+        { "questionId": "q_1", "selectedOptionId": "opt_1_b", "timestamp": 1715958210344 },
+        { "questionId": "q_2", "selectedOptionId": null, "timestamp": 1715958220021 }
+      ]
+    }
+    ```
+*   **Response (200 OK - Sukses)**:
+    ```json
+    {
+      "success": true,
+      "count": 2,
+      "timestamp": 1715958210385
+    }
+    ```
+*   **Error**: `404` sesi tak ditemukan, `409` ujian sudah dikumpulkan, `410` waktu ujian habis. Klien men-_drop_ antrean pada `409`/`410`, dan retry (backoff) pada error lain.
+
+---
+
 ### 2.3 POST `/exams/:examId/submit`
 Menyerahkan lembar jawaban final siswa untuk dikunci dan dinilai secara permanen.
 

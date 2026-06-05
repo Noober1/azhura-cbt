@@ -29,11 +29,19 @@ import { checkExamToken } from "../lib/exam-token";
 import { notifyRosterPatch } from "../lib/roster-events";
 import { buildRosterParticipant } from "../lib/roster";
 import { shuffle, applyQuestionOrder } from "../lib/question-order";
+import { dedupeAnswersByQuestion } from "../lib/answer-batch";
 
 const { exams, questions, options, examSessions, answers, examGroups, sessionQuestions } =
   schema;
 
 const log = createLogger("Exam");
+
+/**
+ * Upper bound on answers accepted in one batch flush (#10). An honest client
+ * never exceeds the question count; the cap is an abuse guard, not a limit on
+ * legitimate use.
+ */
+const MAX_BATCH_ANSWERS = 500;
 
 export const examRoutes = new Elysia({ prefix: "/exams" })
   .use(authPlugin)
@@ -277,6 +285,81 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
         questionId: t.String(),
         selectedOptionId: t.Nullable(t.String()),
         timestamp: t.Number(),
+      }),
+    }
+  )
+
+  /**
+   * POST /api/exams/:examId/answers/batch
+   * Flushes a batch of queued answers in one idempotent transaction — the
+   * client uses this to drain its offline queue on reconnect (#10). Shares the
+   * exact session guards as `/answer`; intra-batch duplicates are collapsed
+   * (latest-per-question) before upserting via `uq_session_question`.
+   * @throws {NotFoundError} session not found for this user/exam.
+   * @throws {ConflictError} exam already submitted.
+   * @throws {GoneError}     exam time has expired.
+   */
+  .post(
+    "/:examId/answers/batch",
+    async ({ params, body, user }) => {
+      const { examId } = params;
+      const { sessionId, answers: incoming } = body;
+
+      // Same guards as the single-answer endpoint: ownership + still open.
+      const session = await db.query.examSessions.findFirst({
+        columns: { id: true, endTime: true, submitted: true },
+        where: and(
+          eq(examSessions.id, sessionId),
+          eq(examSessions.userId, user.userId),
+          eq(examSessions.examId, examId)
+        ),
+      });
+
+      if (!session) throw new NotFoundError("Sesi ujian tidak ditemukan.");
+      if (session.submitted) throw new ConflictError("Ujian sudah dikumpulkan.");
+      if (Date.now() > session.endTime) {
+        throw new GoneError("Waktu ujian sudah habis.");
+      }
+
+      // Collapse duplicates so the transaction never writes a question twice.
+      const deduped = dedupeAnswersByQuestion(incoming);
+
+      if (deduped.length > 0) {
+        await db.transaction(async (tx) => {
+          for (const ans of deduped) {
+            await tx
+              .insert(answers)
+              .values({
+                id: randomUUID(),
+                sessionId,
+                questionId: ans.questionId,
+                selectedOptionId: ans.selectedOptionId,
+                timestamp: ans.timestamp,
+                isFlagged: 0,
+              })
+              .onDuplicateKeyUpdate({
+                set: {
+                  selectedOptionId: ans.selectedOptionId,
+                  timestamp: ans.timestamp,
+                },
+              });
+          }
+        });
+      }
+
+      return { success: true, count: deduped.length, timestamp: Date.now() };
+    },
+    {
+      body: t.Object({
+        sessionId: t.String(),
+        answers: t.Array(
+          t.Object({
+            questionId: t.String(),
+            selectedOptionId: t.Nullable(t.String()),
+            timestamp: t.Number(),
+          }),
+          { maxItems: MAX_BATCH_ANSWERS }
+        ),
       }),
     }
   )
