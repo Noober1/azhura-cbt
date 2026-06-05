@@ -7,7 +7,9 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report",
-    "install:browsers": "playwright install chromium"
+    "install:browsers": "playwright install chromium",
+    "seed": "bun run setup/seed-e2e.ts",
+    "reset": "bun run setup/reset-e2e-sessions.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
@@ -17,6 +19,7 @@
   "dependencies": {
     "@azhura/shared": "workspace:*",
     "bcryptjs": "^2.4.3",
+    "ioredis": "^5.11.0",
     "mysql2": "^3.11.0"
   }
 }

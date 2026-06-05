@@ -6,7 +6,7 @@
  * This test must run after exam-token-gate so E2E_STUDENT_ALT's session is
  * already created (correct token test). We create it here via API just in case.
  */
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../../fixtures/test.ts";
 import { ExamPage } from "../../pages/ExamPage.ts";
 import { apiLogin, apiStartSession } from "../../fixtures/api.ts";
 import { E2E_EXAM, E2E_STUDENT_ALT } from "../../data/users.ts";

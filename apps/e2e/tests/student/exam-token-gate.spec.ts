@@ -4,7 +4,7 @@
  * Runs serially (each test mutates E2E_STUDENT_ALT's session state).
  * globalSetup resets sessions before the suite so re-runs are safe.
  */
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../../fixtures/test.ts";
 import { DashboardPage } from "../../pages/DashboardPage.ts";
 import { ExamPage } from "../../pages/ExamPage.ts";
 import { apiLogin } from "../../fixtures/api.ts";
