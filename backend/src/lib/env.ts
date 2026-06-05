@@ -162,13 +162,24 @@ export interface ServerConfig {
   port: number;
   corsOrigins: string[];
   /**
-   * Socket.io engine ping/pong tuning (#9 liveness foundation). The server pings
-   * every `pingIntervalMs`; if no pong arrives within `pingTimeoutMs` the socket
-   * is considered dead and `disconnect` fires — which drives roster connection
-   * status (#7) and the session grace period (#5).
+   * Socket.io *engine* ping/pong tuning — the transport-level liveness backstop.
+   * The server pings every `pingIntervalMs`; if no pong arrives within
+   * `pingTimeoutMs` the socket is considered dead and `disconnect` fires.
    */
   pingIntervalMs: number;
   pingTimeoutMs: number;
+  /**
+   * App-level heartbeat tuning (#9). On top of the engine ping, the server emits
+   * a `heartbeat:ping` every `heartbeatPingIntervalMs` that the client's JS must
+   * answer with `heartbeat:pong`. After `heartbeatMaxMisses` consecutive
+   * unanswered pings the socket is force-disconnected, which flips roster status
+   * (#7) and starts the session grace period (#5). Each pong refreshes the
+   * session TTL/`lastSeen`, so a frozen-but-transport-alive client no longer
+   * keeps its session pinned. Keep the interval safely below the connected
+   * session TTL so a healthy client always refreshes in time.
+   */
+  heartbeatPingIntervalMs: number;
+  heartbeatMaxMisses: number;
 }
 
 let serverConfig: ServerConfig | null = null;
@@ -186,6 +197,8 @@ export const getServerConfig = (): ServerConfig => {
     corsOrigins,
     pingIntervalMs: numberEnv("SOCKET_PING_INTERVAL_MS", 25000),
     pingTimeoutMs: numberEnv("SOCKET_PING_TIMEOUT_MS", 20000),
+    heartbeatPingIntervalMs: numberEnv("HEARTBEAT_PING_INTERVAL_MS", 10000),
+    heartbeatMaxMisses: numberEnv("HEARTBEAT_MAX_MISSES", 2),
   };
   log.debug("Server configuration loaded.", { ...serverConfig });
   return serverConfig;
