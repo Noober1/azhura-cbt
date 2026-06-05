@@ -157,6 +157,31 @@ export const getRedisConfig = (): RedisConfig => {
   return redisConfig;
 };
 
+/** Public school/app info returned by GET /api/info (no auth required). */
+export interface SchoolInfoConfig {
+  schoolName: string;
+  address: string;
+  appVersion: string;
+}
+
+let schoolInfoConfig: SchoolInfoConfig | null = null;
+
+/** Returns school name, address, and app version from env. No required fields — all optional. */
+export const getSchoolInfoConfig = (): SchoolInfoConfig => {
+  if (schoolInfoConfig) return schoolInfoConfig;
+  schoolInfoConfig = {
+    schoolName: optionalEnv("SCHOOL_NAME", "Azhura CBT"),
+    address: optionalEnv("SCHOOL_ADDRESS", ""),
+    appVersion: optionalEnv("APP_VERSION", "1.0.0"),
+  };
+  return schoolInfoConfig;
+};
+
+/** Test-only: clears the memoized school info so env changes take effect. */
+export const _resetSchoolInfoConfig = (): void => {
+  schoolInfoConfig = null;
+};
+
 /** Validated HTTP/socket server settings. */
 export interface ServerConfig {
   port: number;

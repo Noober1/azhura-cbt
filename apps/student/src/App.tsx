@@ -1,12 +1,57 @@
+import { useEffect, useRef, useState } from "react";
 import AppRouterWrapper from "./routes";
 import { Toaster } from "sonner";
 import { SupervisorMessageModal } from "./components/SupervisorMessageModal";
+import { PassphraseDialog } from "./components/settings/PassphraseDialog";
+import { SettingsPanel } from "./components/settings/SettingsPanel";
 
 /**
- * Tauri CBT App - Main Application Entrypoint
- * Bootstraps the HashRouter and sets up global widgets like the toast container.
+ * Key chord that opens the hidden settings panel: Ctrl+Shift+O, then S (within 2 s).
+ * Only active in Tauri builds — invisible to web users.
  */
+const CHORD_STEP1 = (e: KeyboardEvent) =>
+  e.ctrlKey && e.shiftKey && !e.altKey && e.key === "O";
+const CHORD_STEP2 = (e: KeyboardEvent) =>
+  !e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "s";
+const CHORD_TIMEOUT_MS = 2000;
+
+function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 function App() {
+  const [passphraseOpen, setPassphraseOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Two-step chord state: null = waiting for step 1, timer = waiting for step 2.
+  const chordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (CHORD_STEP1(e)) {
+        if (chordTimerRef.current) clearTimeout(chordTimerRef.current);
+        chordTimerRef.current = setTimeout(() => {
+          chordTimerRef.current = null;
+        }, CHORD_TIMEOUT_MS);
+        return;
+      }
+
+      if (chordTimerRef.current && CHORD_STEP2(e)) {
+        clearTimeout(chordTimerRef.current);
+        chordTimerRef.current = null;
+        setPassphraseOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      if (chordTimerRef.current) clearTimeout(chordTimerRef.current);
+    };
+  }, []);
+
   return (
     <>
       {/* HashRouter Navigation structure */}
@@ -23,6 +68,22 @@ function App() {
 
       {/* Supervisor broadcast modal (#13) */}
       <SupervisorMessageModal />
+
+      {/* Hidden settings entry — passphrase gate (#42) */}
+      <PassphraseDialog
+        open={passphraseOpen}
+        onVerified={() => {
+          setPassphraseOpen(false);
+          setSettingsOpen(true);
+        }}
+        onClose={() => setPassphraseOpen(false)}
+      />
+
+      {/* Hidden settings panel (#42) */}
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </>
   );
 }

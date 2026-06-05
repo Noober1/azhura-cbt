@@ -1,18 +1,22 @@
-/**
- * Azhura CBT App - Application Router
- *
- * Defines the HashRouter route tree (login, dashboard, exam, result) and the
- * `ProtectedRoute` guard that redirects unauthenticated users to `/login`.
- * Each page is implemented in its own feature component.
- */
-
 import { HashRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/auth";
+import { useConfigStore } from "../stores/config";
 import { LoginForm } from "../components/auth/LoginForm";
 import { AuthLayout } from "../components/layout/AuthLayout";
 import { DashboardPage } from "../components/dashboard/DashboardPage";
 import { ExamLayout } from "../components/exam/ExamLayout";
 import { ResultPage } from "../components/exam/ResultPage";
+import { SetupWizard } from "../components/setup/SetupWizard";
+
+/**
+ * Redirects to /setup when the server URL has not been configured yet.
+ * Wraps all routes that require a working backend connection.
+ */
+const SetupGuard = ({ children }: { children: React.ReactNode }) => {
+  const { isSetupComplete } = useConfigStore();
+  if (!isSetupComplete) return <Navigate to="/setup" replace />;
+  return <>{children}</>;
+};
 
 /** Wraps protected routes, redirecting to `/login` when unauthenticated. */
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -21,19 +25,26 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-/** Declares the route tree and which routes require authentication. */
 export const AppRouter = () => {
   const navigate = useNavigate();
 
   return (
     <Routes>
+      {/* Public: First-run setup wizard (shown when serverUrl is not configured) */}
+      <Route
+        path="/setup"
+        element={<SetupWizard onComplete={() => navigate("/login")} />}
+      />
+
       {/* Public: Login */}
       <Route
         path="/login"
         element={
-          <AuthLayout>
-            <LoginForm onSuccess={() => navigate("/dashboard")} />
-          </AuthLayout>
+          <SetupGuard>
+            <AuthLayout>
+              <LoginForm onSuccess={() => navigate("/dashboard")} />
+            </AuthLayout>
+          </SetupGuard>
         }
       />
 
@@ -41,12 +52,14 @@ export const AppRouter = () => {
       <Route
         path="/dashboard"
         element={
-          <ProtectedRoute>
-            <DashboardPage
-              onExamStarted={() => navigate("/exam")}
-              onShowResult={() => navigate("/result")}
-            />
-          </ProtectedRoute>
+          <SetupGuard>
+            <ProtectedRoute>
+              <DashboardPage
+                onExamStarted={() => navigate("/exam")}
+                onShowResult={() => navigate("/result")}
+              />
+            </ProtectedRoute>
+          </SetupGuard>
         }
       />
 
@@ -54,9 +67,11 @@ export const AppRouter = () => {
       <Route
         path="/exam"
         element={
-          <ProtectedRoute>
-            <ExamLayout onExamSubmitted={() => navigate("/result")} />
-          </ProtectedRoute>
+          <SetupGuard>
+            <ProtectedRoute>
+              <ExamLayout onExamSubmitted={() => navigate("/result")} />
+            </ProtectedRoute>
+          </SetupGuard>
         }
       />
 
@@ -64,9 +79,11 @@ export const AppRouter = () => {
       <Route
         path="/result"
         element={
-          <ProtectedRoute>
-            <ResultPage onFinish={() => navigate("/dashboard")} />
-          </ProtectedRoute>
+          <SetupGuard>
+            <ProtectedRoute>
+              <ResultPage onFinish={() => navigate("/dashboard")} />
+            </ProtectedRoute>
+          </SetupGuard>
         }
       />
 

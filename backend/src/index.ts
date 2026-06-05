@@ -18,6 +18,7 @@ import { adminExamRoutes } from "./routes/admin/exams";
 import { adminQuestionRoutes } from "./routes/admin/questions";
 import { adminGroupRoutes } from "./routes/admin/groups";
 import { adminStudentRoutes } from "./routes/admin/students";
+import { infoRoutes } from "./routes/info";
 import { initSocket } from "./socket";
 import { getServerConfig } from "./lib/env";
 import { assertDbConnection } from "./db";
@@ -76,6 +77,7 @@ const app = new Elysia()
   .get("/health", () => ({ status: "ok", time: new Date().toISOString() }))
   .group("/api", (app) =>
     app
+      .use(infoRoutes)
       .use(authRoutes)
       .use(examRoutes)
       .use(supervisorRoutes)
