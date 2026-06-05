@@ -83,7 +83,9 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
         const { data } = await api.get<ActiveSessionResponse>("/exams/sessions/active");
         if (cancelled) return;
         if (data.status === "resume") {
-          await useExamStore.getState().setExamSession(data.session);
+          await useExamStore
+            .getState()
+            .setExamSession({ ...data.session, serverTime: data.serverTime });
           onExamStarted();
           return;
         }

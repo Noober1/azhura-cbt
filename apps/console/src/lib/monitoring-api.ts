@@ -50,10 +50,23 @@ export const monitoringApi = {
     await api.post("/supervisor/force-submit", { userId, ...(reason ? { reason } : {}) });
   },
 
-  /** Lists groups (id + name) for the broadcast target picker (#13). */
+  /** Lists groups (id + name) for the broadcast/time-change target picker. */
   async listGroups(): Promise<GroupOption[]> {
     const { data } = await api.get<GroupOption[]>("/supervisor/groups");
     return data;
+  },
+
+  /**
+   * Adds or subtracts remaining exam time (#8) for a target — one student, one or
+   * more groups, or everyone mid-exam. `deltaMinutes` is positive to add time,
+   * negative to subtract. Returns how many active sessions were adjusted.
+   */
+  async changeTime(target: BroadcastTarget, deltaMinutes: number): Promise<number> {
+    const { data } = await api.post<{ success: boolean; count: number }>(
+      "/supervisor/time-change",
+      { target, deltaMinutes }
+    );
+    return data.count;
   },
 
   /**

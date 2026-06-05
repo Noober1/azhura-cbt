@@ -34,13 +34,26 @@ interface ExamState {
   flaggedQuestions: Record<string, boolean>;
   startTime: number | null;
   endTime: number | null;
+  /**
+   * Clock-skew offset (ms): `serverTime − clientNow` captured at the last server
+   * sync (session create / resume / time-change). The countdown is derived from
+   * `endTime − (Date.now() + serverTimeOffset)` so it stays aligned with the
+   * authoritative server clock even when the local clock is skewed (#8).
+   */
+  serverTimeOffset: number;
   timeRemaining: number;
   examResult: ExamResult | null;
   isSubmitting: boolean;
+  /**
+   * True while {@link finalizeExam} is running: the exam is being submitted and
+   * retried until the server accepts it. Drives the blocking Processing overlay
+   * that locks the UI so a student is never stranded on a failed submit (#8).
+   */
+  finalizing: boolean;
   /** Last submission error message, for surfacing/tracing failed submits. */
   submitError: string | null;
 
-  setExamSession: (session: ExamSession) => Promise<void>;
+  setExamSession: (session: ExamSession & { serverTime?: number }) => Promise<void>;
   /**
    * Loads a server-finalized result (e.g. an expired session scored on resume,
    * #4) into state so the result page can render it without a manual submit.
@@ -52,6 +65,19 @@ interface ExamState {
   toggleFlagQuestion: (questionId: string) => Promise<void>;
   setTimeRemaining: (time: number | ((prev: number) => number)) => void;
   submitExam: () => Promise<ExamResult | null>;
+  /**
+   * Finalizes the exam reliably: shows the Processing lock and retries
+   * {@link submitExam} with capped backoff until the server accepts it (the
+   * submit is idempotent server-side, so retries are safe). Used by manual
+   * "Selesai", timer expiry, and supervisor force-submit (#8).
+   */
+  finalizeExam: () => Promise<ExamResult | null>;
+  /**
+   * Applies a supervisor time change (#8): sets the new authoritative `endTime`,
+   * re-derives the clock-skew offset from `serverTime`, and recomputes the
+   * countdown live.
+   */
+  applyTimeChange: (endTime: number, serverTime: number) => void;
   loadPersistedAnswers: () => Promise<void>;
   resetExam: () => void;
   restoreSession: () => void;
@@ -61,13 +87,22 @@ interface ExamState {
 const readNumber = (key: string): number =>
   isBrowser ? Number(localStorage.getItem(key) || "0") : 0;
 
-/** Computes seconds remaining until `endTime`, clamped to >= 0. */
-const secondsUntil = (endTime: number | null): number =>
-  endTime ? Math.max(0, Math.floor((endTime - Date.now()) / 1000)) : 0;
+/**
+ * Seconds remaining until `endTime`, clamped to >= 0. `offset` (ms) corrects for
+ * client clock skew: the "now" we compare against is `Date.now() + offset`, which
+ * approximates the server clock the `endTime` was issued in (#8).
+ */
+const secondsUntil = (endTime: number | null, offset = 0): number =>
+  endTime ? Math.max(0, Math.floor((endTime - (Date.now() + offset)) / 1000)) : 0;
 
 const storedEndTime = isBrowser
   ? readNumber("cbt_exam_end_time") || null
   : null;
+const storedOffset = isBrowser ? readNumber("cbt_server_time_offset") : 0;
+
+/** Capped exponential backoff (ms) for the finalize/submit retry loop. */
+const FINALIZE_BACKOFF_START_MS = 1000;
+const FINALIZE_BACKOFF_MAX_MS = 15000;
 
 /** localStorage keys that make up a persisted exam session. */
 const SESSION_KEYS = [
@@ -79,6 +114,7 @@ const SESSION_KEYS = [
   "cbt_current_question_index",
   "cbt_exam_start_time",
   "cbt_exam_end_time",
+  "cbt_server_time_offset",
 ] as const;
 
 export const useExamStore = create<ExamState>((set, get) => ({
@@ -95,12 +131,17 @@ export const useExamStore = create<ExamState>((set, get) => ({
   flaggedQuestions: {},
   startTime: isBrowser ? readNumber("cbt_exam_start_time") || null : null,
   endTime: storedEndTime,
-  timeRemaining: secondsUntil(storedEndTime),
+  serverTimeOffset: storedOffset,
+  timeRemaining: secondsUntil(storedEndTime, storedOffset),
   examResult: null,
   isSubmitting: false,
+  finalizing: false,
   submitError: null,
 
   setExamSession: async (session) => {
+    // Capture clock skew from the server's clock at session creation so the
+    // countdown stays aligned even if the local clock is wrong (#8).
+    const offset = session.serverTime !== undefined ? session.serverTime - Date.now() : 0;
     if (isBrowser) {
       localStorage.setItem("cbt_exam_session_id", session.id);
       localStorage.setItem("cbt_exam_id", session.examId);
@@ -108,6 +149,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
       localStorage.setItem("cbt_total_questions", String(session.totalQuestions));
       localStorage.setItem("cbt_exam_start_time", String(session.startTime));
       localStorage.setItem("cbt_exam_end_time", String(session.endTime));
+      localStorage.setItem("cbt_server_time_offset", String(offset));
     }
     set({
       examSessionId: session.id,
@@ -116,7 +158,8 @@ export const useExamStore = create<ExamState>((set, get) => ({
       totalQuestions: session.totalQuestions,
       startTime: session.startTime,
       endTime: session.endTime,
-      timeRemaining: secondsUntil(session.endTime),
+      serverTimeOffset: offset,
+      timeRemaining: secondsUntil(session.endTime, offset),
       examResult: null,
     });
     await get().loadPersistedAnswers();
@@ -236,6 +279,45 @@ export const useExamStore = create<ExamState>((set, get) => ({
     }
   },
 
+  finalizeExam: async () => {
+    // Already finalized or in flight — return the known result instead of
+    // starting a second retry loop.
+    if (get().examResult) return get().examResult;
+    if (get().finalizing) return null;
+
+    set({ finalizing: true });
+    let delay = FINALIZE_BACKOFF_START_MS;
+
+    // Retry until the server accepts the submit. The submit is idempotent
+    // server-side (a re-submit of an already-finalized session returns its
+    // score), so retrying after a timeout/offline window — or even after a
+    // server-side finalize race — converges safely without double-scoring.
+    // The Processing overlay keeps the UI locked for the whole loop.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const result = await get().submitExam();
+      if (result) {
+        set({ finalizing: false });
+        return result;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay = Math.min(delay * 2, FINALIZE_BACKOFF_MAX_MS);
+    }
+  },
+
+  applyTimeChange: (endTime, serverTime) => {
+    const offset = serverTime - Date.now();
+    if (isBrowser) {
+      localStorage.setItem("cbt_exam_end_time", String(endTime));
+      localStorage.setItem("cbt_server_time_offset", String(offset));
+    }
+    set({
+      endTime,
+      serverTimeOffset: offset,
+      timeRemaining: secondsUntil(endTime, offset),
+    });
+  },
+
   loadPersistedAnswers: async () => {
     try {
       const dbAnswers = await getAnswersFromLocalDb();
@@ -270,9 +352,11 @@ export const useExamStore = create<ExamState>((set, get) => ({
       flaggedQuestions: {},
       startTime: null,
       endTime: null,
+      serverTimeOffset: 0,
       timeRemaining: 0,
       examResult: null,
       isSubmitting: false,
+      finalizing: false,
       submitError: null,
     });
   },
@@ -284,6 +368,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
     if (!examSessionId) return;
 
     const endTime = readNumber("cbt_exam_end_time") || null;
+    const offset = readNumber("cbt_server_time_offset");
 
     set({
       examSessionId,
@@ -298,7 +383,8 @@ export const useExamStore = create<ExamState>((set, get) => ({
       currentQuestionIndex: readNumber("cbt_current_question_index"),
       startTime: readNumber("cbt_exam_start_time") || null,
       endTime,
-      timeRemaining: secondsUntil(endTime),
+      serverTimeOffset: offset,
+      timeRemaining: secondsUntil(endTime, offset),
     });
   },
 }));
