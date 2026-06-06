@@ -224,6 +224,13 @@ export interface AntiCheatConfig {
   detectMultiMonitor: boolean;
 }
 
+/** Public school/app info returned by GET /api/info (no auth required). */
+export interface SchoolInfo {
+  schoolName: string;
+  address: string;
+  appVersion: string;
+}
+
 export interface AntiCheatEvent {
   id: string;
   eventType: 'focus_loss' | 'fullscreen_exit' | 'shortcut_attempt' | 'multi_monitor';
