@@ -6,13 +6,13 @@ import { PassphraseDialog } from "./components/settings/PassphraseDialog";
 import { SettingsPanel } from "./components/settings/SettingsPanel";
 
 /**
- * Key chord that opens the hidden settings panel: Ctrl+Shift+O, then S (within 2 s).
+ * Key chord that opens the hidden settings panel: Ctrl+Shift+O, then Ctrl+Shift+S (within 2 s).
  * Only active in Tauri builds — invisible to web users.
  */
 const CHORD_STEP1 = (e: KeyboardEvent) =>
   e.ctrlKey && e.shiftKey && !e.altKey && e.key === "O";
 const CHORD_STEP2 = (e: KeyboardEvent) =>
-  !e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "s";
+  e.ctrlKey && e.shiftKey && !e.altKey && e.key === "S";
 const CHORD_TIMEOUT_MS = 2000;
 
 function isTauri(): boolean {

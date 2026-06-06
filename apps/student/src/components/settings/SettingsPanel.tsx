@@ -5,12 +5,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import { Separator } from "../ui/separator";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { toast } from "sonner";
 import type { SchoolInfo } from "@azhura/shared";
 
@@ -52,10 +47,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setConnStatus("testing");
     setConnError("");
     try {
-      const healthRes = await fetch(`${base}/health`, { signal: AbortSignal.timeout(5000) });
+      const healthRes = await fetch(`${base}/health`, {
+        signal: AbortSignal.timeout(5000),
+      });
       if (!healthRes.ok) throw new Error(`HTTP ${healthRes.status}`);
-      const infoRes = await fetch(`${base}/api/info`, { signal: AbortSignal.timeout(5000) });
-      const info = infoRes.ok ? (await infoRes.json() as SchoolInfo) : null;
+      const infoRes = await fetch(`${base}/api/info`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      const info = infoRes.ok ? ((await infoRes.json()) as SchoolInfo) : null;
       await setServerUrl(base);
       if (info) await setSchoolInfo(info);
       setConnStatus("success");
@@ -101,12 +100,15 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground">Koneksi</h3>
             <div className="space-y-2">
-              <Label htmlFor="settings-url">URL Server Backend</Label>
+              <Label htmlFor="settings-url">URL Server</Label>
               <div className="flex gap-2">
                 <Input
                   id="settings-url"
                   value={urlInput}
-                  onChange={(e) => { setUrlInput(e.target.value); setConnStatus("idle"); }}
+                  onChange={(e) => {
+                    setUrlInput(e.target.value);
+                    setConnStatus("idle");
+                  }}
                   placeholder="http://192.168.1.1:3000"
                 />
                 <Button
@@ -122,7 +124,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 <p className="text-xs text-destructive">{connError}</p>
               )}
               {connStatus === "success" && (
-                <p className="text-xs text-green-600">Terhubung &amp; disimpan.</p>
+                <p className="text-xs text-green-600">
+                  Terhubung &amp; disimpan.
+                </p>
               )}
             </div>
           </section>
@@ -131,19 +135,26 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
           {/* Anti-Cheat */}
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-foreground">Anti-Cheat</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              Anti-Cheat
+            </h3>
             <div className="space-y-3">
               {(
                 [
                   { key: "enabled", label: "Aktifkan anti-cheat" },
                   { key: "fullscreen", label: "Paksa layar penuh" },
                   { key: "blockShortcuts", label: "Blokir shortcut keyboard" },
-                  { key: "detectFocusLoss", label: "Deteksi Alt+Tab / kehilangan fokus" },
+                  {
+                    key: "detectFocusLoss",
+                    label: "Deteksi Alt+Tab / kehilangan fokus",
+                  },
                   { key: "detectMultiMonitor", label: "Deteksi multi-monitor" },
                 ] as const
               ).map(({ key, label }) => (
                 <div key={key} className="flex items-center justify-between">
-                  <Label htmlFor={`ac-${key}`} className="text-sm">{label}</Label>
+                  <Label htmlFor={`ac-${key}`} className="text-sm">
+                    {label}
+                  </Label>
                   <Switch
                     id={`ac-${key}`}
                     checked={antiCheat[key]}
@@ -182,7 +193,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="confirm-pass">Konfirmasi passphrase baru</Label>
+                  <Label htmlFor="confirm-pass">
+                    Konfirmasi passphrase baru
+                  </Label>
                   <Input
                     id="confirm-pass"
                     type="password"
@@ -192,7 +205,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   />
                 </div>
               </div>
-              {passError && <p className="text-xs text-destructive">{passError}</p>}
+              {passError && (
+                <p className="text-xs text-destructive">{passError}</p>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -210,7 +225,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground">Developer</h3>
             <div className="flex items-center justify-between">
-              <Label htmlFor="debug-mode" className="text-sm">Debug mode</Label>
+              <Label htmlFor="debug-mode" className="text-sm">
+                Debug mode
+              </Label>
               <Switch
                 id="debug-mode"
                 checked={debugMode}
@@ -219,9 +236,18 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             </div>
             {debugMode && (
               <div className="rounded-md bg-muted p-3 text-xs space-y-1 font-mono">
-                <p><span className="text-muted-foreground">Server URL:</span> {serverUrl || "—"}</p>
-                <p><span className="text-muted-foreground">App version:</span> {schoolInfo?.appVersion ?? "—"}</p>
-                <p><span className="text-muted-foreground">Anti-cheat:</span> {antiCheat.enabled ? "ON" : "OFF"}</p>
+                <p>
+                  <span className="text-muted-foreground">Server URL:</span>{" "}
+                  {serverUrl || "—"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">App version:</span>{" "}
+                  {schoolInfo?.appVersion ?? "—"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Anti-cheat:</span>{" "}
+                  {antiCheat.enabled ? "ON" : "OFF"}
+                </p>
               </div>
             )}
           </section>
@@ -231,12 +257,18 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           {/* Informasi */}
           {schoolInfo && (
             <section className="space-y-1">
-              <h3 className="text-sm font-semibold text-foreground">Informasi</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                Informasi
+              </h3>
               <p className="text-sm">{schoolInfo.schoolName}</p>
               {schoolInfo.address && (
-                <p className="text-xs text-muted-foreground">{schoolInfo.address}</p>
+                <p className="text-xs text-muted-foreground">
+                  {schoolInfo.address}
+                </p>
               )}
-              <p className="text-xs text-muted-foreground">Versi: {schoolInfo.appVersion}</p>
+              <p className="text-xs text-muted-foreground">
+                Versi: {schoolInfo.appVersion}
+              </p>
             </section>
           )}
         </div>
