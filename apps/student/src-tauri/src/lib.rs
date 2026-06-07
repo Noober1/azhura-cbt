@@ -7,7 +7,7 @@
 // emitted to the frontend (`kiosk-refocus`, `kiosk-close-blocked`) for auditing.
 
 use std::sync::Mutex;
-use tauri::{Emitter, Manager, WebviewWindow, WindowEvent};
+use tauri::{Emitter, Manager, WebviewWindow, Window, WindowEvent};
 
 /// Event names mirrored in `src/lib/kiosk.ts`.
 const EVENT_REFOCUS: &str = "kiosk-refocus";
@@ -51,6 +51,20 @@ fn apply_kiosk(window: &WebviewWindow, on: bool) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Re-asserts the lockdown after the window loses focus: unminimize (in case
+/// Alt+Tab / Win+D pushed it down), re-apply always-on-top, and pull focus back
+/// to the front. This is L2 *mitigation* — it snaps the window back but cannot
+/// truly swallow Alt+Tab; that is L3 (#27, Windows-only). Most effective on
+/// Windows; many Linux WMs reject focus-stealing so the effect is limited there.
+fn reassert_focus(window: &Window) {
+    let _ = window.unminimize();
+    // Toggle topmost off→on to force the OS to re-raise the window above the
+    // app the user just Alt+Tabbed to (a no-op visually when already on top).
+    let _ = window.set_always_on_top(false);
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_focus();
+}
+
 /// Locks the window into kiosk mode and marks the exam active.
 #[tauri::command]
 fn enter_kiosk(window: WebviewWindow, state: tauri::State<ExamLockState>) -> Result<(), String> {
@@ -87,8 +101,7 @@ pub fn run() {
             // foreground and report the violation. True prevention is L3.
             WindowEvent::Focused(false) => {
                 if window.state::<ExamLockState>().is_active() {
-                    let _ = window.set_focus();
-                    let _ = window.set_always_on_top(true);
+                    reassert_focus(window);
                     let _ = window.emit(EVENT_REFOCUS, ());
                 }
             }
