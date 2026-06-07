@@ -3,8 +3,13 @@ import { useExamStore } from "../../stores/exam";
 import { useAuthStore } from "../../stores/auth";
 import { useSocketStore } from "../../stores/socket";
 import { useConnectivityStore } from "../../stores/connectivity";
-import { useAntiCheatStore } from "../../stores/anti-cheat";
-import { startAntiCheatMonitoring, enterFullscreen } from "../../lib/anti-cheat-config";
+import { useConfigStore } from "../../stores/config";
+import {
+  startAntiCheatMonitoring,
+  enterFullscreen,
+  detectMultiMonitor,
+} from "../../lib/anti-cheat-config";
+import { enterKiosk, exitKiosk, listenKioskEvents } from "../../lib/kiosk";
 import { QuestionRenderer } from "./QuestionRenderer";
 import { ExamSidebar } from "./ExamSidebar";
 import { NavigationPanel } from "./NavigationPanel";
@@ -44,7 +49,7 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
   const { user, token } = useAuthStore();
   const { isOnline } = useConnectivityStore();
   const { isConnected } = useSocketStore();
-  const { config, initializeConfig } = useAntiCheatStore();
+  const config = useConfigStore((s) => s.antiCheat);
 
   const [isLoading, setIsLoading] = useState(true);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -59,10 +64,7 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
       useSocketStore.getState().connect(token);
     }
 
-    // 3. Initialize Anti-Cheat settings
-    initializeConfig();
-
-    // 4. Fetch Questions
+    // 3. Fetch Questions
     const fetchQuestions = async () => {
       setIsLoading(true);
       try {
@@ -84,22 +86,31 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
       // Disconnect socket upon leaving exam
       useSocketStore.getState().disconnect();
     };
-  }, [token, setQuestions, initializeConfig]);
+  }, [token, setQuestions]);
 
-  // 2. Start Anti-Cheat Monitoring
+  // 2. Anti-Cheat: L1 web/DOM monitoring + L2 Tauri kiosk window.
   useEffect(() => {
-    // Only run if anti-cheat master is enabled
+    // L1 listeners always attach; each handler self-gates on the config flags,
+    // so a runtime toggle in the hidden panel (#42) takes effect immediately.
     const cleanMonitoring = startAntiCheatMonitoring();
-    
-    // Automatically trigger fullscreen if config asks for it
-    if (config.enabled && config.fullscreen) {
-      enterFullscreen();
+
+    if (!config.enabled) {
+      return () => cleanMonitoring();
     }
+
+    if (config.fullscreen) enterFullscreen();
+    void detectMultiMonitor();
+
+    // L2: lock the OS window into kiosk mode and react to window-level events.
+    void enterKiosk();
+    const unlistenKiosk = listenKioskEvents();
 
     return () => {
       cleanMonitoring();
+      void unlistenKiosk.then((off) => off());
+      void exitKiosk();
     };
-  }, [config.enabled, config.fullscreen]);
+  }, [config.enabled, config.fullscreen, config.detectMultiMonitor]);
 
   // 3. Confirm Final Submit — hand off to finalizeExam, which shows the blocking
   // Processing overlay and retries until the server accepts (idempotent). The

@@ -39,7 +39,26 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [confirmPass, setConfirmPass] = useState("");
   const [passError, setPassError] = useState("");
 
+  // Two-step confirmation for the destructive "exit app" action.
+  const [confirmExit, setConfirmExit] = useState(false);
+
   const normalizeUrl = (raw: string) => raw.replace(/\/+$/, "");
+
+  /**
+   * Force-quits the desktop app. Uses `destroy()` (not `close()`) so it bypasses
+   * the kiosk close-requested guard (L2) and shuts down even mid-exam. No-op on
+   * web, where the panel is normally unavailable.
+   */
+  const handleExitApp = async () => {
+    const isTauri =
+      typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+    if (!isTauri) {
+      toast.error("Keluar aplikasi hanya tersedia di aplikasi desktop.");
+      return;
+    }
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    await getCurrentWindow().destroy();
+  };
 
   const handleTestAndSaveUrl = async () => {
     const base = normalizeUrl(urlInput.trim());
@@ -271,6 +290,43 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               </p>
             </section>
           )}
+
+          <Separator />
+
+          {/* Keluar aplikasi */}
+          <section className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-destructive">
+                Keluar dari aplikasi
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Menutup aplikasi ujian sepenuhnya, termasuk saat mode terkunci
+                sedang aktif.
+              </p>
+            </div>
+            {confirmExit ? (
+              <div className="flex items-center gap-2">
+                <Button variant="destructive" size="sm" onClick={handleExitApp}>
+                  Ya, keluar
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmExit(false)}
+                >
+                  Batal
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmExit(true)}
+              >
+                Keluar dari aplikasi
+              </Button>
+            )}
+          </section>
         </div>
       </DialogContent>
     </Dialog>
