@@ -12,11 +12,13 @@
  */
 
 import { io, Socket } from "socket.io-client";
+import type { ActiveSessionResponse } from "@azhura/shared";
 import { useSocketStore } from "../stores/socket";
 import { useExamStore } from "../stores/exam";
 import { useConnectivityStore } from "../stores/connectivity";
 import { useAuthStore } from "../stores/auth";
 import { toast } from "sonner";
+import api from "./api";
 import { createLogger } from "./logger";
 import { toErrorContext } from "./errors";
 
@@ -99,6 +101,25 @@ export const connectSocket = (token: string): void => {
   socket.on("time-change", (data: { endTime: number; serverTime: number }) => {
     useExamStore.getState().applyTimeChange(data.endTime, data.serverTime);
     toast.info("Pengawas mengubah sisa waktu ujian Anda.", { duration: 6000 });
+  });
+
+  // A supervisor/admin reset one of this student's sessions (#58). Re-check the
+  // active session over HTTP and resume into the exam immediately, so a student
+  // sitting on the dashboard is moved without a manual refresh. No-op when there
+  // is nothing to resume (e.g. the reset was undone or already consumed).
+  socket.on("session-reset", async () => {
+    try {
+      const { data } = await api.get<ActiveSessionResponse>("/exams/sessions/active");
+      if (data.status !== "resume") return;
+      await useExamStore
+        .getState()
+        .setExamSession({ ...data.session, serverTime: data.serverTime });
+      if (typeof window !== "undefined") window.location.hash = "/exam";
+    } catch (error) {
+      // Fail-soft: the dashboard resume-check on the next refresh/reconnect is
+      // the backstop, so a transient failure here must not crash the handler.
+      log.error("session-reset handler failed", error, toErrorContext(error));
+    }
   });
 
   socket.on("force-submit", async (data: { reason?: string }) => {

@@ -16,12 +16,13 @@
 
 import { Elysia, t } from "elysia";
 import { randomUUID } from "crypto";
-import { and, asc, eq, gt, inArray, like, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, like, ne, sql } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors";
 import { notifyExamListChanged } from "../../lib/exam-events";
+import { supervisorActions } from "../../socket";
 import { createLogger } from "../../lib/logger";
 
 const { exams, examGroups, groups, questions, options, examSessions, users } =
@@ -549,7 +550,9 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
    * add a check that `session.examId` belongs to the caller's allowed scope.
    *
    * @throws {NotFoundError}  when the session does not exist.
-   * @throws {ConflictError}  when the session is not in the submitted state.
+   * @throws {ConflictError}  when the session is not in the submitted state, or
+   *   when the participant already has another active (in-progress) session —
+   *   resetting then would leave them with two live sessions at once.
    */
   .patch("/sessions/:sessionId/reset", async ({ params }) => {
     const { sessionId } = params;
@@ -560,6 +563,26 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
     if (session.submitted !== 1) {
       throw new ConflictError(
         "Hanya sesi dengan status selesai yang dapat direset."
+      );
+    }
+
+    // Guard against multi-session: if this participant is already mid-exam in
+    // another session (unsubmitted and not yet expired), reset would create a
+    // second concurrent live session. Reject so a student can never end up with
+    // the current session *and* the reset one active at the same time.
+    const now = Date.now();
+    const activeElsewhere = await db.query.examSessions.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(examSessions.userId, session.userId),
+        eq(examSessions.submitted, 0),
+        gt(examSessions.endTime, now),
+        ne(examSessions.id, sessionId)
+      ),
+    });
+    if (activeElsewhere) {
+      throw new ConflictError(
+        "Peserta sedang mengerjakan sesi ujian lain. Reset ditolak untuk mencegah sesi ganda."
       );
     }
 
@@ -574,6 +597,12 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
       .update(examSessions)
       .set({ submitted: 0, endTime: newEndTime })
       .where(eq(examSessions.id, sessionId));
+
+    // Realtime nudge (#58): tell the student's client to re-check its active
+    // session and resume into the exam immediately, instead of only noticing the
+    // reset on the next manual refresh. A disconnected student falls back to the
+    // dashboard resume-check on reconnect/refresh.
+    supervisorActions.resumeSessionUser(session.userId);
 
     log.info("Session reset", { sessionId, examId: session.examId });
     return { success: true };
