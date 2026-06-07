@@ -11,8 +11,14 @@ import bcrypt from "bcryptjs";
 import { sql } from "drizzle-orm";
 import { db, pool, schema } from "./db";
 import { createLogger } from "./lib/logger";
+import {
+  SETTINGS_DEFAULTS,
+  SETTING_KEYS,
+  serialize,
+} from "./lib/settings-registry";
+import type { SystemSettings } from "./lib/settings-registry";
 
-const { users, groups, exams, examGroups, questions, options } = schema;
+const { users, groups, exams, examGroups, questions, options, settings } = schema;
 
 const log = createLogger("Seed");
 
@@ -332,6 +338,20 @@ for (const exam of seedExams) {
     );
   }
 }
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+// Insert defaults only when a key is absent; never overwrite admin-configured values.
+const now = Date.now();
+for (const key of SETTING_KEYS) {
+  const typedKey = key as keyof SystemSettings;
+  const value = serialize(typedKey, SETTINGS_DEFAULTS[typedKey]);
+  // ON DUPLICATE KEY UPDATE key = key is a no-op; acts as INSERT IGNORE for typed ORMs.
+  await db
+    .insert(settings)
+    .values({ key, value, updatedAt: now })
+    .onDuplicateKeyUpdate({ set: { key: sql`values(${settings.key})` } });
+}
+log.info("Default settings seeded.");
 
 log.info("Seeding complete. Initial data inserted.");
 await pool.end();

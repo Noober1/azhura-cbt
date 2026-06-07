@@ -1,4 +1,8 @@
-/** E2E-dedicated test data constants. Keep in sync with setup/seed-e2e.ts. */
+/**
+ * E2E-dedicated test data constants.
+ * Keep in sync with setup/seed-e2e.ts — any constant added here must have a
+ * matching INSERT in the seed script.
+ */
 
 export const E2E_STUDENT = {
   id: "usr_e2e_1",
@@ -28,4 +32,20 @@ export const E2E_EXAM_TOKEN = {
   id: "exam_e2e_token",
   title: "E2E Ujian Token",
   token: "AB12",
+} as const;
+
+/** Admin account for console E2E tests. */
+export const E2E_ADMIN = {
+  id: "usr_e2e_admin",
+  nis: "900001",
+  password: "admin@123",
+  name: "E2E Administrator",
+} as const;
+
+/** Supervisor account for console E2E tests. */
+export const E2E_SUPERVISOR = {
+  id: "usr_e2e_sup",
+  nis: "900002",
+  password: "supervisor@123",
+  name: "E2E Pengawas",
 } as const;

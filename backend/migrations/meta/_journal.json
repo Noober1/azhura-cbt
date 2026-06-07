@@ -36,6 +36,13 @@
       "when": 1780567732145,
       "tag": "0004_sudden_meggan",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1780801346026,
+      "tag": "0005_panoramic_nebula",
+      "breakpoints": true
     }
   ]
 }

@@ -237,3 +237,19 @@ export interface AntiCheatEvent {
   timestamp: number;
   details?: string;
 }
+
+/**
+ * Global admin-editable application settings. Returned by `GET /admin/settings`
+ * and accepted (partially) by `PATCH /admin/settings`. The backend registry
+ * (`settings-registry.ts`) applies defaults for any key absent from the DB.
+ */
+export interface SystemSettings {
+  schoolName: string;
+  schoolAddress: string;
+  /** Default duration offered in the "new exam" form, in minutes (1–480). */
+  defaultExamDurationMinutes: number;
+  /** Default passing score offered in the "new exam" form (0–100). */
+  defaultPassingGrade: number;
+  /** When true, the anti-cheat engine is active for all student sessions. */
+  antiCheatEnabled: boolean;
+}

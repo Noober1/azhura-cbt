@@ -8,7 +8,7 @@
 
 import bcrypt from "bcryptjs";
 import mysql from "mysql2/promise";
-import { E2E_EXAM, E2E_EXAM_TOKEN, E2E_GROUP, E2E_STUDENT, E2E_STUDENT_ALT } from "../data/users.ts";
+import { E2E_ADMIN, E2E_EXAM, E2E_EXAM_TOKEN, E2E_GROUP, E2E_STUDENT, E2E_STUDENT_ALT, E2E_SUPERVISOR } from "../data/users.ts";
 
 function createPool() {
   return mysql.createPool({
@@ -93,6 +93,23 @@ export async function seedE2E(): Promise<void> {
         [student.id, student.nis, student.name, hash, E2E_GROUP.id]
       );
     }
+
+    // Console users (admin + supervisor — no group)
+    const adminHash = await bcrypt.hash(E2E_ADMIN.password, 10);
+    await pool.execute(
+      `INSERT INTO users (id, nis, \`name\`, \`password\`, role, is_active, group_id)
+       VALUES (?, ?, ?, ?, 'admin', 1, NULL)
+       ON DUPLICATE KEY UPDATE \`name\` = VALUES(\`name\`), is_active = 1`,
+      [E2E_ADMIN.id, E2E_ADMIN.nis, E2E_ADMIN.name, adminHash]
+    );
+
+    const supervisorHash = await bcrypt.hash(E2E_SUPERVISOR.password, 10);
+    await pool.execute(
+      `INSERT INTO users (id, nis, \`name\`, \`password\`, role, is_active, group_id)
+       VALUES (?, ?, ?, ?, 'supervisor', 1, NULL)
+       ON DUPLICATE KEY UPDATE \`name\` = VALUES(\`name\`), is_active = 1`,
+      [E2E_SUPERVISOR.id, E2E_SUPERVISOR.nis, E2E_SUPERVISOR.name, supervisorHash]
+    );
 
     const oneYearMs = Date.now() + 365 * 24 * 60 * 60 * 1000;
     const expiredAt = new Date(oneYearMs);

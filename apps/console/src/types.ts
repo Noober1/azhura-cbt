@@ -152,6 +152,13 @@ export interface StudentUpdateInput {
   isActive?: boolean;
 }
 
+// ── Settings (#16) ──────────────────────────────────────────────────────────
+
+export type { SystemSettings } from "@azhura/shared";
+
+/** Body for `PATCH /admin/settings` — all fields are optional. */
+export type SystemSettingsInput = Partial<import("@azhura/shared").SystemSettings>;
+
 // ── Sessions (#45) ──────────────────────────────────────────────────────────
 
 export type SessionStatus = "in_progress" | "completed" | "expired";
