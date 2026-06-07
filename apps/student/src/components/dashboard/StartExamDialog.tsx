@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TriangleAlert, FileText, Clock, KeyRound } from "lucide-react";
 import type { AvailableExam } from "../../types";
 import {
@@ -66,6 +66,8 @@ export const StartExamDialog = ({
   // True after the server rejects the token; cleared as soon as the student
   // types again. Drives the red error styling and message.
   const [tokenRejected, setTokenRejected] = useState(false);
+  // The underlying OTP <input>, for refocusing after a rejection clears it.
+  const otpRef = useRef<HTMLInputElement>(null);
 
   // Reset the token field whenever the dialog targets a different exam (or
   // reopens) so a previous entry never carries over.
@@ -75,17 +77,16 @@ export const StartExamDialog = ({
   }, [exam?.id, open]);
 
   // On a wrong-token rejection (#47): clear the boxes and refocus so the student
-  // can retype straight away. The input exposes id="exam-token" (input-otp
-  // forwards it to the real <input>), so focus it once the cleared value paints.
+  // can retype straight away. Guarded on `open` so a rejection can never pop the
+  // dialog into a stale error state while it's closed.
   useEffect(() => {
-    if (!tokenRejectedNonce) return; // ignore the initial 0
+    if (!tokenRejectedNonce || !open) return; // ignore the initial 0 / closed dialog
     setToken("");
     setTokenRejected(true);
-    const raf = requestAnimationFrame(() => {
-      document.getElementById("exam-token")?.focus();
-    });
+    // Refocus once the cleared value has painted.
+    const raf = requestAnimationFrame(() => otpRef.current?.focus());
     return () => cancelAnimationFrame(raf);
-  }, [tokenRejectedNonce]);
+  }, [tokenRejectedNonce, open]);
 
   const tokenValid = !requiresToken || TOKEN_PATTERN.test(token);
   // Show an error hint for a bad format (once the student types) or a rejection.
@@ -157,6 +158,7 @@ export const StartExamDialog = ({
               Token Akses Ujian
             </Label>
             <InputOTP
+              ref={otpRef}
               id="exam-token"
               maxLength={TOKEN_LENGTH}
               // Alphanumeric only — mirrors the server token format so symbols
@@ -185,6 +187,10 @@ export const StartExamDialog = ({
               </InputOTPGroup>
             </InputOTP>
             <p
+              // Static polite live region: announces the hint/error text whenever
+              // it changes (e.g. a rejection) without the role↔aria-live conflict
+              // a toggled role="alert" would introduce.
+              aria-live="polite"
               className={`text-xs font-medium ${
                 showTokenError
                   ? "text-destructive"

@@ -14,6 +14,7 @@ import { useExamStore } from "../../stores/exam";
 import { useSocketStore } from "../../stores/socket";
 import type { AvailableExam, ActiveSessionResponse } from "../../types";
 import api from "../../lib/api";
+import { isAxiosError } from "axios";
 import { toast } from "sonner";
 import { createLogger } from "../../lib/logger";
 import { getErrorMessage, toErrorContext } from "../../lib/errors";
@@ -169,10 +170,13 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
       });
       const message = getErrorMessage(error, "Gagal memulai sesi ujian. Coba lagi.");
       toast.error(message);
-      // A wrong/invalid access token (#47): the server's token errors all mention
-      // "Token". Signal the dialog to clear + refocus the OTP so the student can
-      // retype immediately, rather than leaving the stale, rejected value.
-      if (token && /token/i.test(message)) {
+      // A wrong access token (#47) surfaces as HTTP 403 from the session endpoint
+      // when a token was supplied — and that's the only 403 reachable here (an
+      // exam the student's group can't take isn't even listed). Keying on the
+      // status, not the message text, avoids mistaking an expired-JWT 401 (whose
+      // message also says "Token") for a bad access token. Signal the dialog to
+      // clear + refocus the OTP so the student can retype immediately.
+      if (token && isAxiosError(error) && error.response?.status === 403) {
         setTokenRejectedNonce((n) => n + 1);
       }
     } finally {
