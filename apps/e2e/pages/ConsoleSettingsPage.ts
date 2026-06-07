@@ -9,7 +9,8 @@ export class ConsoleSettingsPage {
   constructor(private readonly page: Page) {}
 
   goto() {
-    return this.page.goto("/#/settings");
+    // Console uses BrowserRouter (path-based), not hash routing (#63).
+    return this.page.goto("/settings");
   }
 
   get schoolNameInput() {

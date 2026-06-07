@@ -24,7 +24,7 @@ test.describe("Settings page — admin access", () => {
     await login.login(E2E_ADMIN.nis, E2E_ADMIN.password);
     await settings.navLink.click();
 
-    await expect(page).toHaveURL(/#\/settings/);
+    await expect(page).toHaveURL(/\/settings$/);
     await expect(settings.schoolNameInput).toBeVisible();
     await expect(settings.saveButton).toBeVisible();
   });
@@ -35,7 +35,7 @@ test.describe("Settings page — admin access", () => {
 
     await login.login(E2E_ADMIN.nis, E2E_ADMIN.password);
     // Wait for post-login redirect to complete before navigating to settings.
-    await expect(page).toHaveURL(/#\/(exams|settings|monitoring)/);
+    await expect(page).toHaveURL(/\/(exams|settings|monitoring)/);
     await settings.goto();
 
     await settings.schoolNameInput.fill(UNIQUE_NAME);
@@ -83,10 +83,10 @@ test.describe("Settings page — supervisor access denied", () => {
     const login = new ConsoleLoginPage(page);
 
     await login.login(E2E_SUPERVISOR.nis, E2E_SUPERVISOR.password);
-    await page.goto("/#/settings");
+    await page.goto("/settings");
 
     // AdminRoute redirects supervisor to /monitoring
-    await expect(page).toHaveURL(/#\/monitoring/);
+    await expect(page).toHaveURL(/\/monitoring/);
   });
 
   test("Pengaturan nav link is not visible to supervisor", async ({ page }) => {
