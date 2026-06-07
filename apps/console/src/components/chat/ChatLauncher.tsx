@@ -15,14 +15,23 @@ import { Badge } from "../ui/Badge";
 import { MessageSquareIcon, XIcon } from "../ui/icons";
 
 export function ChatLauncher() {
-  const { messages, presence, connected, enabled } = useChatStream();
+  const { messages, presence, connected, enabled, historyLoaded } = useChatStream();
 
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const seenCountRef = useRef(0);
 
-  // Count messages that land while the drawer is closed.
+  // Establish the history baseline so backfill messages never count as unread.
   useEffect(() => {
+    if (historyLoaded) {
+      seenCountRef.current = messages.length;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyLoaded]);
+
+  // Count live messages that land while the drawer is closed.
+  useEffect(() => {
+    if (!historyLoaded) return;
     if (open) {
       seenCountRef.current = messages.length;
       setUnread(0);
@@ -31,7 +40,7 @@ export function ChatLauncher() {
     const delta = messages.length - seenCountRef.current;
     if (delta > 0) setUnread((u) => u + delta);
     seenCountRef.current = messages.length;
-  }, [messages.length, open]);
+  }, [messages.length, open, historyLoaded]);
 
   // Escape to close + lock body scroll while the drawer is open.
   useEffect(() => {

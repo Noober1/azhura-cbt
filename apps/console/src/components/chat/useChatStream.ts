@@ -27,6 +27,8 @@ export interface UseChatStreamResult {
   connected: boolean;
   /** Whether chat is globally enabled; null until the first `chat:config` arrives. */
   enabled: boolean | null;
+  /** True once the initial `chat:history` backfill has been received. */
+  historyLoaded: boolean;
 }
 
 export function useChatStream(): UseChatStreamResult {
@@ -35,6 +37,7 @@ export function useChatStream(): UseChatStreamResult {
   const [presence, setPresence] = useState<ChatPresenceMember[]>([]);
   const [connected, setConnected] = useState(false);
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -43,8 +46,10 @@ export function useChatStream(): UseChatStreamResult {
     const onConnect = () => setConnected(true);
     const onDisconnect = () => setConnected(false);
     const onConfig = (data: ChatConfigEvent) => setEnabled(data.enabled);
-    const onHistory = (data: ChatHistoryEvent) =>
+    const onHistory = (data: ChatHistoryEvent) => {
       setMessages(data.messages.slice(-MAX_MESSAGES));
+      setHistoryLoaded(true);
+    };
     const onMessage = (message: ChatMessage) =>
       setMessages((prev) => [...prev, message].slice(-MAX_MESSAGES));
     const onPresence = (data: ChatPresenceEvent) => setPresence(data.members);
@@ -68,5 +73,5 @@ export function useChatStream(): UseChatStreamResult {
     };
   }, [token]);
 
-  return { messages, presence, connected, enabled };
+  return { messages, presence, connected, enabled, historyLoaded };
 }
