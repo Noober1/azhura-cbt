@@ -144,3 +144,10 @@ export const ScrollTextIcon = svg(
 export const MessageSquareIcon = svg(
   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
 );
+
+export const BarChartIcon = svg(
+  <>
+    <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+    <path d="M8 17V9M13 17V5M18 17v-6" />
+  </>
+);

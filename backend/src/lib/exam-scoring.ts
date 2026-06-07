@@ -29,6 +29,25 @@ export interface AnswerKeyEntry {
   correctOptionId: string;
 }
 
+/** Lifecycle of an exam session as derived from `submitted` + `end_time`. */
+export type SessionStatus = "in_progress" | "completed" | "expired";
+
+/**
+ * Derives a session's display status. A submitted session is `completed`; an
+ * unsubmitted one is `in_progress` while time remains and `expired` once its
+ * `endTime` has elapsed. Shared by the admin sessions list (#45) and the
+ * aggregate recap (#19) so both label sessions identically.
+ */
+export const deriveSessionStatus = (
+  submitted: number,
+  endTime: number,
+  now: number
+): SessionStatus => {
+  if (submitted === 1) return "completed";
+  if (endTime > now) return "in_progress";
+  return "expired";
+};
+
 /**
  * Grades a set of selections against an answer key. Pure (no I/O): every key
  * question is counted as correct / wrong / empty, and the score is the rounded
