@@ -204,6 +204,14 @@ async function getExamDetail(examId: string) {
   };
 }
 
+type AdminSessionStatus = "in_progress" | "completed" | "expired";
+
+function deriveSessionStatus(submitted: number, endTime: number, now: number): AdminSessionStatus {
+  if (submitted === 1) return "completed";
+  if (endTime > now) return "in_progress";
+  return "expired";
+}
+
 export const adminExamRoutes = new Elysia({ prefix: "/admin" })
   .use(authPlugin)
   .onBeforeHandle(requireAdmin)
@@ -482,5 +490,89 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
 
     notifyExamListChanged(groupsBefore);
     log.info("Exam deleted", { id });
+    return { success: true };
+  })
+
+  /**
+   * GET /api/admin/exams/:examId/sessions
+   * Lists all exam sessions (participants) for one exam, with derived status.
+   * @throws {NotFoundError} when the exam does not exist.
+   */
+  .get("/exams/:examId/sessions", async ({ params }) => {
+    const { examId } = params;
+    const exam = await db.query.exams.findFirst({
+      columns: { id: true },
+      where: eq(exams.id, examId),
+    });
+    if (!exam) throw new NotFoundError("Ujian tidak ditemukan.");
+
+    const rows = await db
+      .select({
+        id: examSessions.id,
+        userId: examSessions.userId,
+        name: users.name,
+        nis: users.nis,
+        groupName: groups.name,
+        startTime: examSessions.startTime,
+        endTime: examSessions.endTime,
+        submitted: examSessions.submitted,
+      })
+      .from(examSessions)
+      .innerJoin(users, eq(users.id, examSessions.userId))
+      .leftJoin(groups, eq(groups.id, users.groupId))
+      .where(eq(examSessions.examId, examId))
+      .orderBy(asc(examSessions.startTime));
+
+    const now = Date.now();
+    return rows.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      name: r.name,
+      nis: r.nis,
+      groupName: r.groupName ?? null,
+      startTime: r.startTime,
+      endTime: r.endTime,
+      status: deriveSessionStatus(r.submitted, r.endTime, now),
+    }));
+  })
+
+  /**
+   * PATCH /api/admin/sessions/:sessionId/reset
+   * Resets a submitted session back to in_progress, extending end_time by the
+   * exam's full duration from now. Answers are preserved.
+   *
+   * Authorization note: this system uses a flat global-admin model — all admins
+   * have access to all sessions across all exams. The `requireAdmin` guard above
+   * enforces this. If a per-exam or multi-tenant admin model is introduced later,
+   * add a check that `session.examId` belongs to the caller's allowed scope.
+   *
+   * @throws {NotFoundError}  when the session does not exist.
+   * @throws {ConflictError}  when the session is not in the submitted state.
+   */
+  .patch("/sessions/:sessionId/reset", async ({ params }) => {
+    const { sessionId } = params;
+    const session = await db.query.examSessions.findFirst({
+      where: eq(examSessions.id, sessionId),
+    });
+    if (!session) throw new NotFoundError("Sesi tidak ditemukan.");
+    if (session.submitted !== 1) {
+      throw new ConflictError(
+        "Hanya sesi dengan status selesai yang dapat direset."
+      );
+    }
+
+    const exam = await db.query.exams.findFirst({
+      columns: { durationMinutes: true },
+      where: eq(exams.id, session.examId),
+    });
+    if (!exam) throw new NotFoundError("Ujian tidak ditemukan.");
+
+    const newEndTime = Date.now() + exam.durationMinutes * 60 * 1000;
+    await db
+      .update(examSessions)
+      .set({ submitted: 0, endTime: newEndTime })
+      .where(eq(examSessions.id, sessionId));
+
+    log.info("Session reset", { sessionId, examId: session.examId });
     return { success: true };
   });

@@ -151,3 +151,19 @@ export interface StudentUpdateInput {
   groupId?: string | null;
   isActive?: boolean;
 }
+
+// ── Sessions (#45) ──────────────────────────────────────────────────────────
+
+export type SessionStatus = "in_progress" | "completed" | "expired";
+
+/** Row from `GET /admin/exams/:examId/sessions`. */
+export interface ExamSessionRow {
+  id: string;
+  userId: string;
+  name: string;
+  nis: string;
+  groupName: string | null;
+  startTime: number;
+  endTime: number;
+  status: SessionStatus;
+}

@@ -11,6 +11,7 @@ import type {
   ExamCreateInput,
   ExamDetail,
   ExamListResponse,
+  ExamSessionRow,
   ExamUpdateInput,
   QuestionCreateInput,
   QuestionUpdateInput,
@@ -59,5 +60,14 @@ export const examsApi = {
 
   async removeQuestion(examId: string, qid: string): Promise<void> {
     await api.delete(`/admin/exams/${examId}/questions/${qid}`);
+  },
+
+  async listSessions(examId: string): Promise<ExamSessionRow[]> {
+    const { data } = await api.get<ExamSessionRow[]>(`/admin/exams/${examId}/sessions`);
+    return data;
+  },
+
+  async resetSession(sessionId: string): Promise<void> {
+    await api.patch(`/admin/sessions/${sessionId}/reset`);
   },
 };

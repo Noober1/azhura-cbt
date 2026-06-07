@@ -3,16 +3,19 @@
  *
  * Loads a single exam (with its questions, options, and answer key) and provides
  * full question CRUD: add/edit via <QuestionFormModal/>, delete via
- * <ConfirmDialog/>. Also surfaces exam metadata and a shortcut to edit the exam.
+ * <ConfirmDialog/>. Also surfaces exam metadata, an edit shortcut, a live lock
+ * banner when students are mid-exam (#46), and the full participant/session list
+ * with a reset action for submitted sessions (#45).
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useAuthStore } from "../../stores/auth";
 import { examsApi } from "../../lib/exams-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { formatDateTime, formatDuration, isPast } from "../../lib/format";
-import type { AdminQuestion, ExamDetail } from "../../types";
+import type { AdminQuestion, ExamDetail, ExamSessionRow, SessionStatus } from "../../types";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { Spinner, CenterState } from "../ui/Spinner";
@@ -27,13 +30,27 @@ import {
   ClockIcon,
   KeyIcon,
   CheckIcon,
+  AlertIcon,
 } from "../ui/icons";
+
+const SESSION_STATUS: Record<SessionStatus, { tone: "accent" | "positive" | "neutral"; label: string }> = {
+  in_progress: { tone: "accent", label: "Mengerjakan" },
+  completed: { tone: "positive", label: "Selesai" },
+  expired: { tone: "neutral", label: "Kedaluwarsa" },
+};
+
+function SessionStatusBadge({ status }: { status: SessionStatus }) {
+  const { tone, label } = SESSION_STATUS[status];
+  return <Badge tone={tone}>{label}</Badge>;
+}
 
 export function ExamDetailPage() {
   const { examId = "" } = useParams();
   const navigate = useNavigate();
+  const role = useAuthStore((s) => s.role);
 
   const [exam, setExam] = useState<ExamDetail | null>(null);
+  const [sessions, setSessions] = useState<ExamSessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,12 +58,18 @@ export function ExamDetailPage() {
   const [questionFormOpen, setQuestionFormOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<AdminQuestion | null>(null);
   const [deletingQuestion, setDeletingQuestion] = useState<AdminQuestion | null>(null);
+  const [resettingSession, setResettingSession] = useState<ExamSessionRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setExam(await examsApi.get(examId));
+      const [examData, sessionsData] = await Promise.all([
+        examsApi.get(examId),
+        examsApi.listSessions(examId),
+      ]);
+      setExam(examData);
+      setSessions(sessionsData);
     } catch (err) {
       setError(getErrorMessage(err, "Gagal memuat ujian."));
     } finally {
@@ -54,9 +77,27 @@ export function ExamDetailPage() {
     }
   }, [examId]);
 
+  const refresh = useCallback(async () => {
+    try {
+      const [examData, sessionsData] = await Promise.all([
+        examsApi.get(examId),
+        examsApi.listSessions(examId),
+      ]);
+      setExam(examData);
+      setSessions(sessionsData);
+    } catch {
+      // silent — polling errors don't surface to the user
+    }
+  }, [examId]);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const id = setInterval(refresh, 15_000);
+    return () => clearInterval(id);
+  }, [refresh]);
 
   function openAddQuestion() {
     setEditingQuestion(null);
@@ -82,6 +123,18 @@ export function ExamDetailPage() {
       load();
     } catch (err) {
       toast.error(getErrorMessage(err, "Gagal menghapus soal."));
+      throw err;
+    }
+  }
+
+  async function confirmResetSession() {
+    if (!resettingSession) return;
+    try {
+      await examsApi.resetSession(resettingSession.id);
+      toast.success(`Status ujian ${resettingSession.name} berhasil direset.`);
+      refresh();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal mereset status ujian."));
       throw err;
     }
   }
@@ -120,6 +173,9 @@ export function ExamDetailPage() {
 
   const nextOrderIndex =
     exam.questions.reduce((max, q) => Math.max(max, q.orderIndex), -1) + 1;
+
+  const activeCount = exam.allowedGroups.reduce((n, g) => n + g.activeParticipants, 0);
+  const isLocked = activeCount > 0;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -196,16 +252,35 @@ export function ExamDetailPage() {
               : "Belum ada soal"}
           </p>
         </div>
-        <Button onClick={openAddQuestion} leadingIcon={<PlusIcon className="size-4" />}>
+        <Button
+          onClick={openAddQuestion}
+          disabled={isLocked}
+          leadingIcon={<PlusIcon className="size-4" />}
+        >
           Tambah soal
         </Button>
       </div>
+
+      {isLocked && (
+        <div className="mt-3 flex items-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-warn)]/25 bg-[var(--color-warn)]/10 px-4 py-3 text-sm text-[var(--color-warn)]">
+          <AlertIcon className="size-4 shrink-0" />
+          <span>
+            Kelola soal dikunci — <strong>{activeCount}</strong> peserta sedang mengerjakan ujian ini.
+            Tambah, edit, dan hapus soal tidak tersedia.
+          </span>
+        </div>
+      )}
 
       {exam.questions.length === 0 ? (
         <div className="mt-4 rounded-[var(--radius-card)] border border-dashed border-line bg-surface">
           <CenterState>
             <span>Tambahkan soal pertama untuk ujian ini.</span>
-            <Button size="sm" onClick={openAddQuestion} leadingIcon={<PlusIcon className="size-4" />}>
+            <Button
+              size="sm"
+              onClick={openAddQuestion}
+              disabled={isLocked}
+              leadingIcon={<PlusIcon className="size-4" />}
+            >
               Tambah soal
             </Button>
           </CenterState>
@@ -228,16 +303,28 @@ export function ExamDetailPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
-                    onClick={() => openEditQuestion(q)}
+                    onClick={isLocked ? undefined : () => openEditQuestion(q)}
+                    disabled={isLocked}
                     aria-label={`Edit soal ${index + 1}`}
-                    className="focus-ring rounded-md p-2 text-faint transition-colors hover:bg-canvas hover:text-ink"
+                    aria-disabled={isLocked}
+                    className={`focus-ring rounded-md p-2 transition-colors ${
+                      isLocked
+                        ? "cursor-not-allowed text-faint/40"
+                        : "text-faint hover:bg-canvas hover:text-ink"
+                    }`}
                   >
                     <PencilIcon className="size-4" />
                   </button>
                   <button
-                    onClick={() => setDeletingQuestion(q)}
+                    onClick={isLocked ? undefined : () => setDeletingQuestion(q)}
+                    disabled={isLocked}
                     aria-label={`Hapus soal ${index + 1}`}
-                    className="focus-ring rounded-md p-2 text-faint transition-colors hover:bg-danger-wash hover:text-danger"
+                    aria-disabled={isLocked}
+                    className={`focus-ring rounded-md p-2 transition-colors ${
+                      isLocked
+                        ? "cursor-not-allowed text-faint/40"
+                        : "text-faint hover:bg-danger-wash hover:text-danger"
+                    }`}
                   >
                     <TrashIcon className="size-4" />
                   </button>
@@ -275,6 +362,68 @@ export function ExamDetailPage() {
         </ol>
       )}
 
+      {/* Participants */}
+      <div className="mt-10">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-ink">Peserta</h2>
+          <p className="mt-0.5 text-sm text-faint">
+            {sessions.length > 0
+              ? `${sessions.length} sesi tercatat`
+              : "Belum ada peserta"}
+          </p>
+        </div>
+
+        {sessions.length === 0 ? (
+          <div className="mt-4 rounded-[var(--radius-card)] border border-dashed border-line bg-surface">
+            <CenterState>
+              <span>Belum ada peserta yang mengikuti ujian ini.</span>
+            </CenterState>
+          </div>
+        ) : (
+          <div className="mt-4 overflow-hidden rounded-[var(--radius-card)] border border-line">
+            <table className="w-full text-sm">
+              <thead className="border-b border-line bg-canvas">
+                <tr>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-faint">Nama</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-faint tabular">NIS</th>
+                  <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-faint md:table-cell">Group</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-faint">Status</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-faint">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {sessions.map((s) => (
+                  <tr key={s.id} className="bg-surface">
+                    <td className="px-4 py-3 font-medium text-ink">{s.name}</td>
+                    <td className="tabular px-4 py-3 text-ink-soft">{s.nis}</td>
+                    <td className="hidden px-4 py-3 md:table-cell">
+                      {s.groupName ? (
+                        <Badge tone="accent">{s.groupName}</Badge>
+                      ) : (
+                        <span className="text-faint">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <SessionStatusBadge status={s.status} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {s.status === "completed" && role === "admin" && (
+                        <button
+                          onClick={() => setResettingSession(s)}
+                          className="focus-ring rounded-md px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent-wash"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Modals */}
       <ExamFormModal
         open={examFormOpen}
@@ -305,6 +454,16 @@ export function ExamDetailPage() {
         confirmLabel="Hapus soal"
         onConfirm={confirmDeleteQuestion}
         onClose={() => setDeletingQuestion(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(resettingSession)}
+        title="Reset status ujian?"
+        message={`Reset ujian ${resettingSession?.name ?? ""}? Jawaban yang sudah dijawab tetap tersimpan. Peserta dapat melanjutkan ujian dari kondisi terakhir dengan waktu penuh.`}
+        confirmLabel="Reset"
+        tone="primary"
+        onConfirm={confirmResetSession}
+        onClose={() => setResettingSession(null)}
       />
     </div>
   );

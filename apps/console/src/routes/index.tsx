@@ -27,6 +27,14 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function AdminRoute({ children }: { children: ReactNode }) {
+  const role = useAuthStore((s) => s.role);
+  if (role !== "admin") {
+    return <Navigate to="/exams" replace />;
+  }
+  return <>{children}</>;
+}
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -40,8 +48,8 @@ export function AppRoutes() {
       >
         <Route path="/exams" element={<ExamListPage />} />
         <Route path="/exams/:examId" element={<ExamDetailPage />} />
-        <Route path="/students" element={<StudentListPage />} />
-        <Route path="/groups" element={<GroupListPage />} />
+        <Route path="/students" element={<AdminRoute><StudentListPage /></AdminRoute>} />
+        <Route path="/groups" element={<AdminRoute><GroupListPage /></AdminRoute>} />
         <Route path="/monitoring" element={<StatusPesertaPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/exams" replace />} />

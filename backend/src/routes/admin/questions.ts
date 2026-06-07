@@ -21,15 +21,15 @@
 
 import { Elysia, t } from "elysia";
 import { randomUUID } from "crypto";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
-import { BadRequestError, NotFoundError } from "../../lib/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors";
 import { notifyExamListChanged } from "../../lib/exam-events";
 import { createLogger } from "../../lib/logger";
 
-const { exams, examGroups, questions, options } = schema;
+const { exams, examGroups, examSessions, questions, options } = schema;
 
 const log = createLogger("AdminQuestion");
 
@@ -50,6 +50,9 @@ async function getExamGroupIds(examId: string): Promise<string[]> {
     .where(eq(examGroups.examId, examId));
   return rows.map((r) => r.groupId);
 }
+
+const ACTIVE_SESSIONS_ERROR =
+  "Tidak dapat mengubah soal saat ada peserta sedang mengerjakan ujian.";
 
 /** Admin detail for one question (fields + options + answer key). */
 async function getQuestionDetail(examId: string, questionId: string) {
@@ -158,6 +161,13 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       const correctOptionId = optionRows[body.correctOptionIndex].id;
 
       await db.transaction(async (tx) => {
+        const [active] = await tx
+          .select({ id: examSessions.id })
+          .from(examSessions)
+          .where(and(eq(examSessions.examId, examId), eq(examSessions.submitted, 0), gt(examSessions.endTime, Date.now())))
+          .limit(1);
+        if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
+
         await tx.insert(questions).values({
           id: questionId,
           examId,
@@ -233,6 +243,13 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
         patch.correctOptionId = newCorrectOptionId;
 
       await db.transaction(async (tx) => {
+        const [active] = await tx
+          .select({ id: examSessions.id })
+          .from(examSessions)
+          .where(and(eq(examSessions.examId, examId), eq(examSessions.submitted, 0), gt(examSessions.endTime, Date.now())))
+          .limit(1);
+        if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
+
         if (Object.keys(patch).length > 0) {
           await tx.update(questions).set(patch).where(eq(questions.id, qid));
         }
@@ -272,7 +289,16 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
     });
     if (!existing) throw new NotFoundError("Soal tidak ditemukan.");
 
-    await db.delete(questions).where(eq(questions.id, qid));
+    await db.transaction(async (tx) => {
+      const [active] = await tx
+        .select({ id: examSessions.id })
+        .from(examSessions)
+        .where(and(eq(examSessions.examId, examId), eq(examSessions.submitted, 0), gt(examSessions.endTime, Date.now())))
+        .limit(1);
+      if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
+
+      await tx.delete(questions).where(eq(questions.id, qid));
+    });
 
     notifyExamListChanged(await getExamGroupIds(examId));
     log.info("Question deleted", { examId, questionId: qid });

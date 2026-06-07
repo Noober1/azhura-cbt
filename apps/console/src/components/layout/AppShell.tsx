@@ -19,12 +19,13 @@ interface NavItem {
   icon: ReactNode;
   disabled?: boolean;
   hint?: string;
+  adminOnly?: boolean;
 }
 
 const NAV: NavItem[] = [
   { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" /> },
-  { to: "/students", label: "Siswa", icon: <UsersIcon className="size-[18px]" /> },
-  { to: "/groups", label: "Group", icon: <LayersIcon className="size-[18px]" /> },
+  { to: "/students", label: "Siswa", icon: <UsersIcon className="size-[18px]" />, adminOnly: true },
+  { to: "/groups", label: "Group", icon: <LayersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon className="size-[18px]" /> },
 ];
 
@@ -59,7 +60,7 @@ export function AppShell() {
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 px-2.5 py-3 lg:px-3">
-          {NAV.map((item) =>
+          {NAV.filter((item) => !item.adminOnly || role === "admin").map((item) =>
             item.disabled ? (
               <span
                 key={item.to}
