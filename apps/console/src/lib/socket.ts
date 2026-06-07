@@ -12,6 +12,8 @@
  */
 
 import { io, Socket } from "socket.io-client";
+import { useAuthStore } from "../stores/auth";
+import { toast } from "../stores/toast";
 
 const SOCKET_URL = new URL(
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api"
@@ -44,6 +46,17 @@ export function connectConsoleSocket(token: string): Socket {
       auth: { token },
       autoConnect: true,
       path: "/ws",
+    });
+
+    // The backend broadcasts system:reset to ALL connected clients (#79). Any
+    // open admin/supervisor tab must evict itself so it doesn't operate against
+    // an empty database after the wipe.
+    socket.on("system:reset", () => {
+      toast.info("Sistem direset oleh admin. Sesi Anda akan berakhir.");
+      useAuthStore.getState().logout();
+      // Full reload so SetupGate re-checks GET /setup/status and shows the
+      // setup wizard (no admin exists after a nuclear reset).
+      setTimeout(() => window.location.replace("/"), 1500);
     });
   }
   return socket;

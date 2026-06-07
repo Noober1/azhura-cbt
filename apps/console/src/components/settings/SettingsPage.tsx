@@ -9,12 +9,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { settingsApi } from "../../lib/settings-api";
+import api from "../../lib/api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import type { SystemSettings } from "../../types";
 import { Button } from "../ui/Button";
 import { Field, Input, Checkbox } from "../ui/Field";
 import { Spinner, CenterState } from "../ui/Spinner";
+import { Modal } from "../ui/Modal";
 import { SettingsIcon } from "../ui/icons";
 
 /** A settings section card with a title and consistent padding. */
@@ -46,6 +48,10 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetInput, setResetInput] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,6 +107,28 @@ export function SettingsPage() {
       toast.error(getErrorMessage(err, "Gagal menyimpan pengaturan."));
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openReset() {
+    setResetInput("");
+    setResetOpen(true);
+  }
+
+  async function handleReset() {
+    if (resetInput !== "reset" || resetting) return;
+    setResetting(true);
+    try {
+      await api.post("/admin/system/reset");
+      toast.success("Reset sistem berhasil. Halaman akan dimuat ulang...");
+      setResetOpen(false);
+      // Full reload so SetupGate re-checks /setup/status and shows the wizard.
+      await new Promise((r) => setTimeout(r, 1500));
+      window.location.replace("/");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal melakukan reset sistem."));
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -233,10 +261,33 @@ export function SettingsPage() {
             hint="Ruang obrolan publik siswa di dashboard (di luar ujian), dengan anti-spam dan pengumuman."
           />
         </SettingsSection>
+
+        {/* ── Zona Berbahaya ── */}
+        <section className="rounded-xl border border-danger/40 bg-danger-wash/30 p-6">
+          <div className="mb-5 border-b border-danger/20 pb-4">
+            <h2 className="text-base font-semibold text-danger">Zona Berbahaya</h2>
+            <p className="mt-1 text-sm text-faint">
+              Tindakan di bawah ini bersifat permanen dan tidak dapat dibatalkan.
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-ink">Reset Sistem</p>
+              <p className="mt-0.5 text-sm text-faint">
+                Hapus seluruh data termasuk semua akun pengguna. Setelah reset,
+                wizard setup awal akan muncul kembali untuk membuat akun admin baru.
+              </p>
+            </div>
+            <Button variant="danger" size="sm" onClick={openReset}>
+              Reset Sistem
+            </Button>
+          </div>
+        </section>
       </div>
 
       {/* Footer actions */}
       <div className="mt-8 flex items-center justify-end gap-3 border-t border-line pt-6">
+
         <Button
           variant="ghost"
           onClick={() => setDraft(settings)}
@@ -248,6 +299,57 @@ export function SettingsPage() {
           Simpan Perubahan
         </Button>
       </div>
+
+      {/* Reset confirmation modal */}
+      <Modal
+        open={resetOpen}
+        title="Konfirmasi Reset Sistem"
+        description="Tindakan ini tidak dapat dibatalkan. Seluruh database akan dikosongkan dan semua akun dihapus."
+        onClose={() => { if (!resetting) setResetOpen(false); }}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setResetOpen(false)} disabled={resetting}>
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void handleReset()}
+              disabled={resetInput !== "reset" || resetting}
+              busy={resetting}
+            >
+              Reset Sekarang
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-ink">
+            Data berikut akan dihapus secara permanen:
+          </p>
+          <ul className="list-disc pl-5 text-sm text-faint space-y-1">
+            <li>Semua ujian, soal, dan pilihan jawaban</li>
+            <li>Semua sesi ujian dan jawaban siswa</li>
+            <li>Semua akun pengguna — siswa, pengawas, dan <strong>admin</strong></li>
+            <li>Semua kelompok, riwayat chat, dan log aplikasi</li>
+          </ul>
+          <p className="text-sm text-faint rounded-lg border border-line bg-canvas px-3 py-2">
+            Setelah reset, wizard setup awal akan muncul untuk membuat akun admin baru.
+            Pengaturan sistem (nama sekolah, dll.) tetap dipertahankan.
+          </p>
+          <Field label="Ketik 'reset' untuk mengkonfirmasi">
+            {(id) => (
+              <Input
+                id={id}
+                value={resetInput}
+                onChange={(e) => setResetInput(e.target.value)}
+                placeholder="reset"
+                autoComplete="off"
+                disabled={resetting}
+              />
+            )}
+          </Field>
+        </div>
+      </Modal>
     </div>
   );
 }
