@@ -20,6 +20,7 @@ const log = createLogger("Kiosk");
 /** Rust commands exposed via `invoke_handler`. */
 const ENTER_KIOSK = "enter_kiosk";
 const EXIT_KIOSK = "exit_kiosk";
+const EXIT_APP = "exit_app";
 
 /** Events emitted from Rust on window-level violations. */
 const EVENT_REFOCUS = "kiosk-refocus";
@@ -28,8 +29,21 @@ const EVENT_CLOSE_BLOCKED = "kiosk-close-blocked";
 /** Unlisten handle returned by Tauri's `listen`. */
 type UnlistenFn = () => void;
 
-function isTauri(): boolean {
+/** True when running inside the Tauri webview (vs a plain browser). */
+export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+/**
+ * Quits the desktop app via the custom `exit_app` Rust command (AppHandle::exit),
+ * which isn't gated by the capability system and bypasses the kiosk close guard.
+ * No-op on web. Used by the hidden settings panel and the setup wizard so an
+ * admin can always leave the app (e.g. for OS-level network diagnosis).
+ */
+export async function exitApp(): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke(EXIT_APP);
 }
 
 /** Locks the OS window into kiosk mode. No-op outside Tauri. */

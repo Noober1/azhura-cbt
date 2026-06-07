@@ -3,8 +3,16 @@ import { useConfigStore } from "../../stores/config";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../ui/card";
 import { toast } from "sonner";
+import { isTauri, exitApp } from "../../lib/kiosk";
 import type { SchoolInfo } from "@azhura/shared";
 
 type WizardStatus = "idle" | "testing" | "success" | "error";
@@ -34,17 +42,26 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     setPreview(null);
 
     try {
-      const healthRes = await fetch(`${base}/health`, { signal: AbortSignal.timeout(5000) });
-      if (!healthRes.ok) throw new Error(`Health check gagal (HTTP ${healthRes.status})`);
+      const healthRes = await fetch(`${base}/health`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!healthRes.ok)
+        throw new Error(`Health check gagal (HTTP ${healthRes.status})`);
 
-      const infoRes = await fetch(`${base}/api/info`, { signal: AbortSignal.timeout(5000) });
-      if (!infoRes.ok) throw new Error(`Gagal mengambil info sekolah (HTTP ${infoRes.status})`);
+      const infoRes = await fetch(`${base}/api/info`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!infoRes.ok)
+        throw new Error(
+          `Gagal mengambil info sekolah (HTTP ${infoRes.status})`,
+        );
 
-      const info = await infoRes.json() as SchoolInfo;
+      const info = (await infoRes.json()) as SchoolInfo;
       setPreview(info);
       setStatus("success");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Tidak dapat terhubung ke server.";
+      const message =
+        err instanceof Error ? err.message : "Tidak dapat terhubung ke server.";
       setErrorMsg(message);
       setStatus("error");
     }
@@ -65,7 +82,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         <CardHeader>
           <CardTitle className="text-2xl">Setup Azhura CBT</CardTitle>
           <CardDescription>
-            Masukkan URL server backend untuk menghubungkan aplikasi ini ke sistem ujian sekolah.
+            Masukkan URL server backend untuk menghubungkan aplikasi ini ke
+            sistem ujian sekolah.
           </CardDescription>
         </CardHeader>
 
@@ -91,11 +109,17 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
           {status === "success" && preview && (
             <div className="rounded-md border border-border bg-muted p-3 space-y-1">
-              <p className="text-sm font-medium text-foreground">{preview.schoolName}</p>
+              <p className="text-sm font-medium text-foreground">
+                {preview.schoolName}
+              </p>
               {preview.address && (
-                <p className="text-xs text-muted-foreground">{preview.address}</p>
+                <p className="text-xs text-muted-foreground">
+                  {preview.address}
+                </p>
               )}
-              <p className="text-xs text-muted-foreground">Versi app: {preview.appVersion}</p>
+              <p className="text-xs text-muted-foreground">
+                Versi app: {preview.appVersion}
+              </p>
             </div>
           )}
         </CardContent>
@@ -113,6 +137,18 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           {status === "success" && (
             <Button className="w-full" onClick={handleSave}>
               Simpan &amp; Lanjutkan
+            </Button>
+          )}
+
+          {/* Escape hatch: quit the app from the wizard (e.g. to run OS-level
+              network diagnostics) when there's no other way out. Tauri-only. */}
+          {isTauri() && (
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={() => void exitApp()}
+            >
+              Keluar aplikasi
             </Button>
           )}
         </CardFooter>
