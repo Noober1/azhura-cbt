@@ -191,4 +191,6 @@ export type {
   StudentRecapStats,
   StudentRecapQuery,
   StudentRecapResponse,
+  DashboardSnapshot,
+  ExamScoreSummary,
 } from "@azhura/shared";

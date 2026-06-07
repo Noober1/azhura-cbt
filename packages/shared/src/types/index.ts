@@ -362,6 +362,35 @@ export interface SetupResult {
   success: true;
 }
 
+/** Per-exam score statistics for the admin dashboard chart. */
+export interface ExamScoreSummary {
+  examId: string;
+  examTitle: string;
+  min: number;
+  median: number;
+  max: number;
+  totalSubmissions: number;
+}
+
+/** Realtime stats snapshot for the admin dashboard (#78). */
+export interface DashboardSnapshot {
+  welcome: { name: string };
+  stats: {
+    totalStudents: number;
+    totalGroups: number;
+    totalExams: number;
+    /** Students whose socket is currently connected (status = "connected" in session registry). */
+    onlineStudents: number;
+    sessions: {
+      completed:  { count: number; percentage: number };
+      inProgress: { count: number; percentage: number };
+      notStarted: { count: number; percentage: number };
+    };
+  };
+  /** Exams with at least one submitted session. */
+  examScores: ExamScoreSummary[];
+}
+
 export interface AntiCheatEvent {
   id: string;
   eventType:

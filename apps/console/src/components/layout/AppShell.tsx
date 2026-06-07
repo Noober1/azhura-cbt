@@ -7,7 +7,7 @@
  * shown as disabled placeholders to set expectations.
  */
 
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/Button";
@@ -24,7 +24,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: <LayoutDashboardIcon className="size-[18px]" />, disabled: true, hint: "Segera hadir" },
+  { to: "/dashboard", label: "Dashboard", icon: <LayoutDashboardIcon className="size-[18px]" />, adminOnly: true },
   { to: "/groups", label: "Grup", icon: <LayersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/students", label: "Peserta", icon: <UsersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" />, adminOnly: true },
@@ -36,7 +36,11 @@ const NAV: NavItem[] = [
 
 export function AppShell() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, role, logout } = useAuthStore();
+
+  const currentNavLabel =
+    NAV.find((item) => location.pathname.startsWith(item.to))?.label ?? "Konsol";
   const roleLabel = role === "supervisor" ? "Pengawas" : "Administrator";
 
   function handleLogout() {
@@ -118,7 +122,7 @@ export function AppShell() {
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-canvas/80 px-5 backdrop-blur lg:px-8">
           <div className="flex items-center gap-2 text-sm text-faint">
-            <span className="font-medium text-ink">Manajemen Ujian</span>
+            <span className="font-medium text-ink">{currentNavLabel}</span>
           </div>
           <Button
             variant="ghost"
