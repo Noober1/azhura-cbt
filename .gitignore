@@ -1,5 +1,6 @@
-# Logs
-logs
+# Logs — winston output only. Anchored so it never swallows a source folder
+# named "logs" (e.g. apps/console/src/components/logs).
+/backend/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*

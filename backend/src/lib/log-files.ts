@@ -20,6 +20,9 @@
 import { mkdirSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import winston from "winston";
+import type { LogBroadcast, LogStream } from "@azhura/shared";
+import { redactFields } from "./redact";
+import { insertLog } from "./log-store";
 
 const { combine, timestamp, json } = winston.format;
 
@@ -84,15 +87,14 @@ const accessFileLogger = winston.createLogger({
 /** Structured fields attached to a file log entry. */
 export type LogFields = Record<string, unknown>;
 
-/** Which `.log` stream an entry belongs to. */
-export type LogStream = "error" | "warn" | "access";
+/** Re-exported for callers that previously imported the stream union here. */
+export type { LogStream, LogBroadcast } from "@azhura/shared";
 
-/** A single log entry as broadcast to the supervisor dashboard. */
-export interface LogBroadcast {
-  stream: LogStream;
-  message: string;
-  fields?: LogFields;
-  timestamp: string;
+/** Optional actor/event metadata attached to a recorded entry. */
+interface RecordMeta {
+  eventType?: string | null;
+  actorId?: string | null;
+  actorRole?: string | null;
 }
 
 /**
@@ -114,21 +116,36 @@ export const setLogBroadcaster = (fn: Broadcaster): void => {
 
 /**
  * Returns recent log entries (newest last), optionally filtered by stream.
- * Backs the supervisor dashboard's history/backfill endpoint.
+ * Backs the supervisor dashboard's late-join backfill (the admin viewer uses
+ * the DB-backed `GET /admin/logs` for full history).
  */
 export const getRecentLogs = (stream?: LogStream): LogBroadcast[] =>
   stream ? recentEntries.filter((e) => e.stream === stream) : [...recentEntries];
 
-/** Records an entry into the ring buffer and pushes it to the dashboard. */
-const record = (stream: LogStream, message: string, fields?: LogFields): void => {
+/**
+ * Records an entry: redacts secrets, persists it to the DB (#18), keeps it in
+ * the ring buffer, and pushes it live to the dashboard. The single choke point
+ * for redaction so no sink (DB, socket, ring) ever sees a secret.
+ */
+const record = (
+  stream: LogStream,
+  message: string,
+  fields?: LogFields,
+  meta?: RecordMeta
+): void => {
   const entry: LogBroadcast = {
     stream,
+    eventType: meta?.eventType ?? null,
+    actorId: meta?.actorId ?? null,
+    actorRole: meta?.actorRole ?? null,
     message,
-    fields,
-    timestamp: new Date().toISOString(),
+    fields: redactFields(fields),
+    timestamp: Date.now(),
   };
   recentEntries.push(entry);
   if (recentEntries.length > RECENT_LIMIT) recentEntries.shift();
+  // Durable, queryable history — fire-and-forget, never throws.
+  insertLog(entry);
   // Never let a dashboard-push failure break logging or the request path.
   try {
     broadcaster?.(entry);
@@ -147,6 +164,29 @@ export const writeWarnLog = (message: string, fields?: LogFields): void => {
 export const writeErrorLog = (message: string, fields?: LogFields): void => {
   appFileLogger.error(message, fields);
   record("error", message, fields);
+};
+
+/**
+ * Records a semantic application event (#18) — login, exam start/submit,
+ * supervisor action — to the DB + dashboard. Unlike warn/error these have no
+ * dedicated `.log` file; the DB is their durable store.
+ *
+ * @param eventType Stable event discriminator, e.g. `login`, `exam_start`.
+ * @param message   Human-readable summary.
+ * @param fields    Structured context (redacted before storage).
+ * @param actor     The user the event is attributed to, when known.
+ */
+export const writeEventLog = (
+  eventType: string,
+  message: string,
+  fields?: LogFields,
+  actor?: { id?: string | null; role?: string | null }
+): void => {
+  record("event", message, fields, {
+    eventType,
+    actorId: actor?.id ?? null,
+    actorRole: actor?.role ?? null,
+  });
 };
 
 /** Fields describing a completed HTTP request for the access trail. */

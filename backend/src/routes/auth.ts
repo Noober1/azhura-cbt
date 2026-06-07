@@ -17,6 +17,7 @@ import { db, schema } from "../db";
 import { getJwtSecret } from "../lib/env";
 import { AuthError, ConflictError } from "../lib/errors";
 import { createLogger } from "../lib/logger";
+import { writeEventLog } from "../lib/log-files";
 import { sessionRegistry } from "../lib/session-registry";
 
 const { users, groups } = schema;
@@ -121,6 +122,13 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       });
 
       log.info("Login success", { userId: record.id, nis: record.nis });
+      // Audit event (#18) — never include the password.
+      writeEventLog(
+        "login",
+        `Login berhasil: ${record.nis}`,
+        { nis: record.nis, role: record.role },
+        { id: record.id, role: record.role }
+      );
       return {
         token,
         userId: record.id,

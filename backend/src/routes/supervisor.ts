@@ -22,6 +22,7 @@ import { notifyRosterPatch } from "../lib/roster-events";
 import { kickStudent } from "../lib/proctor-actions";
 import { applyTimeChange } from "../lib/time-control";
 import { createLogger } from "../lib/logger";
+import { writeEventLog } from "../lib/log-files";
 
 const { groups } = schema;
 
@@ -86,6 +87,12 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
       const variant = body.variant ?? "toast";
       supervisorActions.broadcastMessage(body.target, body.message, variant);
       log.info("Broadcast", { by: user.userId, target: body.target.type, variant });
+      writeEventLog(
+        "supervisor_action",
+        `Broadcast pesan ke ${body.target.type}`,
+        { action: "broadcast", target: body.target.type, variant },
+        { id: user.userId, role: user.role }
+      );
       return { success: true };
     },
     {
@@ -135,6 +142,12 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
         deltaMinutes,
         count: affected.length,
       });
+      writeEventLog(
+        "supervisor_action",
+        `Ubah waktu ujian (${deltaMinutes >= 0 ? "+" : ""}${deltaMinutes} menit)`,
+        { action: "time_change", target: target.type, deltaMinutes, count: affected.length },
+        { id: user.userId, role: user.role }
+      );
       return { success: true, count: affected.length };
     },
     {
@@ -168,6 +181,12 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
     ({ body, user }) => {
       supervisorActions.forceSubmitUser(body.userId, body.reason);
       log.info("Force submit", { target: body.userId, by: user.userId });
+      writeEventLog(
+        "supervisor_action",
+        "Paksa kumpulkan ujian peserta",
+        { action: "force_submit", targetUserId: body.userId },
+        { id: user.userId, role: user.role }
+      );
       return { success: true };
     },
     {
@@ -191,6 +210,12 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
       const reason = body.reason?.trim() || DEFAULT_KICK_REASON;
       const { finalized } = await kickStudent(body.userId, reason);
       log.info("Kick", { target: body.userId, by: user.userId, finalized });
+      writeEventLog(
+        "supervisor_action",
+        "Keluarkan peserta dari ujian (kick)",
+        { action: "kick", targetUserId: body.userId, finalized },
+        { id: user.userId, role: user.role }
+      );
       return { success: true, finalized };
     },
     {

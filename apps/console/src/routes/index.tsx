@@ -18,6 +18,7 @@ import { StudentListPage } from "../components/students/StudentListPage";
 import { GroupListPage } from "../components/groups/GroupListPage";
 import { StatusPesertaPage } from "../components/monitoring/StatusPesertaPage";
 import { SettingsPage } from "../components/settings/SettingsPage";
+import { LogViewerPage } from "../components/logs/LogViewerPage";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -57,6 +58,7 @@ export function AppRoutes() {
         <Route path="/students" element={<AdminRoute><StudentListPage /></AdminRoute>} />
         <Route path="/groups" element={<AdminRoute><GroupListPage /></AdminRoute>} />
         <Route path="/monitoring" element={<StatusPesertaPage />} />
+        <Route path="/logs" element={<AdminRoute><LogViewerPage /></AdminRoute>} />
         <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
       </Route>
       <Route path="/" element={<DefaultRedirect />} />

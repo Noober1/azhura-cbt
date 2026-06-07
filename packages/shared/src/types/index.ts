@@ -260,3 +260,63 @@ export interface SystemSettings {
   /** When true, the anti-cheat engine is active for all student sessions. */
   antiCheatEnabled: boolean;
 }
+
+// ── Application logs (#18) ───────────────────────────────────────────────────
+
+/**
+ * Which stream/category a persisted log entry belongs to (#18).
+ * - `error`/`warn` — server diagnostics promoted from the structured logger.
+ * - `access`       — one entry per HTTP request (method/path/status).
+ * - `event`        — a semantic application event (login, exam start/submit,
+ *                    supervisor action) with an `eventType` discriminator.
+ */
+export type LogStream = 'error' | 'warn' | 'access' | 'event';
+
+/**
+ * The realtime-broadcast shape of a log entry (`log-entry` socket event). It is
+ * the persisted {@link LogEntry} minus the DB-assigned `id`, so the live tail
+ * and the HTTP history share one rendering path in the admin viewer.
+ */
+export interface LogBroadcast {
+  stream: LogStream;
+  /** Semantic event name for the `event` stream (e.g. `login`); null otherwise. */
+  eventType: string | null;
+  /** Actor user id when known; null for system/anonymous entries. */
+  actorId: string | null;
+  /** Actor role when known (`student` | `supervisor` | `admin`). */
+  actorRole: string | null;
+  message: string;
+  /** Structured context, already redacted of secrets (password/token/answers). */
+  fields: Record<string, unknown> | null;
+  /** Epoch milliseconds when the entry was recorded. */
+  timestamp: number;
+}
+
+/** A persisted application log entry surfaced to the admin log viewer (#18). */
+export interface LogEntry extends LogBroadcast {
+  /** DB-assigned, monotonically increasing identifier. */
+  id: number;
+}
+
+/** Query/filter accepted by `GET /admin/logs` (#18). All fields optional. */
+export interface LogQuery {
+  stream?: LogStream;
+  eventType?: string;
+  actorId?: string;
+  /** Inclusive lower time bound (epoch ms). */
+  from?: number;
+  /** Inclusive upper time bound (epoch ms). */
+  to?: number;
+  /** 1-based page number (default 1). */
+  page?: number;
+  /** Page size (default 50, capped server-side). */
+  limit?: number;
+}
+
+/** Paginated result returned by `GET /admin/logs` (#18). */
+export interface LogPage {
+  rows: LogEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}

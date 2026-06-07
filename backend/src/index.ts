@@ -19,6 +19,7 @@ import { adminQuestionRoutes } from "./routes/admin/questions";
 import { adminGroupRoutes } from "./routes/admin/groups";
 import { adminStudentRoutes } from "./routes/admin/students";
 import { adminSettingsRoutes } from "./routes/admin/settings";
+import { adminLogsRoutes } from "./routes/admin/logs";
 import { infoRoutes } from "./routes/info";
 import { initSocket } from "./socket";
 import { getServerConfig } from "./lib/env";
@@ -27,6 +28,7 @@ import { closeRedis } from "./lib/redis";
 import { AppError } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { writeAccessLog, logDirectory } from "./lib/log-files";
+import { pruneOldLogs, LOG_RETENTION_DAYS } from "./lib/log-store";
 
 const log = createLogger("Server");
 
@@ -87,6 +89,7 @@ const app = new Elysia()
       .use(adminGroupRoutes)
       .use(adminStudentRoutes)
       .use(adminSettingsRoutes)
+      .use(adminLogsRoutes)
   );
 
 // Compile Elysia routes before using .handle() outside of .listen().
@@ -164,6 +167,14 @@ httpServer.listen(port, () => {
   log.info(`Azhura CBT Backend running at http://localhost:${port}`);
   log.info(`Socket.io available at ws://localhost:${port}/ws`);
   log.info(`Access/warn/error logs writing to ${logDirectory}`);
+
+  // Self-trim persisted logs on boot (#18) — drops entries older than the
+  // retention window so an on-premise deployment never needs an external cron.
+  void pruneOldLogs().then((deleted) => {
+    if (deleted > 0) {
+      log.info(`Pruned ${deleted} log entries older than ${LOG_RETENTION_DAYS} days`);
+    }
+  });
 });
 
 // Release the Redis connection on shutdown so the session registry doesn't leak
