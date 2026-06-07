@@ -117,8 +117,11 @@ async function computeStats(adminName: string): Promise<DashboardSnapshot> {
       )
       .where(eq(users.role, "student")),
 
-    // Distinct student IDs that have at least one session (any status)
-    db.selectDistinct({ userId: examSessions.userId }).from(examSessions),
+    // Distinct student IDs with a session for a currently-active exam
+    db
+      .selectDistinct({ userId: examSessions.userId })
+      .from(examSessions)
+      .innerJoin(exams, and(eq(exams.id, examSessions.examId), eq(exams.isActive, 1))),
   ]);
 
   // ── Session stats ──────────────────────────────────────────────────────────

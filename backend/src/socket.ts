@@ -415,8 +415,10 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       // Chat (#17): the socket has already left its rooms by now, so refresh the
       // remaining members' presence/mention list. No-op when the room is empty.
       void emitChatPresence().catch(() => {});
-      // Dashboard (#78): online count changed — push updated stats.
-      void notifyDashboardStats().catch(() => {});
+      // Dashboard (#78): online count changed — only students affect the count.
+      if (role === "student") {
+        void notifyDashboardStats().catch(() => {});
+      }
       // Start the grace window: a reconnect with the same sessionId refreshes the
       // TTL back; otherwise the key expires and the account becomes free again.
       if (role === "student" && sessionId) {

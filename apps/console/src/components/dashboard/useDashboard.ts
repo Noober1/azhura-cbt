@@ -41,7 +41,10 @@ export function useDashboard(): UseDashboardResult {
     if (!token) return;
     const socket = connectConsoleSocket(token);
 
-    const onStats = (data: DashboardSnapshot) => setSnapshot(data);
+    // Preserve welcome.name from the initial HTTP load; broadcast payloads use a
+    // generic placeholder since the backend can't know which admin is viewing.
+    const onStats = (data: DashboardSnapshot) =>
+      setSnapshot((prev) => ({ ...data, welcome: prev?.welcome ?? data.welcome }));
     const onConnect = () => {
       setWsConnected(true);
       // Re-sync on reconnect to catch any events missed while disconnected.
