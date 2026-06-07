@@ -152,6 +152,15 @@ export const BarChartIcon = svg(
   </>
 );
 
+export const LayoutDashboardIcon = svg(
+  <>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </>
+);
+
 export const DownloadIcon = svg(
   <>
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
