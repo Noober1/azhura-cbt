@@ -1,0 +1,332 @@
+/**
+ * Azhura CBT Backend — Supervisor Question Management Routes (#85)
+ *
+ * Supervisors can CRUD questions only for exams they have been assigned to
+ * by an admin (rows in `exam_supervisors`). Attempting to access an exam that
+ * is not in the caller's assignment list returns 403. Admins use the separate
+ * `/admin/exams/:examId/questions` endpoints and are unaffected.
+ *
+ * Endpoints (all require `role = supervisor`):
+ * - `GET    /api/supervisor/exams`                             — assigned exams list
+ * - `GET    /api/supervisor/exams/:examId/questions`           — list questions
+ * - `POST   /api/supervisor/exams/:examId/questions`           — create question
+ * - `PUT    /api/supervisor/exams/:examId/questions/:questionId` — replace question
+ * - `DELETE /api/supervisor/exams/:examId/questions/:questionId` — delete question
+ */
+
+import { Elysia, t } from "elysia";
+import { randomUUID } from "crypto";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { db, schema } from "../db";
+import { authPlugin } from "../middleware/requireAuth";
+import type { JwtPayload } from "../middleware/requireAuth";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../lib/errors";
+import { notifyExamListChanged } from "../lib/exam-events";
+import { createLogger } from "../lib/logger";
+
+const { exams, examGroups, examSessions, examSupervisors, questions, options } = schema;
+
+const log = createLogger("SupervisorQuestion");
+
+const ACTIVE_SESSIONS_ERROR =
+  "Tidak dapat mengubah soal saat ada peserta sedang mengerjakan ujian.";
+
+/** Throws 403 unless the caller is a supervisor. */
+function requireSupervisor({ user }: { user: JwtPayload }): void {
+  if (user.role !== "supervisor") {
+    throw new ForbiddenError("Akses ditolak. Khusus supervisor.");
+  }
+}
+
+/**
+ * Validates that `examId` exists AND the calling supervisor is assigned to it.
+ * @throws {NotFoundError}  when the exam does not exist.
+ * @throws {ForbiddenError} when the supervisor is not assigned to the exam.
+ */
+async function assertAssigned(examId: string, userId: string): Promise<void> {
+  const exam = await db.query.exams.findFirst({
+    columns: { id: true },
+    where: eq(exams.id, examId),
+  });
+  if (!exam) throw new NotFoundError("Ujian tidak ditemukan.");
+
+  const assigned = await db.query.examSupervisors.findFirst({
+    where: and(
+      eq(examSupervisors.examId, examId),
+      eq(examSupervisors.userId, userId)
+    ),
+  });
+  if (!assigned) throw new ForbiddenError("Kamu tidak ditugaskan ke ujian ini.");
+}
+
+/** Group ids assigned to an exam — scopes the realtime exam-list notification. */
+async function getExamGroupIds(examId: string): Promise<string[]> {
+  const rows = await db
+    .select({ groupId: examGroups.groupId })
+    .from(examGroups)
+    .where(eq(examGroups.examId, examId));
+  return rows.map((r) => r.groupId);
+}
+
+/** Full question detail (text + options + answer key) for management views. */
+async function getQuestionDetail(examId: string, questionId: string) {
+  const question = await db.query.questions.findFirst({
+    where: and(eq(questions.id, questionId), eq(questions.examId, examId)),
+  });
+  if (!question) throw new NotFoundError("Soal tidak ditemukan.");
+
+  const optionRows = await db
+    .select({ id: options.id, text: options.text })
+    .from(options)
+    .where(eq(options.questionId, questionId))
+    .orderBy(asc(options.id));
+
+  return {
+    id: question.id,
+    examId: question.examId,
+    text: question.text,
+    orderIndex: question.orderIndex,
+    correctOptionId: question.correctOptionId,
+    options: optionRows,
+  };
+}
+
+export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
+  .use(authPlugin)
+  .onBeforeHandle(requireSupervisor)
+
+  /**
+   * GET /api/supervisor/exams
+   *
+   * Returns the exams the calling supervisor has been assigned to.
+   */
+  .get("/exams", async ({ user }) => {
+    const rows = await db
+      .select({
+        id: exams.id,
+        title: exams.title,
+        durationMinutes: exams.durationMinutes,
+        isActive: exams.isActive,
+        passingGrade: exams.passingGrade,
+        createdAt: exams.createdAt,
+      })
+      .from(examSupervisors)
+      .innerJoin(exams, eq(exams.id, examSupervisors.examId))
+      .where(eq(examSupervisors.userId, user.userId));
+
+    return rows.map((r) => ({
+      ...r,
+      isActive: r.isActive === 1,
+    }));
+  })
+
+  /**
+   * GET /api/supervisor/exams/:examId/questions
+   *
+   * Lists all questions with options and answer key for an assigned exam.
+   */
+  .get("/exams/:examId/questions", async ({ params, user }) => {
+    await assertAssigned(params.examId, user.userId);
+
+    const questionRows = await db
+      .select({
+        id: questions.id,
+        text: questions.text,
+        orderIndex: questions.orderIndex,
+        correctOptionId: questions.correctOptionId,
+        type: questions.type,
+        config: questions.config,
+      })
+      .from(questions)
+      .where(eq(questions.examId, params.examId))
+      .orderBy(asc(questions.orderIndex));
+
+    const optionRows = questionRows.length
+      ? await db
+          .select({ id: options.id, questionId: options.questionId, text: options.text })
+          .from(options)
+          .where(inArray(options.questionId, questionRows.map((q) => q.id)))
+          .orderBy(asc(options.id))
+      : [];
+
+    const byQuestion = new Map<string, { id: string; text: string }[]>();
+    for (const o of optionRows) {
+      const bucket = byQuestion.get(o.questionId) ?? [];
+      bucket.push({ id: o.id, text: o.text });
+      byQuestion.set(o.questionId, bucket);
+    }
+
+    return questionRows.map((q) => ({
+      id: q.id,
+      text: q.text,
+      orderIndex: q.orderIndex,
+      correctOptionId: q.correctOptionId,
+      type: q.type,
+      config: q.config,
+      options: byQuestion.get(q.id) ?? [],
+    }));
+  })
+
+  /**
+   * POST /api/supervisor/exams/:examId/questions
+   *
+   * Creates a new multiple-choice question. The question is blocked when there
+   * are active (in-progress) sessions on the exam.
+   */
+  .post(
+    "/exams/:examId/questions",
+    async ({ params, body, user, set }) => {
+      const { examId } = params;
+      await assertAssigned(examId, user.userId);
+
+      if (body.correctOptionIndex >= body.options.length) {
+        throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
+      }
+
+      const questionId = randomUUID();
+      const optionRows = body.options.map((o) => ({
+        id: randomUUID(),
+        questionId,
+        text: o.text,
+      }));
+      const correctOptionId = optionRows[body.correctOptionIndex].id;
+
+      await db.transaction(async (tx) => {
+        const [active] = await tx
+          .select({ id: examSessions.id })
+          .from(examSessions)
+          .where(
+            and(
+              eq(examSessions.examId, examId),
+              eq(examSessions.submitted, 0),
+              gt(examSessions.endTime, Date.now())
+            )
+          )
+          .limit(1);
+        if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
+
+        await tx.insert(questions).values({
+          id: questionId,
+          examId,
+          text: body.text,
+          correctOptionId,
+          orderIndex: body.orderIndex ?? 0,
+        });
+        await tx.insert(options).values(optionRows);
+      });
+
+      notifyExamListChanged(await getExamGroupIds(examId));
+      log.info("Question created by supervisor", { examId, questionId, supervisorId: user.userId });
+      set.status = 201;
+      return getQuestionDetail(examId, questionId);
+    },
+    {
+      body: t.Object({
+        text: t.String({ minLength: 1 }),
+        orderIndex: t.Optional(t.Integer({ minimum: 0 })),
+        options: t.Array(t.Object({ text: t.String({ minLength: 1 }) }), { minItems: 2 }),
+        correctOptionIndex: t.Integer({ minimum: 0 }),
+      }),
+    }
+  )
+
+  /**
+   * PUT /api/supervisor/exams/:examId/questions/:questionId
+   *
+   * Full replacement of a question's text and options. Both `text`, `options`,
+   * and `correctOptionIndex` are required. Blocked during active sessions.
+   */
+  .put(
+    "/exams/:examId/questions/:questionId",
+    async ({ params, body, user }) => {
+      const { examId, questionId } = params;
+      await assertAssigned(examId, user.userId);
+
+      const existing = await db.query.questions.findFirst({
+        columns: { id: true },
+        where: and(eq(questions.id, questionId), eq(questions.examId, examId)),
+      });
+      if (!existing) throw new NotFoundError("Soal tidak ditemukan.");
+
+      if (body.correctOptionIndex >= body.options.length) {
+        throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
+      }
+
+      const newOptionRows = body.options.map((o) => ({
+        id: randomUUID(),
+        questionId,
+        text: o.text,
+      }));
+      const correctOptionId = newOptionRows[body.correctOptionIndex].id;
+
+      await db.transaction(async (tx) => {
+        const [active] = await tx
+          .select({ id: examSessions.id })
+          .from(examSessions)
+          .where(
+            and(
+              eq(examSessions.examId, examId),
+              eq(examSessions.submitted, 0),
+              gt(examSessions.endTime, Date.now())
+            )
+          )
+          .limit(1);
+        if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
+
+        await tx
+          .update(questions)
+          .set({ text: body.text, correctOptionId, orderIndex: body.orderIndex ?? 0 })
+          .where(eq(questions.id, questionId));
+        await tx.delete(options).where(eq(options.questionId, questionId));
+        await tx.insert(options).values(newOptionRows);
+      });
+
+      log.info("Question updated by supervisor", { examId, questionId, supervisorId: user.userId });
+      return getQuestionDetail(examId, questionId);
+    },
+    {
+      body: t.Object({
+        text: t.String({ minLength: 1 }),
+        orderIndex: t.Optional(t.Integer({ minimum: 0 })),
+        options: t.Array(t.Object({ text: t.String({ minLength: 1 }) }), { minItems: 2 }),
+        correctOptionIndex: t.Integer({ minimum: 0 }),
+      }),
+    }
+  )
+
+  /**
+   * DELETE /api/supervisor/exams/:examId/questions/:questionId
+   *
+   * Deletes a question; its options cascade via FK. Blocked during active sessions.
+   */
+  .delete("/exams/:examId/questions/:questionId", async ({ params, user }) => {
+    const { examId, questionId } = params;
+    await assertAssigned(examId, user.userId);
+
+    const existing = await db.query.questions.findFirst({
+      columns: { id: true },
+      where: and(eq(questions.id, questionId), eq(questions.examId, examId)),
+    });
+    if (!existing) throw new NotFoundError("Soal tidak ditemukan.");
+
+    await db.transaction(async (tx) => {
+      const [active] = await tx
+        .select({ id: examSessions.id })
+        .from(examSessions)
+        .where(
+          and(
+            eq(examSessions.examId, examId),
+            eq(examSessions.submitted, 0),
+            gt(examSessions.endTime, Date.now())
+          )
+        )
+        .limit(1);
+      if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
+
+      await tx.delete(questions).where(eq(questions.id, questionId));
+    });
+
+    notifyExamListChanged(await getExamGroupIds(examId));
+    log.info("Question deleted by supervisor", { examId, questionId, supervisorId: user.userId });
+    return { success: true };
+  });
