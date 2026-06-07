@@ -2,7 +2,8 @@
  * Unit tests for the exam access-token check (#1).
  *
  * Covers the open-exam pass-through, the missing/invalid-format/mismatch
- * rejections, and case-sensitivity — the rules the session endpoint relies on.
+ * rejections, and case-insensitive matching — the rules the session endpoint
+ * relies on.
  */
 
 import { describe, it, expect } from "bun:test";
@@ -24,9 +25,12 @@ describe("checkExamToken", () => {
     expect(checkExamToken("Ab12c", "")).toBe("missing");
   });
 
-  it("is case-sensitive", () => {
-    expect(checkExamToken("Ab12c", "ab12c")).toBe("mismatch");
-    expect(checkExamToken("Ab12c", "AB12C")).toBe("mismatch");
+  it("matches case-insensitively (#47)", () => {
+    // The same token typed in any casing is accepted.
+    expect(checkExamToken("Ab12c", "ab12c")).toBe("ok");
+    expect(checkExamToken("Ab12c", "AB12C")).toBe("ok");
+    expect(checkExamToken("ABCD", "abcd")).toBe("ok");
+    expect(checkExamToken("abcd", "AbCd")).toBe("ok");
   });
 
   it("reports mismatch for a well-formed but wrong token", () => {
