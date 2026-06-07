@@ -20,9 +20,11 @@ import { NotFoundError } from "./errors";
 import { deriveSessionStatus, type SessionStatus } from "./exam-scoring";
 import type {
   ExamRecapResponse,
+  ExamRecapStats,
   RecapParticipant,
   StudentRecapEntry,
   StudentRecapResponse,
+  StudentRecapStats,
 } from "@azhura/shared";
 
 const { answers, exams, groups, questions, examSessions, users } = schema;
@@ -117,17 +119,31 @@ const breakdown = (
 const correctExpr = sql<number>`sum(case when ${answers.selectedOptionId} = ${questions.correctOptionId} then 1 else 0 end)`;
 const answeredExpr = sql<number>`sum(case when ${answers.selectedOptionId} is not null then 1 else 0 end)`;
 
+/** Filters (no paging) shared by the per-exam recap query and its export. */
+export interface ExamRecapFilters {
+  groupId?: string;
+  from?: number;
+  to?: number;
+}
+
+/** The full (un-paginated) per-exam recap: meta + stats + every participant. */
+export interface ExamRecapData {
+  exam: { id: string; title: string; totalQuestions: number };
+  stats: ExamRecapStats;
+  participants: RecapParticipant[];
+}
+
 /**
- * Per-exam recap: every participant's score plus class statistics, filtered by
- * group/time and paginated. Stats are computed over the whole filtered set, not
- * just the returned page.
+ * Collects the complete per-exam recap (all participants, no paging), filtered
+ * by group/time. Backs both the paginated endpoint and the xlsx export so they
+ * always agree. Stats are computed over the whole filtered set.
  *
  * @throws {NotFoundError} when the exam does not exist.
  */
-export const getExamRecap = async (
+export const collectExamRecap = async (
   examId: string,
-  opts: RecapPaging & { groupId?: string } = {}
-): Promise<ExamRecapResponse> => {
+  opts: ExamRecapFilters = {}
+): Promise<ExamRecapData> => {
   const exam = await db.query.exams.findFirst({
     columns: { id: true, title: true },
     where: eq(exams.id, examId),
@@ -188,13 +204,8 @@ export const getExamRecap = async (
   });
 
   const stats = computeRecapStats(
-    participants
-      .filter((p) => p.score !== null)
-      .map((p) => p.score as number)
+    participants.filter((p) => p.score !== null).map((p) => p.score as number)
   );
-
-  const { page, limit } = clampPaging(opts.page, opts.limit);
-  const start = (page - 1) * limit;
 
   return {
     exam: { id: exam.id, title: exam.title, totalQuestions },
@@ -205,23 +216,62 @@ export const getExamRecap = async (
       highest: stats.highest,
       lowest: stats.lowest,
     },
-    participants: participants.slice(start, start + limit),
-    total: participants.length,
+    participants,
+  };
+};
+
+/**
+ * Per-exam recap, paginated for the API. Thin wrapper over {@link collectExamRecap}.
+ *
+ * @throws {NotFoundError} when the exam does not exist.
+ */
+export const getExamRecap = async (
+  examId: string,
+  opts: RecapPaging & { groupId?: string } = {}
+): Promise<ExamRecapResponse> => {
+  const data = await collectExamRecap(examId, {
+    groupId: opts.groupId,
+    from: opts.from,
+    to: opts.to,
+  });
+
+  const { page, limit } = clampPaging(opts.page, opts.limit);
+  const start = (page - 1) * limit;
+
+  return {
+    exam: data.exam,
+    stats: data.stats,
+    participants: data.participants.slice(start, start + limit),
+    total: data.participants.length,
     page,
     limit,
   };
 };
 
+/** Filters (no paging) shared by the per-student recap query and its export. */
+export interface StudentRecapFilters {
+  examId?: string;
+  from?: number;
+  to?: number;
+}
+
+/** The full (un-paginated) per-student recap: student + stats + all history. */
+export interface StudentRecapData {
+  student: { id: string; name: string; nis: string; groupName: string | null };
+  stats: StudentRecapStats;
+  history: StudentRecapEntry[];
+}
+
 /**
- * Per-student recap: one student's exam history with scores, filtered by
- * exam/time and paginated. Stats are computed over the whole filtered set.
+ * Collects the complete per-student recap (all exam history, no paging),
+ * filtered by exam/time. Backs both the paginated endpoint and the xlsx export.
  *
  * @throws {NotFoundError} when the student does not exist.
  */
-export const getStudentRecap = async (
+export const collectStudentRecap = async (
   studentId: string,
-  opts: RecapPaging & { examId?: string } = {}
-): Promise<StudentRecapResponse> => {
+  opts: StudentRecapFilters = {}
+): Promise<StudentRecapData> => {
   // Plain left join for the group name — the relational `with` API emits a
   // LEFT JOIN LATERAL + json_array that MariaDB rejects.
   const [student] = await db
@@ -293,9 +343,6 @@ export const getStudentRecap = async (
     history.filter((h) => h.score !== null).map((h) => h.score as number)
   );
 
-  const { page, limit } = clampPaging(opts.page, opts.limit);
-  const start = (page - 1) * limit;
-
   return {
     student: {
       id: student.id,
@@ -308,8 +355,34 @@ export const getStudentRecap = async (
       completedCount: stats.completedCount,
       average: stats.average,
     },
-    history: history.slice(start, start + limit),
-    total: history.length,
+    history,
+  };
+};
+
+/**
+ * Per-student recap, paginated for the API. Thin wrapper over
+ * {@link collectStudentRecap}.
+ *
+ * @throws {NotFoundError} when the student does not exist.
+ */
+export const getStudentRecap = async (
+  studentId: string,
+  opts: RecapPaging & { examId?: string } = {}
+): Promise<StudentRecapResponse> => {
+  const data = await collectStudentRecap(studentId, {
+    examId: opts.examId,
+    from: opts.from,
+    to: opts.to,
+  });
+
+  const { page, limit } = clampPaging(opts.page, opts.limit);
+  const start = (page - 1) * limit;
+
+  return {
+    student: data.student,
+    stats: data.stats,
+    history: data.history.slice(start, start + limit),
+    total: data.history.length,
     page,
     limit,
   };

@@ -12,6 +12,8 @@ import { examsApi } from "../../lib/exams-api";
 import { recapApi } from "../../lib/recap-api";
 import { useDebounce } from "../../hooks/useDebounce";
 import { getErrorMessage } from "../../lib/errors";
+import { saveBlob } from "../../lib/download";
+import { toast } from "../../stores/toast";
 import { formatDateTime, fromDatetimeLocal } from "../../lib/format";
 import type { ExamSummary, StudentRecapResponse, StudentSummary } from "../../types";
 import { Badge } from "../ui/Badge";
@@ -19,7 +21,7 @@ import { Select } from "../ui/Select";
 import { Input } from "../ui/Field";
 import { Button } from "../ui/Button";
 import { Spinner, CenterState } from "../ui/Spinner";
-import { SearchIcon, ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
+import { SearchIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon } from "../ui/icons";
 import { RecapStatusBadge, StatCard, ScoreCell, formatScore } from "./RecapShared";
 
 const PAGE_SIZE = 20;
@@ -42,6 +44,24 @@ export function PerSiswaTab() {
   const [data, setData] = useState<StudentRecapResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function onExport() {
+    if (!selected) return;
+    setExporting(true);
+    try {
+      const { blob, filename } = await recapApi.studentRecapXlsx(selected.id, {
+        examId: examId || undefined,
+        from: from ? fromDatetimeLocal(from) : undefined,
+        to: to ? fromDatetimeLocal(to) : undefined,
+      });
+      saveBlob(blob, filename);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal mengekspor rekap ke Excel."));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // Load the exam filter list once.
   useEffect(() => {
@@ -190,9 +210,26 @@ export function PerSiswaTab() {
             </Badge>
           )}
         </div>
-        <Button variant="secondary" size="sm" onClick={clearStudent}>
-          Ganti siswa
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onExport}
+            disabled={exporting || !data || data.total === 0}
+            leadingIcon={
+              exporting ? (
+                <Spinner className="size-4" />
+              ) : (
+                <DownloadIcon className="size-4" />
+              )
+            }
+          >
+            {exporting ? "Mengekspor…" : "Export Excel"}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={clearStudent}>
+            Ganti siswa
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

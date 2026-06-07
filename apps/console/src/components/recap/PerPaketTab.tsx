@@ -11,6 +11,8 @@ import { examsApi } from "../../lib/exams-api";
 import { recapApi } from "../../lib/recap-api";
 import { useGroups } from "../../hooks/useGroups";
 import { getErrorMessage } from "../../lib/errors";
+import { saveBlob } from "../../lib/download";
+import { toast } from "../../stores/toast";
 import { formatDateTime, fromDatetimeLocal } from "../../lib/format";
 import type { ExamRecapResponse, ExamSummary } from "../../types";
 import { Badge } from "../ui/Badge";
@@ -18,7 +20,7 @@ import { Select } from "../ui/Select";
 import { Input } from "../ui/Field";
 import { Button } from "../ui/Button";
 import { Spinner, CenterState } from "../ui/Spinner";
-import { ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
+import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon } from "../ui/icons";
 import { RecapStatusBadge, StatCard, ScoreCell, formatScore } from "./RecapShared";
 
 const PAGE_SIZE = 20;
@@ -37,6 +39,26 @@ export function PerPaketTab() {
   const [data, setData] = useState<ExamRecapResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  // Filters shared by the recap query and the Excel export.
+  const filters = {
+    groupId: groupId || undefined,
+    from: from ? fromDatetimeLocal(from) : undefined,
+    to: to ? fromDatetimeLocal(to) : undefined,
+  };
+
+  async function onExport() {
+    setExporting(true);
+    try {
+      const { blob, filename } = await recapApi.examRecapXlsx(examId, filters);
+      saveBlob(blob, filename);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal mengekspor rekap ke Excel."));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // Load the exam picker once.
   useEffect(() => {
@@ -147,8 +169,27 @@ export function PerPaketTab() {
         </CenterState>
       ) : data ? (
         <>
+          {/* Export toolbar */}
+          <div className="mt-6 flex items-center justify-end">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onExport}
+              disabled={exporting || data.total === 0}
+              leadingIcon={
+                exporting ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <DownloadIcon className="size-4" />
+                )
+              }
+            >
+              {exporting ? "Mengekspor…" : "Export Excel"}
+            </Button>
+          </div>
+
           {/* Statistics */}
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Rata-rata" value={formatScore(data.stats.average)} />
             <StatCard label="Tertinggi" value={formatScore(data.stats.highest)} />
             <StatCard label="Terendah" value={formatScore(data.stats.lowest)} />
