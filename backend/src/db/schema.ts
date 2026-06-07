@@ -261,6 +261,18 @@ export const cheatLogsRelations = relations(cheatLogs, ({ one }) => ({
   }),
 }));
 
+/**
+ * Global application settings stored as key/value pairs. New settings require
+ * no schema migration — only a code change in the settings registry. Values are
+ * always stored as text and (de)serialized per key by the registry.
+ */
+export const settings = mysqlTable("settings", {
+  key: varchar("key", { length: 64 }).primaryKey(),
+  value: text("value").notNull(),
+  /** Epoch-ms of the last write (matches `Date.now()` convention). */
+  updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+});
+
 /** Convenience row types inferred from the schema. */
 export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
@@ -271,3 +283,4 @@ export type Option = typeof options.$inferSelect;
 export type ExamSession = typeof examSessions.$inferSelect;
 export type SessionQuestion = typeof sessionQuestions.$inferSelect;
 export type Answer = typeof answers.$inferSelect;
+export type Setting = typeof settings.$inferSelect;
