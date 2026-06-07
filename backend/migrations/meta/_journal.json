@@ -43,6 +43,13 @@
       "when": 1780801346026,
       "tag": "0005_panoramic_nebula",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1780809006447,
+      "tag": "0006_flimsy_masque",
+      "breakpoints": true
     }
   ]
 }

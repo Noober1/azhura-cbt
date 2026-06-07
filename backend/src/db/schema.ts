@@ -16,7 +16,9 @@
 import { relations } from "drizzle-orm";
 import {
   bigint,
+  index,
   int,
+  json,
   mysqlEnum,
   mysqlTable,
   primaryKey,
@@ -273,6 +275,40 @@ export const settings = mysqlTable("settings", {
   updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
 });
 
+/**
+ * Persisted application logs for the admin log viewer (#18). Captures server
+ * diagnostics (`error`/`warn`), the HTTP access trail (`access`), and semantic
+ * application events (`event`: login, exam start/submit, supervisor actions).
+ *
+ * `fields` is the structured context, already redacted of secrets before it
+ * reaches this table. `created_at` is epoch-ms (`Date.now()`), indexed so the
+ * viewer can order/range-filter and the 30-day pruner can sweep efficiently.
+ */
+export const appLogs = mysqlTable(
+  "app_logs",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    /** One of LogStream: error | warn | access | event. */
+    stream: varchar("stream", { length: 10 }).notNull(),
+    /** Semantic event name for the `event` stream (e.g. `login`); null otherwise. */
+    eventType: varchar("event_type", { length: 40 }),
+    /** Actor user id when known; null for system/anonymous entries. */
+    actorId: varchar("actor_id", { length: 36 }),
+    /** Actor role when known (student | supervisor | admin). */
+    actorRole: varchar("actor_role", { length: 16 }),
+    message: varchar("message", { length: 512 }).notNull(),
+    /** Redacted structured context (no secrets). */
+    fields: json("fields"),
+    /** Epoch-ms of when the entry was recorded (matches `Date.now()`). */
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    index("idx_app_logs_created_at").on(t.createdAt),
+    index("idx_app_logs_stream").on(t.stream),
+    index("idx_app_logs_event_type").on(t.eventType),
+  ]
+);
+
 /** Convenience row types inferred from the schema. */
 export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
@@ -284,3 +320,4 @@ export type ExamSession = typeof examSessions.$inferSelect;
 export type SessionQuestion = typeof sessionQuestions.$inferSelect;
 export type Answer = typeof answers.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
+export type AppLog = typeof appLogs.$inferSelect;

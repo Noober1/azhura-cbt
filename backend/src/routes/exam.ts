@@ -24,6 +24,7 @@ import {
   BadRequestError,
 } from "../lib/errors";
 import { createLogger } from "../lib/logger";
+import { writeEventLog } from "../lib/log-files";
 import { gradeAgainstKey, findActiveSession, finalizeSession } from "../lib/exam-scoring";
 import { checkExamToken } from "../lib/exam-token";
 import { notifyRosterPatch } from "../lib/roster-events";
@@ -483,6 +484,12 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
         userId: user.userId,
         score: result.score,
       });
+      writeEventLog(
+        "exam_submit",
+        `Selesai ujian (skor ${result.score})`,
+        { examId, sessionId, score: result.score },
+        { id: user.userId, role: user.role }
+      );
       // Roster (#7): the exam is done, but the student is usually still logged
       // in — move them back to the "Dashboard" group (upsert resolves to a
       // dashboard entry now that no exam session is active). If their socket is
@@ -661,6 +668,12 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       userId: user.userId,
       randomizedQuestions: persistQuestionOrder,
     });
+    writeEventLog(
+      "exam_start",
+      `Mulai ujian: ${exam.title}`,
+      { examId, sessionId, examTitle: exam.title },
+      { id: user.userId, role: user.role }
+    );
 
     // Roster (#7): push the new participant to supervisors. Built after insert so
     // it carries the live DB state; null only if the session vanished immediately.
