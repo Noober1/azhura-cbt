@@ -64,6 +64,13 @@
       "when": 1749254400000,
       "tag": "0008_passing_grade",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1780874162286,
+      "tag": "0009_striped_master_chief",
+      "breakpoints": true
     }
   ]
 }
