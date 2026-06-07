@@ -3,8 +3,12 @@ import { useExamStore } from "../../stores/exam";
 import { useAuthStore } from "../../stores/auth";
 import { useSocketStore } from "../../stores/socket";
 import { useConnectivityStore } from "../../stores/connectivity";
-import { useAntiCheatStore } from "../../stores/anti-cheat";
-import { startAntiCheatMonitoring, enterFullscreen } from "../../lib/anti-cheat-config";
+import { useConfigStore } from "../../stores/config";
+import {
+  startExamMonitoring,
+  enterFullscreen,
+  detectMultiMonitor,
+} from "../../lib/anti-cheat-config";
 import { QuestionRenderer } from "./QuestionRenderer";
 import { ExamSidebar } from "./ExamSidebar";
 import { NavigationPanel } from "./NavigationPanel";
@@ -44,7 +48,7 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
   const { user, token } = useAuthStore();
   const { isOnline } = useConnectivityStore();
   const { isConnected } = useSocketStore();
-  const { config, initializeConfig } = useAntiCheatStore();
+  const config = useConfigStore((s) => s.antiCheat);
 
   const [isLoading, setIsLoading] = useState(true);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -59,10 +63,7 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
       useSocketStore.getState().connect(token);
     }
 
-    // 3. Initialize Anti-Cheat settings
-    initializeConfig();
-
-    // 4. Fetch Questions
+    // 3. Fetch Questions
     const fetchQuestions = async () => {
       setIsLoading(true);
       try {
@@ -84,22 +85,23 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
       // Disconnect socket upon leaving exam
       useSocketStore.getState().disconnect();
     };
-  }, [token, setQuestions, initializeConfig]);
+  }, [token, setQuestions]);
 
-  // 2. Start Anti-Cheat Monitoring
+  // 2. Anti-Cheat L1 (web/DOM) monitoring, scoped to the exam screen to avoid
+  //    false positives at login/dashboard. The L2 Tauri kiosk window is managed
+  //    app-wide (see App.tsx) so the window stays locked from launch.
   useEffect(() => {
-    // Only run if anti-cheat master is enabled
-    const cleanMonitoring = startAntiCheatMonitoring();
-    
-    // Automatically trigger fullscreen if config asks for it
-    if (config.enabled && config.fullscreen) {
-      enterFullscreen();
+    // Exam-scoped detection (focus loss + fullscreen). Input prevention
+    // (right-click/shortcuts/clipboard) is app-wide in App.tsx.
+    const cleanMonitoring = startExamMonitoring();
+
+    if (config.enabled) {
+      if (config.fullscreen) enterFullscreen();
+      void detectMultiMonitor();
     }
 
-    return () => {
-      cleanMonitoring();
-    };
-  }, [config.enabled, config.fullscreen]);
+    return () => cleanMonitoring();
+  }, [config.enabled, config.fullscreen, config.detectMultiMonitor]);
 
   // 3. Confirm Final Submit — hand off to finalizeExam, which shows the blocking
   // Processing overlay and retries until the server accepts (idempotent). The

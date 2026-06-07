@@ -5,6 +5,10 @@ import { hashPassphrase } from "../lib/crypto";
 
 const DEFAULT_PASSPHRASE = "azhura";
 
+/** True when running inside the Tauri webview (vs a plain browser). */
+const isTauriRuntime = (): boolean =>
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
 const DEFAULT_ANTI_CHEAT: AntiCheatConfig = {
   enabled: import.meta.env.VITE_ANTI_CHEAT_ENABLED === "true",
   fullscreen: import.meta.env.VITE_ANTI_CHEAT_FULLSCREEN === "true",
@@ -60,7 +64,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await appStoreSet("passphraseHash", await hashPassphrase(DEFAULT_PASSPHRASE));
     }
 
-    const resolvedUrl = serverUrl ?? get().serverUrl;
+    // In Tauri, the server URL comes ONLY from the persisted store — when it's
+    // absent the first-run wizard (#43) must show, so we do NOT fall back to
+    // `VITE_API_BASE_URL` (which would skip the wizard). The web build has no
+    // wizard and keeps using the env-derived default.
+    const resolvedUrl = serverUrl ?? (isTauriRuntime() ? "" : get().serverUrl);
 
     set({
       serverUrl: resolvedUrl,

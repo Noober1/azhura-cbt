@@ -1,60 +1,37 @@
 /**
- * Azhura CBT App - Anti-Cheat Store (Zustand)
+ * Azhura CBT App - Anti-Cheat Audit Sink (Zustand)
  *
- * Holds the anti-cheat feature configuration (sourced from `VITE_ANTI_CHEAT_*`
- * env vars) and the in-memory log of detected violation events. The actual DOM
- * listeners live in `lib/anti-cheat-config.ts`; this store is their data sink.
+ * Holds the in-memory log of detected violation events. This store is purely a
+ * data sink: the DOM listeners live in `lib/anti-cheat-config.ts` and the
+ * window-level (kiosk) events come from Tauri via `lib/kiosk.ts`.
+ *
+ * The anti-cheat *feature configuration* (enabled, fullscreen, blockShortcuts,
+ * …) is owned by `stores/config.ts` (plugin-store, with `VITE_ANTI_CHEAT_*` as
+ * the fallback default). This sink reads `enabled` from there so a single source
+ * of truth drives both enforcement and auditing — see issue #25/#42.
  *
  * Note: violation events are currently kept in memory only. Production should
  * periodically push `detectedCheats` to a supervisor endpoint (see CLAUDE.md).
  */
 
 import { create } from "zustand";
-import { AntiCheatConfig, AntiCheatEvent } from "../types";
+import type { AntiCheatEvent } from "../types";
 import { nanoid } from "nanoid";
+import { useConfigStore } from "./config";
 
 interface AntiCheatState {
-  config: AntiCheatConfig;
   detectedCheats: AntiCheatEvent[];
-  /** Loads feature flags from `VITE_ANTI_CHEAT_*` env vars into `config`. */
-  initializeConfig: () => void;
-  /** Enables/disables a single anti-cheat feature at runtime. */
-  toggleFeature: (feature: keyof AntiCheatConfig, enabled: boolean) => void;
   /** Records a violation event (no-op when anti-cheat is disabled). */
   logCheatEvent: (eventType: AntiCheatEvent["eventType"], details?: string) => void;
   /** Clears the in-memory violation log. */
   clearLogs: () => void;
 }
 
-export const useAntiCheatStore = create<AntiCheatState>((set, get) => ({
-  config: {
-    enabled: false,
-    fullscreen: false,
-    blockShortcuts: false,
-    detectFocusLoss: false,
-    detectMultiMonitor: false,
-  },
+export const useAntiCheatStore = create<AntiCheatState>((set) => ({
   detectedCheats: [],
 
-  initializeConfig: () => {
-    const masterEnabled = import.meta.env.VITE_ANTI_CHEAT_ENABLED === "true";
-    set({
-      config: {
-        enabled: masterEnabled,
-        fullscreen: masterEnabled && import.meta.env.VITE_ANTI_CHEAT_FULLSCREEN === "true",
-        blockShortcuts: masterEnabled && import.meta.env.VITE_ANTI_CHEAT_BLOCK_SHORTCUTS === "true",
-        detectFocusLoss: masterEnabled && import.meta.env.VITE_ANTI_CHEAT_DETECT_FOCUS_LOSS === "true",
-        detectMultiMonitor: masterEnabled && import.meta.env.VITE_ANTI_CHEAT_DETECT_MULTI_MONITOR === "true",
-      },
-    });
-  },
-
-  toggleFeature: (feature, enabled) => {
-    set((state) => ({ config: { ...state.config, [feature]: enabled } }));
-  },
-
   logCheatEvent: (eventType, details) => {
-    if (!get().config.enabled) return;
+    if (!useConfigStore.getState().antiCheat.enabled) return;
 
     const newEvent: AntiCheatEvent = {
       id: nanoid(),

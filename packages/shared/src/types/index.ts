@@ -233,7 +233,14 @@ export interface SchoolInfo {
 
 export interface AntiCheatEvent {
   id: string;
-  eventType: 'focus_loss' | 'fullscreen_exit' | 'shortcut_attempt' | 'multi_monitor';
+  eventType:
+    | 'focus_loss'
+    | 'fullscreen_exit'
+    | 'shortcut_attempt'
+    | 'multi_monitor'
+    | 'clipboard_blocked'
+    | 'force_refocus'
+    | 'window_close_blocked';
   timestamp: number;
   details?: string;
 }

@@ -7,6 +7,7 @@ import { Switch } from "../ui/switch";
 import { Separator } from "../ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { toast } from "sonner";
+import { isTauri, exitApp } from "../../lib/kiosk";
 import type { SchoolInfo } from "@azhura/shared";
 
 interface SettingsPanelProps {
@@ -39,7 +40,28 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [confirmPass, setConfirmPass] = useState("");
   const [passError, setPassError] = useState("");
 
+  // Two-step confirmation for the destructive "exit app" action.
+  const [confirmExit, setConfirmExit] = useState(false);
+
   const normalizeUrl = (raw: string) => raw.replace(/\/+$/, "");
+
+  /**
+   * Quits the desktop app via the shared {@link exitApp} helper (custom
+   * `exit_app` Rust command — bypasses the kiosk close guard, the sanctioned
+   * admin exit). No-op on web, where the panel is normally unavailable.
+   */
+  const handleExitApp = async () => {
+    if (!isTauri()) {
+      toast.error("Keluar aplikasi hanya tersedia di aplikasi desktop.");
+      return;
+    }
+    try {
+      await exitApp();
+    } catch (err) {
+      toast.error("Gagal menutup aplikasi.");
+      throw err;
+    }
+  };
 
   const handleTestAndSaveUrl = async () => {
     const base = normalizeUrl(urlInput.trim());
@@ -271,6 +293,43 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               </p>
             </section>
           )}
+
+          <Separator />
+
+          {/* Keluar aplikasi */}
+          <section className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-destructive">
+                Keluar dari aplikasi
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Menutup aplikasi ujian sepenuhnya, termasuk saat mode terkunci
+                sedang aktif.
+              </p>
+            </div>
+            {confirmExit ? (
+              <div className="flex items-center gap-2">
+                <Button variant="destructive" size="sm" onClick={handleExitApp}>
+                  Ya, keluar
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmExit(false)}
+                >
+                  Batal
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmExit(true)}
+              >
+                Keluar dari aplikasi
+              </Button>
+            )}
+          </section>
         </div>
       </DialogContent>
     </Dialog>
