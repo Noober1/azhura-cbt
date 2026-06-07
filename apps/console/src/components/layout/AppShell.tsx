@@ -11,7 +11,8 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/Button";
-import { FileTextIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon, MessageSquareIcon } from "../ui/icons";
+import { FileTextIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon } from "../ui/icons";
+import { ChatLauncher } from "../chat/ChatLauncher";
 
 interface NavItem {
   to: string;
@@ -27,7 +28,6 @@ const NAV: NavItem[] = [
   { to: "/students", label: "Siswa", icon: <UsersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/groups", label: "Group", icon: <LayersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon className="size-[18px]" /> },
-  { to: "/chat", label: "Chat", icon: <MessageSquareIcon className="size-[18px]" /> },
   { to: "/logs", label: "Log", icon: <ScrollTextIcon className="size-[18px]" />, adminOnly: true },
   { to: "/settings", label: "Pengaturan", icon: <SettingsIcon className="size-[18px]" />, adminOnly: true },
 ];
@@ -132,6 +132,9 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {/* Public chat (#17) — floating button + bottom drawer, available console-wide. */}
+      <ChatLauncher />
     </div>
   );
 }

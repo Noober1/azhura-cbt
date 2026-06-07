@@ -1,23 +1,23 @@
 /**
- * Azhura CBT App - Public chat panel (#17)
+ * Azhura CBT App - Public chat conversation body (#17)
  *
- * Dashboard-only chat surface: a live message list plus a composer with
- * @mention autocomplete and an emoji picker. Renders nothing when the feature is
- * globally disabled. While muted (anti-spam or supervisor), the composer locks
- * and shows the reason — with a live countdown for timed anti-spam mutes.
+ * The live message list plus a composer with @mention autocomplete and an emoji
+ * picker. Designed to fill its container — it is mounted inside {@link ChatDrawer}
+ * (a bottom sheet opened by a floating button). While muted (anti-spam or
+ * supervisor), the composer locks and shows the reason, with a live countdown for
+ * timed anti-spam mutes.
  *
  * Reads everything from the chat store (driven by socket events in `lib/socket.ts`)
  * and posts via `sendChat`. The server enforces dashboard-only membership, so this
- * panel simply never receives chat events during an exam.
+ * surface never receives chat events during an exam.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MessagesSquare, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { useChatStore } from "../../stores/chat";
 import { useAuthStore } from "../../stores/auth";
 import { sendChat } from "../../lib/socket";
 import { findActiveMention, applyMention } from "../../lib/mentions";
-import { Card, CardContent, CardHeader } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ChatMessageItem } from "./ChatMessageItem";
@@ -44,7 +44,7 @@ const formatRemaining = (ms: number): string => {
 };
 
 export function ChatPanel() {
-  const { enabled, messages, presence, mutedUntil, muteReason, muteManual } = useChatStore();
+  const { messages, presence, mutedUntil, muteReason, muteManual } = useChatStore();
   const { user, userId } = useAuthStore();
 
   const [draft, setDraft] = useState("");
@@ -72,8 +72,6 @@ export function ChatPanel() {
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  if (!enabled) return null;
 
   const refreshMention = (value: string, caret: number): void => {
     setMentionQuery(findActiveMention(value, caret));
@@ -129,95 +127,85 @@ export function ChatPanel() {
   };
 
   return (
-    <Card className="flex h-[28rem] flex-col border border-neutral-200/60 bg-white/90 shadow-sm backdrop-blur-sm dark:border-neutral-800/60 dark:bg-neutral-900/90">
-      <CardHeader className="flex-row items-center gap-2 border-b border-neutral-200/60 py-3 dark:border-neutral-800/60">
-        <MessagesSquare className="size-5 text-indigo-600 dark:text-indigo-400" />
-        <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-50">Chat Peserta</h2>
-        <span className="ml-auto text-xs font-medium text-neutral-400">
-          {presence.length} online
-        </span>
-      </CardHeader>
-
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-        {/* Message list */}
-        <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
-          {messages.length === 0 ? (
-            <p className="m-auto text-center text-xs text-neutral-400">
-              Belum ada pesan. Sapa teman sekelasmu! 👋
-            </p>
-          ) : (
-            messages.map((m) => (
-              <ChatMessageItem
-                key={m.id}
-                message={m}
-                isOwn={m.userId !== null && m.userId === userId}
-                selfName={selfName}
-                mentionNames={mentionNames}
-              />
-            ))
-          )}
-          <div ref={listEndRef} />
-        </div>
-
-        {/* Mute banner */}
-        {isMuted && (
-          <div className="rounded-lg border border-rose-300/50 bg-rose-50/80 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300">
-            {muteReason ?? "Anda sedang dibisukan."}
-            {!muteManual && remaining !== null && (
-              <span className="ml-1 font-mono">({formatRemaining(remaining)})</span>
-            )}
-          </div>
-        )}
-
-        {/* Composer */}
-        <div className="relative">
-          {suggestions.length > 0 && (
-            <ul className="absolute bottom-full left-0 mb-1 w-56 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-800">
-              {suggestions.map((m) => (
-                <li key={m.userId}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      pickMention(m.name);
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-indigo-50 dark:hover:bg-neutral-700"
-                  >
-                    <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                      @{m.name}
-                    </span>
-                    {m.groupName && (
-                      <span className="text-xs text-neutral-400">{m.groupName}</span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex items-end gap-1.5">
-            <Input
-              ref={inputRef}
-              value={draft}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-              disabled={isMuted}
-              maxLength={500}
-              placeholder={isMuted ? "Anda sedang dibisukan…" : "Tulis pesan… (@ untuk sebut)"}
-              aria-label="Tulis pesan chat"
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      {/* Message list */}
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-1">
+        {messages.length === 0 ? (
+          <p className="m-auto text-center text-sm text-neutral-400">
+            Belum ada pesan. Sapa teman sekelasmu! 👋
+          </p>
+        ) : (
+          messages.map((m) => (
+            <ChatMessageItem
+              key={m.id}
+              message={m}
+              isOwn={m.userId !== null && m.userId === userId}
+              selfName={selfName}
+              mentionNames={mentionNames}
             />
-            <EmojiPickerButton onSelect={insertEmoji} disabled={isMuted} />
-            <Button
-              type="button"
-              size="icon"
-              onClick={submit}
-              disabled={isMuted || draft.trim().length === 0}
-              aria-label="Kirim pesan"
-            >
-              <Send className="size-4" />
-            </Button>
-          </div>
+          ))
+        )}
+        <div ref={listEndRef} />
+      </div>
+
+      {/* Mute banner */}
+      {isMuted && (
+        <div className="rounded-lg border border-rose-300/50 bg-rose-50/80 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300">
+          {muteReason ?? "Anda sedang dibisukan."}
+          {!muteManual && remaining !== null && (
+            <span className="ml-1 font-mono">({formatRemaining(remaining)})</span>
+          )}
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {/* Composer */}
+      <div className="relative">
+        {suggestions.length > 0 && (
+          <ul className="absolute bottom-full left-0 mb-1 w-56 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-800">
+            {suggestions.map((m) => (
+              <li key={m.userId}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pickMention(m.name);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-indigo-50 dark:hover:bg-neutral-700"
+                >
+                  <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                    @{m.name}
+                  </span>
+                  {m.groupName && (
+                    <span className="text-xs text-neutral-400">{m.groupName}</span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex items-end gap-1.5">
+          <Input
+            ref={inputRef}
+            value={draft}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            disabled={isMuted}
+            maxLength={500}
+            placeholder={isMuted ? "Anda sedang dibisukan…" : "Tulis pesan… (@ untuk sebut)"}
+            aria-label="Tulis pesan chat"
+          />
+          <EmojiPickerButton onSelect={insertEmoji} disabled={isMuted} />
+          <Button
+            type="button"
+            size="icon"
+            onClick={submit}
+            disabled={isMuted || draft.trim().length === 0}
+            aria-label="Kirim pesan"
+          >
+            <Send className="size-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

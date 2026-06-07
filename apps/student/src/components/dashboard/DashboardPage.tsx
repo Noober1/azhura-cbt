@@ -22,7 +22,7 @@ import { DashboardNavbar } from "./DashboardNavbar";
 import { ParticipantCard } from "./ParticipantCard";
 import { ExamListTable } from "./ExamListTable";
 import { StartExamDialog } from "./StartExamDialog";
-import { ChatPanel } from "./ChatPanel";
+import { ChatDrawer } from "./ChatDrawer";
 
 const log = createLogger("Dashboard");
 
@@ -212,10 +212,9 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* Left column: participant identity + public chat (#17) */}
-          <div className="lg:col-span-1 space-y-6">
+          {/* Left column: participant identity */}
+          <div className="lg:col-span-1">
             <ParticipantCard user={user} />
-            <ChatPanel />
           </div>
 
           {/* Right column: available exams */}
@@ -242,6 +241,9 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
         isStarting={startingExamId !== null}
         tokenRejectedNonce={tokenRejectedNonce}
       />
+
+      {/* Public chat (#17) — floating button + bottom drawer, dashboard-only. */}
+      <ChatDrawer />
     </div>
   );
 };

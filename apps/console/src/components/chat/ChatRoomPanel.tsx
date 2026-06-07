@@ -1,10 +1,10 @@
 /**
- * Azhura CBT Console — Public chat room (#17).
+ * Azhura CBT Console — Public chat panel body (#17).
  *
- * Supervisor/admin surface for the student chat: a live message feed, an
- * announcement composer (posts a system message), and moderation — mute a
- * sender (timed or indefinite) and a panel of active mutes to lift. When chat is
- * globally disabled, the page shows a banner instead of the feed.
+ * The moderation surface rendered inside {@link ChatLauncher}'s bottom drawer: a
+ * live message feed, an announcement composer (posts a system message), and a
+ * muted-users panel. Messages are passed in (the launcher owns the single chat
+ * stream); mutes are fetched and managed here.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,23 +12,19 @@ import type { ChatMessage, MutedUser } from "@azhura/shared";
 import { chatApi } from "../../lib/chat-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
-import { useChatStream } from "./useChatStream";
 import { ChatRow } from "./ChatRow";
 import { Button } from "../ui/Button";
 import { Field, Textarea } from "../ui/Field";
-import { Badge } from "../ui/Badge";
-import { MessageSquareIcon } from "../ui/icons";
 
 function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return new Date(ts).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function ChatRoomPage() {
-  const { messages, presence, connected, enabled } = useChatStream();
+interface ChatRoomPanelProps {
+  messages: ChatMessage[];
+}
 
+export function ChatRoomPanel({ messages }: ChatRoomPanelProps) {
   const [announcement, setAnnouncement] = useState("");
   const [sending, setSending] = useState(false);
   const [mutes, setMutes] = useState<MutedUser[]>([]);
@@ -89,35 +85,11 @@ export function ChatRoomPage() {
     }
   }
 
-  if (enabled === false) {
-    return (
-      <div className="mx-auto max-w-2xl">
-        <div className="rounded-[var(--radius-card)] border border-line bg-surface p-8 text-center">
-          <MessageSquareIcon className="mx-auto size-8 text-faint" />
-          <h2 className="mt-3 text-base font-semibold text-ink">Chat dinonaktifkan</h2>
-          <p className="mt-1 text-sm text-faint">
-            Fitur chat publik sedang dimatikan. Admin dapat mengaktifkannya di
-            Pengaturan → Aktifkan Chat Publik.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+    <div className="grid min-h-0 flex-1 gap-4 p-4 md:grid-cols-[1fr_260px]">
       {/* Feed + composer */}
-      <div className="flex h-[calc(100dvh-9rem)] flex-col rounded-[var(--radius-card)] border border-line bg-surface">
-        <header className="flex items-center gap-2 border-b border-line px-4 py-3">
-          <MessageSquareIcon className="size-5 text-accent" />
-          <h1 className="text-sm font-semibold text-ink">Chat Peserta</h1>
-          <Badge tone={connected ? "positive" : "neutral"}>
-            {connected ? "Live" : "Terputus"}
-          </Badge>
-          <span className="ml-auto text-xs text-faint">{presence.length} siswa online</span>
-        </header>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-3">
+      <div className="flex min-h-0 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
           {messages.length === 0 ? (
             <p className="m-auto text-sm text-faint">Belum ada pesan.</p>
           ) : (
@@ -135,7 +107,7 @@ export function ChatRoomPage() {
           <div ref={feedEndRef} />
         </div>
 
-        <div className="border-t border-line p-3">
+        <div className="mt-3 border-t border-line pt-3">
           <Field label="Kirim pengumuman">
             {(id) => (
               <div className="flex items-end gap-2">
@@ -161,7 +133,7 @@ export function ChatRoomPage() {
       </div>
 
       {/* Muted-users panel */}
-      <aside className="rounded-[var(--radius-card)] border border-line bg-surface p-4">
+      <aside className="hidden min-h-0 flex-col overflow-y-auto rounded-[var(--radius-card)] border border-line bg-canvas/40 p-3 md:flex">
         <h2 className="text-sm font-semibold text-ink">Peserta dibisukan</h2>
         <p className="mt-0.5 text-xs text-faint">{mutes.length} aktif</p>
         <ul className="mt-3 space-y-2">
@@ -171,14 +143,12 @@ export function ChatRoomPage() {
             mutes.map((m) => (
               <li
                 key={m.userId}
-                className="flex items-center justify-between gap-2 rounded-[var(--radius-field)] border border-line px-2.5 py-2"
+                className="flex items-center justify-between gap-2 rounded-[var(--radius-field)] border border-line bg-surface px-2.5 py-2"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-ink">{m.name}</p>
                   <p className="text-xs text-faint">
-                    {m.mutedUntil === null
-                      ? "Permanen"
-                      : `s/d ${formatTime(m.mutedUntil)}`}
+                    {m.mutedUntil === null ? "Permanen" : `s/d ${formatTime(m.mutedUntil)}`}
                   </p>
                 </div>
                 <Button size="sm" variant="secondary" onClick={() => unmute(m.userId, m.name)}>
