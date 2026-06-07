@@ -174,3 +174,18 @@ export interface ExamSessionRow {
   endTime: number;
   status: SessionStatus;
 }
+
+// ── Aggregate recap (#19) ─────────────────────────────────────────────────────
+
+// Defined once in @azhura/shared so the backend contract and console stay aligned.
+export type {
+  RecapSessionStatus,
+  RecapParticipant,
+  ExamRecapStats,
+  ExamRecapQuery,
+  ExamRecapResponse,
+  StudentRecapEntry,
+  StudentRecapStats,
+  StudentRecapQuery,
+  StudentRecapResponse,
+} from "@azhura/shared";

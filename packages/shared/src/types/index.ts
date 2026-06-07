@@ -411,3 +411,109 @@ export interface LogPage {
   page: number;
   limit: number;
 }
+
+// ── Aggregate recap (#19) ─────────────────────────────────────────────────────
+
+/**
+ * Lifecycle of a graded exam session, as derived server-side from the
+ * `submitted` flag and `end_time` vs the current clock. Mirrors the admin
+ * sessions list; only `completed`/`expired` sessions carry a final score.
+ */
+export type RecapSessionStatus = "in_progress" | "completed" | "expired";
+
+/**
+ * One participant row in a per-exam recap (`GET /admin/recap/exams/:examId`).
+ * `score` is the rounded percentage (0–100) and is `null` while the session is
+ * still `in_progress` (no final grade yet). `totalCorrect + totalWrong +
+ * totalEmpty` always equals the exam's question count for graded sessions.
+ */
+export interface RecapParticipant {
+  sessionId: string;
+  userId: string;
+  name: string;
+  nis: string;
+  groupName: string | null;
+  status: RecapSessionStatus;
+  /** Rounded percentage 0–100, or null while in progress. */
+  score: number | null;
+  totalCorrect: number;
+  totalWrong: number;
+  totalEmpty: number;
+  startTime: number;
+  endTime: number;
+}
+
+/** Aggregate statistics over the filtered set of a per-exam recap. */
+export interface ExamRecapStats {
+  /** Participants matching the filters (all statuses). */
+  totalParticipants: number;
+  /** How many of them have a final score (completed/expired). */
+  completedCount: number;
+  /** Mean score across graded sessions, or null when none are graded. */
+  average: number | null;
+  highest: number | null;
+  lowest: number | null;
+}
+
+/** Query/filter accepted by `GET /admin/recap/exams/:examId`. All optional. */
+export interface ExamRecapQuery {
+  /** Restrict to participants in this group. */
+  groupId?: string;
+  /** Inclusive session-start lower/upper bounds (epoch ms). */
+  from?: number;
+  to?: number;
+  page?: number;
+  limit?: number;
+}
+
+/** Response of `GET /admin/recap/exams/:examId` (#19). */
+export interface ExamRecapResponse {
+  exam: { id: string; title: string; totalQuestions: number };
+  stats: ExamRecapStats;
+  participants: RecapParticipant[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/** One exam in a student's cross-exam history (`GET /admin/recap/students/:id`). */
+export interface StudentRecapEntry {
+  sessionId: string;
+  examId: string;
+  examTitle: string;
+  status: RecapSessionStatus;
+  /** Rounded percentage 0–100, or null while in progress. */
+  score: number | null;
+  totalCorrect: number;
+  totalWrong: number;
+  totalEmpty: number;
+  startTime: number;
+  endTime: number;
+}
+
+/** Aggregate statistics over a student's filtered exam history. */
+export interface StudentRecapStats {
+  examsTaken: number;
+  completedCount: number;
+  average: number | null;
+}
+
+/** Query/filter accepted by `GET /admin/recap/students/:studentId`. All optional. */
+export interface StudentRecapQuery {
+  /** Restrict history to a single exam. */
+  examId?: string;
+  from?: number;
+  to?: number;
+  page?: number;
+  limit?: number;
+}
+
+/** Response of `GET /admin/recap/students/:studentId` (#19). */
+export interface StudentRecapResponse {
+  student: { id: string; name: string; nis: string; groupName: string | null };
+  stats: StudentRecapStats;
+  history: StudentRecapEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}

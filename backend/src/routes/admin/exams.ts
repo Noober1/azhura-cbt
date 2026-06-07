@@ -22,6 +22,7 @@ import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors";
 import { notifyExamListChanged } from "../../lib/exam-events";
+import { deriveSessionStatus } from "../../lib/exam-scoring";
 import { supervisorActions } from "../../socket";
 import { createLogger } from "../../lib/logger";
 
@@ -205,14 +206,6 @@ async function getExamDetail(examId: string) {
       options: optionsByQuestion.get(q.id) ?? [],
     })),
   };
-}
-
-type AdminSessionStatus = "in_progress" | "completed" | "expired";
-
-function deriveSessionStatus(submitted: number, endTime: number, now: number): AdminSessionStatus {
-  if (submitted === 1) return "completed";
-  if (endTime > now) return "in_progress";
-  return "expired";
 }
 
 export const adminExamRoutes = new Elysia({ prefix: "/admin" })
