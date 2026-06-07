@@ -12,7 +12,6 @@ import { settingsApi } from "../../lib/settings-api";
 import api from "../../lib/api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
-import { useAuthStore } from "../../stores/auth";
 import type { SystemSettings } from "../../types";
 import { Button } from "../ui/Button";
 import { Field, Input, Checkbox } from "../ui/Field";
@@ -121,11 +120,11 @@ export function SettingsPage() {
     setResetting(true);
     try {
       await api.post("/admin/system/reset");
-      toast.success("Reset sistem berhasil. Sesi Anda akan berakhir.");
+      toast.success("Reset sistem berhasil. Halaman akan dimuat ulang...");
       setResetOpen(false);
-      // Give the toast a moment to show before logout.
+      // Full reload so SetupGate re-checks /setup/status and shows the wizard.
       await new Promise((r) => setTimeout(r, 1500));
-      useAuthStore.getState().logout();
+      window.location.replace("/");
     } catch (err) {
       toast.error(getErrorMessage(err, "Gagal melakukan reset sistem."));
     } finally {

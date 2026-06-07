@@ -54,6 +54,9 @@ export function connectConsoleSocket(token: string): Socket {
     socket.on("system:reset", () => {
       toast.info("Sistem direset oleh admin. Sesi Anda akan berakhir.");
       useAuthStore.getState().logout();
+      // Full reload so SetupGate re-checks GET /setup/status and shows the
+      // setup wizard (no admin exists after a nuclear reset).
+      setTimeout(() => window.location.replace("/"), 1500);
     });
   }
   return socket;
