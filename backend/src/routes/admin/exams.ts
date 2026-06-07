@@ -192,6 +192,7 @@ async function getExamDetail(examId: string) {
     expiredAt: exam.expiredAt.getTime(),
     randomizeQuestion: tinyToBool(exam.randomizeQuestion),
     randomizeAnswer: tinyToBool(exam.randomizeAnswer),
+    passingGrade: exam.passingGrade,
     createdAt: exam.createdAt.getTime(),
     allowedGroups: groupRows.map((g) => ({
       id: g.id,
@@ -241,6 +242,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
           expiredAt: exams.expiredAt,
           randomizeQuestion: exams.randomizeQuestion,
           randomizeAnswer: exams.randomizeAnswer,
+          passingGrade: exams.passingGrade,
           createdAt: exams.createdAt,
         })
         .from(exams)
@@ -286,6 +288,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
           expiredAt: r.expiredAt.getTime(),
           randomizeQuestion: tinyToBool(r.randomizeQuestion),
           randomizeAnswer: tinyToBool(r.randomizeAnswer),
+          passingGrade: r.passingGrade,
           createdAt: r.createdAt.getTime(),
           totalQuestions: qById.get(r.id) ?? 0,
           totalGroups: gById.get(r.id) ?? 0,
@@ -338,6 +341,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
           expiredAt: new Date(body.expiredAt),
           randomizeQuestion: boolToTiny(body.randomizeQuestion ?? true),
           randomizeAnswer: boolToTiny(body.randomizeAnswer ?? true),
+          passingGrade: body.passingGrade ?? 0,
         });
         if (allowedGroups.length > 0) {
           await tx
@@ -360,6 +364,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
         token: t.Optional(t.Nullable(t.String())),
         randomizeQuestion: t.Optional(t.Boolean()),
         randomizeAnswer: t.Optional(t.Boolean()),
+        passingGrade: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
         allowedGroups: t.Optional(t.Array(t.String())),
       }),
     }
@@ -402,6 +407,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
         patch.randomizeQuestion = boolToTiny(body.randomizeQuestion);
       if (body.randomizeAnswer !== undefined)
         patch.randomizeAnswer = boolToTiny(body.randomizeAnswer);
+      if (body.passingGrade !== undefined) patch.passingGrade = body.passingGrade;
 
       const groupsBefore = await getExamGroupIds(id);
 
@@ -463,6 +469,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
         token: t.Optional(t.Nullable(t.String())),
         randomizeQuestion: t.Optional(t.Boolean()),
         randomizeAnswer: t.Optional(t.Boolean()),
+        passingGrade: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
         allowedGroups: t.Optional(t.Array(t.String())),
       }),
     }

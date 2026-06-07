@@ -64,6 +64,8 @@ export const exams = mysqlTable("exams", {
   expiredAt: timestamp("expired_at").notNull().defaultNow(),
   randomizeQuestion: tinyint("randomize_question").notNull().default(1),
   randomizeAnswer: tinyint("randomize_answer").notNull().default(1),
+  /** Minimum passing score (0–100). 0 = no passing grade (all pass). */
+  passingGrade: tinyint("passing_grade").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

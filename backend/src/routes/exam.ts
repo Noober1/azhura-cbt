@@ -68,6 +68,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       id: exams.id,
       title: exams.title,
       durationMinutes: exams.durationMinutes,
+      passingGrade: exams.passingGrade,
       totalQuestions: sql<number>`count(distinct ${questions.id})`,
       // 1 when the caller has any submitted session for this exam (joined below).
       // max(case ...) collapses the per-session rows the join multiplies out.
@@ -95,7 +96,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
     const rows = await scoped
       .where(eq(exams.isActive, 1))
-      .groupBy(exams.id, exams.title, exams.durationMinutes)
+      .groupBy(exams.id, exams.title, exams.durationMinutes, exams.passingGrade)
       .orderBy(asc(exams.createdAt));
 
     return rows.map((row) => ({
@@ -103,6 +104,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       title: row.title,
       totalQuestions: Number(row.totalQuestions),
       durationMinutes: row.durationMinutes,
+      passingGrade: row.passingGrade,
       completed: Number(row.completed) === 1,
       requiresToken: Number(row.requiresToken) === 1,
     }));
@@ -125,7 +127,11 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
     if (Date.now() > active.endTime) {
       const result = await finalizeSession(active);
-      return { status: "finalized" as const, examTitle: active.examTitle, result };
+      return {
+        status: "finalized" as const,
+        examTitle: active.examTitle,
+        result: { ...result, passingGrade: active.passingGrade },
+      };
     }
 
     return {
@@ -391,6 +397,12 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
       if (!session) throw new NotFoundError("Sesi ujian tidak ditemukan.");
 
+      const exam = await db.query.exams.findFirst({
+        columns: { passingGrade: true },
+        where: eq(exams.id, examId),
+      });
+      const passingGrade = exam?.passingGrade ?? 0;
+
       // Idempotent re-submit (#8): a retry — or a race with server-side
       // finalization (expiry/kick) — must not 409 the client into a stuck retry
       // loop. When the session is already submitted, re-grade the answers already
@@ -416,7 +428,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
           sessionId,
           userId: user.userId,
         });
-        return gradeAgainstKey(storedKey, storedSelections);
+        return { ...gradeAgainstKey(storedKey, storedSelections), passingGrade };
       }
 
       // Fetch the answer key from the DB (never trust client-provided correctness).
@@ -508,7 +520,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
             reason: error instanceof Error ? error.message : String(error),
           });
         });
-      return result;
+      return { ...result, passingGrade };
     },
     {
       body: t.Object({
