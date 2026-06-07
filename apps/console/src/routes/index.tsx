@@ -14,6 +14,7 @@ import { LoginPage } from "../components/auth/LoginPage";
 import { AppShell } from "../components/layout/AppShell";
 import { ExamListPage } from "../components/exams/ExamListPage";
 import { ExamDetailPage } from "../components/exams/ExamDetailPage";
+import { ExamSessionsPage } from "../components/exams/ExamSessionsPage";
 import { StudentListPage } from "../components/students/StudentListPage";
 import { GroupListPage } from "../components/groups/GroupListPage";
 import { StatusPesertaPage } from "../components/monitoring/StatusPesertaPage";
@@ -55,6 +56,7 @@ export function AppRoutes() {
       >
         <Route path="/exams" element={<AdminRoute><ExamListPage /></AdminRoute>} />
         <Route path="/exams/:examId" element={<AdminRoute><ExamDetailPage /></AdminRoute>} />
+        <Route path="/exams/:examId/sessions" element={<AdminRoute><ExamSessionsPage /></AdminRoute>} />
         <Route path="/students" element={<AdminRoute><StudentListPage /></AdminRoute>} />
         <Route path="/groups" element={<AdminRoute><GroupListPage /></AdminRoute>} />
         <Route path="/monitoring" element={<StatusPesertaPage />} />

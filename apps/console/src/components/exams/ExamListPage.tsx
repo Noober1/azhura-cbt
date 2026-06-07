@@ -29,6 +29,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   KeyIcon,
+  UsersIcon,
 } from "../ui/icons";
 
 const PAGE_SIZE = 10;
@@ -229,6 +230,14 @@ export function ExamListPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => navigate(`/exams/${exam.id}/sessions`)}
+                        leadingIcon={<UsersIcon className="size-4" />}
+                      >
+                        Status peserta
+                      </Button>
                       <Button
                         variant="secondary"
                         size="sm"
