@@ -7,6 +7,8 @@ import { SettingsPanel } from "./components/settings/SettingsPanel";
 import { useConfigStore } from "./stores/config";
 import { enterKiosk, exitKiosk, listenKioskEvents } from "./lib/kiosk";
 import { startInputHardening } from "./lib/anti-cheat-config";
+import { isResolutionSufficient } from "./lib/screen";
+import { ResolutionGuard } from "./components/setup/ResolutionGuard";
 
 /**
  * Key chord that opens the hidden settings panel: Ctrl+Shift+O, then Ctrl+Shift+S (within 2 s).
@@ -26,6 +28,16 @@ function App() {
   const [passphraseOpen, setPassphraseOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Minimum-resolution gate (#48): read the monitor size once at mount. Below
+  // 1280×720 the exam layout can clip, so we block the whole app with a
+  // non-bypassable warning instead of rendering the router. Per #48 there is no
+  // re-check on resize. `window.screen` reports logical pixels in web and Tauri.
+  const [screen] = useState(() => ({
+    width: typeof window !== "undefined" ? window.screen?.width ?? 0 : 0,
+    height: typeof window !== "undefined" ? window.screen?.height ?? 0 : 0,
+  }));
+  const screenOk = isResolutionSufficient(screen.width, screen.height);
+
   // Two-step chord state: null = waiting for step 1, timer = waiting for step 2.
   const chordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -37,6 +49,9 @@ function App() {
   const antiCheatEnabled = useConfigStore((s) => s.antiCheat.enabled);
 
   useEffect(() => {
+    // Don't lock into kiosk while the resolution guard is blocking the app —
+    // the student needs to reach OS display settings to fix their monitor.
+    if (!screenOk) return;
     if (!antiCheatEnabled) {
       void exitKiosk();
       return;
@@ -52,7 +67,7 @@ function App() {
       void unlistenPromise.then((off) => off());
       stopHardening();
     };
-  }, [antiCheatEnabled]);
+  }, [antiCheatEnabled, screenOk]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -79,6 +94,12 @@ function App() {
       if (chordTimerRef.current) clearTimeout(chordTimerRef.current);
     };
   }, []);
+
+  // Resolution gate (#48): block everything with a non-bypassable warning when
+  // the monitor is too small. Rendered after all hooks so hook order is stable.
+  if (!screenOk) {
+    return <ResolutionGuard width={screen.width} height={screen.height} />;
+  }
 
   return (
     <>
