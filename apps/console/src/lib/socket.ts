@@ -21,25 +21,39 @@ const SOCKET_URL = new URL(
 let socket: Socket | null = null;
 
 /**
- * Opens the realtime connection (idempotent — returns the existing socket if one
- * is already open) authenticated with the given admin/supervisor JWT.
+ * Reference count of live consumers. Several hooks share this one socket
+ * (`useRoster`, `useLogStream`, `useChatStream`, the global chat launcher); the
+ * connection is only torn down once the last of them releases it, so navigating
+ * between pages — or mounting the always-on chat launcher alongside a page hook —
+ * never disconnects a socket another consumer still depends on.
+ */
+let refCount = 0;
+
+/**
+ * Acquires the shared realtime connection (creating it on first use),
+ * authenticated with the given admin/supervisor JWT. Each call must be paired
+ * with one {@link disconnectConsoleSocket}.
  *
  * @param token JWT used to authenticate the socket handshake.
  * @returns the active {@link Socket} so callers can attach listeners.
  */
 export function connectConsoleSocket(token: string): Socket {
-  if (socket) return socket;
-  socket = io(SOCKET_URL, {
-    auth: { token },
-    autoConnect: true,
-    path: "/ws",
-  });
+  refCount += 1;
+  if (!socket) {
+    socket = io(SOCKET_URL, {
+      auth: { token },
+      autoConnect: true,
+      path: "/ws",
+    });
+  }
   return socket;
 }
 
-/** Closes the realtime connection and releases the singleton. */
+/** Releases one consumer's hold; disconnects only when the last one lets go. */
 export function disconnectConsoleSocket(): void {
-  if (!socket) return;
-  socket.disconnect();
-  socket = null;
+  refCount = Math.max(0, refCount - 1);
+  if (refCount === 0 && socket) {
+    socket.disconnect();
+    socket = null;
+  }
 }

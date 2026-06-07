@@ -21,6 +21,12 @@ import { sessionRegistry } from "../lib/session-registry";
 import { notifyRosterPatch } from "../lib/roster-events";
 import { kickStudent } from "../lib/proctor-actions";
 import { applyTimeChange } from "../lib/time-control";
+import { chatMuteRegistry } from "../lib/chat-mute";
+import { saveChatMessage, getChatIdentity } from "../lib/chat-store";
+import { broadcastChatMessage } from "../lib/chat-events";
+import { sanitizeChatContent } from "../lib/chat-content";
+import { getChatConfig } from "../lib/env";
+import { readSettings } from "../lib/settings-service";
 import { createLogger } from "../lib/logger";
 import { writeEventLog } from "../lib/log-files";
 
@@ -44,6 +50,9 @@ const broadcastTargetSchema = t.Union([
 
 /** Largest single time adjustment (minutes) a supervisor may apply (#8). */
 const MAX_TIME_CHANGE_MINUTES = 180;
+
+/** Largest timed chat mute (minutes) a supervisor may apply (#17); 24h. */
+const MAX_MUTE_MINUTES = 1440;
 
 const DEFAULT_LOGOUT_REASON =
   "Anda dikeluarkan dari dashboard oleh pengawas. Silakan login kembali bila perlu.";
@@ -168,6 +177,118 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
       .select({ id: groups.id, name: groups.name })
       .from(groups)
       .orderBy(asc(groups.name));
+  })
+
+  /**
+   * POST /api/supervisor/chat/announce
+   * Posts a system/announcement message (#17) into the public chat room. Rejected
+   * when chat is globally disabled. The message is sanitized, persisted (so it
+   * appears in join history), and broadcast to everyone in the room.
+   */
+  .post(
+    "/chat/announce",
+    async ({ body, user }) => {
+      const { chatEnabled } = await readSettings();
+      if (!chatEnabled) {
+        throw new BadRequestError("Chat sedang dinonaktifkan.");
+      }
+      const result = sanitizeChatContent(body.message, getChatConfig().maxLength);
+      if (!result.ok) {
+        throw new BadRequestError(result.reason);
+      }
+      const message = await saveChatMessage({
+        kind: "system",
+        userId: null,
+        name: "Pengumuman",
+        groupName: null,
+        content: result.content,
+      });
+      broadcastChatMessage(message);
+      log.info("Chat announce", { by: user.userId });
+      writeEventLog(
+        "supervisor_action",
+        "Kirim pengumuman ke chat",
+        { action: "chat_announce" },
+        { id: user.userId, role: user.role }
+      );
+      return { success: true };
+    },
+    { body: t.Object({ message: t.String({ minLength: 1 }) }) }
+  )
+
+  /**
+   * POST /api/supervisor/chat/mute
+   * Mutes a student in chat (#17). `durationMinutes` omitted/0 ⇒ indefinite
+   * (lifts only via unmute); otherwise a timed mute that auto-expires. The
+   * muted client is told live so its composer locks.
+   */
+  .post(
+    "/chat/mute",
+    async ({ body, user }) => {
+      const minutes = body.durationMinutes ?? 0;
+      if (minutes < 0 || minutes > MAX_MUTE_MINUTES) {
+        throw new BadRequestError(`Durasi mute maksimal ${MAX_MUTE_MINUTES} menit.`);
+      }
+      const identity = await getChatIdentity(body.userId);
+      if (!identity) {
+        throw new BadRequestError("Peserta tidak ditemukan.");
+      }
+      const reason = body.reason?.trim() || "Anda dibisukan oleh pengawas.";
+      const mutedUntil = minutes > 0 ? Date.now() + minutes * 60_000 : null;
+
+      await chatMuteRegistry.mute({
+        userId: body.userId,
+        name: identity.name,
+        mutedUntil,
+        by: user.userId,
+        reason,
+      });
+      supervisorActions.muteChatUser(body.userId, mutedUntil, reason);
+      log.info("Chat mute", { target: body.userId, by: user.userId, minutes });
+      writeEventLog(
+        "supervisor_action",
+        `Bisukan peserta di chat${minutes > 0 ? ` (${minutes} menit)` : " (tanpa batas)"}`,
+        { action: "chat_mute", targetUserId: body.userId, minutes },
+        { id: user.userId, role: user.role }
+      );
+      return { success: true };
+    },
+    {
+      body: t.Object({
+        userId: t.String({ minLength: 1 }),
+        durationMinutes: t.Optional(t.Number()),
+        reason: t.Optional(t.String({ maxLength: 200 })),
+      }),
+    }
+  )
+
+  /**
+   * POST /api/supervisor/chat/unmute
+   * Lifts a student's chat mute (#17) and notifies their client.
+   */
+  .post(
+    "/chat/unmute",
+    async ({ body, user }) => {
+      await chatMuteRegistry.unmute(body.userId);
+      supervisorActions.unmuteChatUser(body.userId);
+      log.info("Chat unmute", { target: body.userId, by: user.userId });
+      writeEventLog(
+        "supervisor_action",
+        "Cabut bisukan peserta di chat",
+        { action: "chat_unmute", targetUserId: body.userId },
+        { id: user.userId, role: user.role }
+      );
+      return { success: true };
+    },
+    { body: t.Object({ userId: t.String({ minLength: 1 }) }) }
+  )
+
+  /**
+   * GET /api/supervisor/chat/mutes
+   * Lists currently muted students (#17) for the console moderation panel.
+   */
+  .get("/chat/mutes", async () => {
+    return { mutes: await chatMuteRegistry.listMuted() };
   })
 
   /**

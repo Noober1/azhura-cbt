@@ -22,6 +22,7 @@ import { DashboardNavbar } from "./DashboardNavbar";
 import { ParticipantCard } from "./ParticipantCard";
 import { ExamListTable } from "./ExamListTable";
 import { StartExamDialog } from "./StartExamDialog";
+import { ChatDrawer } from "./ChatDrawer";
 
 const log = createLogger("Dashboard");
 
@@ -240,6 +241,9 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
         isStarting={startingExamId !== null}
         tokenRejectedNonce={tokenRejectedNonce}
       />
+
+      {/* Public chat (#17) — floating button + bottom drawer, dashboard-only. */}
+      <ChatDrawer />
     </div>
   );
 };

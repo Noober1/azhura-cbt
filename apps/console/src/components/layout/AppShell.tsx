@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/Button";
 import { FileTextIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon } from "../ui/icons";
+import { ChatLauncher } from "../chat/ChatLauncher";
 
 interface NavItem {
   to: string;
@@ -131,6 +132,9 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {/* Public chat (#17) — floating button + bottom drawer, available console-wide. */}
+      <ChatLauncher />
     </div>
   );
 }

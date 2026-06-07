@@ -26,6 +26,8 @@ export interface SystemSettings {
   defaultPassingGrade: number;
   /** When true, anti-cheat engine is enabled for all student sessions. */
   antiCheatEnabled: boolean;
+  /** When true, the public student chat room (#17) is available on the dashboard. */
+  chatEnabled: boolean;
 }
 
 export const SETTINGS_DEFAULTS: Readonly<SystemSettings> = {
@@ -34,6 +36,7 @@ export const SETTINGS_DEFAULTS: Readonly<SystemSettings> = {
   defaultExamDurationMinutes: 30,
   defaultPassingGrade: 0,
   antiCheatEnabled: false,
+  chatEnabled: false,
 };
 
 type SettingKey = keyof SystemSettings;
@@ -45,12 +48,14 @@ export const SETTING_KEYS: ReadonlySet<string> = new Set<SettingKey>([
   "defaultExamDurationMinutes",
   "defaultPassingGrade",
   "antiCheatEnabled",
+  "chatEnabled",
 ]);
 
 /** Converts a typed setting value to its DB text representation. */
 export function serialize(key: SettingKey, value: SystemSettings[SettingKey]): string {
   switch (key) {
     case "antiCheatEnabled":
+    case "chatEnabled":
       return (value as boolean) ? "true" : "false";
     case "defaultExamDurationMinutes":
     case "defaultPassingGrade":
@@ -71,6 +76,7 @@ export function serialize(key: SettingKey, value: SystemSettings[SettingKey]): s
 export function deserialize(key: SettingKey, raw: string): SystemSettings[SettingKey] {
   switch (key) {
     case "antiCheatEnabled":
+    case "chatEnabled":
       return raw === "true";
     case "defaultExamDurationMinutes":
     case "defaultPassingGrade": {

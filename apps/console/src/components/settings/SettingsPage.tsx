@@ -226,6 +226,12 @@ export function SettingsPage() {
             label="Aktifkan Anti-Cheat"
             hint="Memantau kecurangan siswa (focus loss, shortcut, fullscreen) selama ujian berlangsung."
           />
+          <Checkbox
+            checked={draft.chatEnabled}
+            onChange={(checked) => updateDraft("chatEnabled", checked)}
+            label="Aktifkan Chat Publik"
+            hint="Ruang obrolan publik siswa di dashboard (di luar ujian), dengan anti-spam dan pengumuman."
+          />
         </SettingsSection>
       </div>
 

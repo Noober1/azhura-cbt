@@ -204,6 +204,95 @@ export interface GroupOption {
   name: string;
 }
 
+// ── Public chat room (#17) ───────────────────────────────────────────────────
+
+/**
+ * Kind of a chat message:
+ * - `user`   — a student's message.
+ * - `system` — an admin/supervisor announcement (rendered distinctly).
+ */
+export type ChatMessageKind = "user" | "system";
+
+/**
+ * One message in the public chat room (#17). `userId`/`groupName` are null for
+ * `system` announcements. `content` is already sanitized + length-capped server
+ * side; clients still render it as text (React escapes) — never as HTML.
+ */
+export interface ChatMessage {
+  id: string;
+  kind: ChatMessageKind;
+  /** Sender user id; null for system/announcement messages. */
+  userId: string | null;
+  /** Sender display name; "Pengumuman" for system messages. */
+  name: string;
+  /** Sender group name; null for system messages or users without a group. */
+  groupName: string | null;
+  content: string;
+  /** Epoch milliseconds when the message was created. */
+  timestamp: number;
+}
+
+/** Payload of the `chat:history` socket event: the last N messages, oldest→newest. */
+export interface ChatHistoryEvent {
+  messages: ChatMessage[];
+}
+
+/** A member currently present in the chat room — used as an @mention candidate. */
+export interface ChatPresenceMember {
+  userId: string;
+  name: string;
+  groupName: string | null;
+}
+
+/** Payload of the `chat:presence` socket event: everyone currently in the room. */
+export interface ChatPresenceEvent {
+  members: ChatPresenceMember[];
+}
+
+/**
+ * Payload of the `chat:muted` socket event sent to a muted sender (#17).
+ * `manual` distinguishes a supervisor/admin mute from the anti-spam auto-mute,
+ * so the client can phrase the notice accordingly.
+ */
+export interface ChatMutedEvent {
+  /** Epoch ms the mute lifts; for an indefinite supervisor mute this is far in the future. */
+  mutedUntil: number;
+  reason: string;
+  manual: boolean;
+}
+
+/** Payload of the `chat:unmuted` socket event: a previously-muted user was freed. */
+export interface ChatUnmutedEvent {
+  userId: string;
+}
+
+/** Payload of the `chat:error` socket event: a send was rejected (validation feedback). */
+export interface ChatErrorEvent {
+  reason: string;
+}
+
+/**
+ * Payload of the `chat:config` socket event (#17): whether the chat feature is
+ * globally enabled. Pushed on connect and whenever an admin toggles the setting,
+ * so clients show/hide the chat surface live.
+ */
+export interface ChatConfigEvent {
+  enabled: boolean;
+}
+
+/**
+ * A muted user as listed for console moderation (`GET /supervisor/chat/mutes`).
+ * `mutedUntil` is null for an indefinite mute (lifts only on explicit unmute).
+ */
+export interface MutedUser {
+  userId: string;
+  name: string;
+  mutedUntil: number | null;
+  /** User id of the supervisor/admin who applied the mute. */
+  by: string;
+  reason: string;
+}
+
 export interface ConnectivityState {
   isOnline: boolean;
   isSyncing: boolean;
@@ -259,6 +348,8 @@ export interface SystemSettings {
   defaultPassingGrade: number;
   /** When true, the anti-cheat engine is active for all student sessions. */
   antiCheatEnabled: boolean;
+  /** When true, the public student chat room (#17) is available on the dashboard. */
+  chatEnabled: boolean;
 }
 
 // ── Application logs (#18) ───────────────────────────────────────────────────
