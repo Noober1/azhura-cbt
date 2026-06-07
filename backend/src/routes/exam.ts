@@ -410,10 +410,13 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       // stored for it and return the same score instead of erroring. The stored
       // answers are authoritative (the exam is over), so this is deterministic.
       if (session.submitted) {
-        const storedKey = await db
+        const storedKeyRaw = await db
           .select({ id: questions.id, correctOptionId: questions.correctOptionId })
           .from(questions)
           .where(eq(questions.examId, examId));
+        const storedKey = storedKeyRaw.filter(
+          (q): q is { id: string; correctOptionId: string } => q.correctOptionId !== null
+        );
         const storedAnswers = await db
           .select({
             questionId: answers.questionId,
@@ -433,13 +436,15 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       }
 
       // Fetch the answer key from the DB (never trust client-provided correctness).
-      const key = await db
-        .select({
-          id: questions.id,
-          correctOptionId: questions.correctOptionId,
-        })
+      // Non-MC questions have null correctOptionId; filter them out since their
+      // grading logic lives in #91 and is not yet wired.
+      const keyRaw = await db
+        .select({ id: questions.id, correctOptionId: questions.correctOptionId })
         .from(questions)
         .where(eq(questions.examId, examId));
+      const key = keyRaw.filter(
+        (q): q is { id: string; correctOptionId: string } => q.correctOptionId !== null
+      );
 
       const answerByQuestion = new Map(submitted.map((a) => [a.questionId, a]));
 

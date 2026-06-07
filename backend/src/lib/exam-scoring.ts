@@ -135,10 +135,12 @@ export const finalizeSession = async (session: {
   id: string;
   examId: string;
 }): Promise<ExamScore> => {
-  const key = await db
+  const rawKey = await db
     .select({ id: questions.id, correctOptionId: questions.correctOptionId })
     .from(questions)
     .where(eq(questions.examId, session.examId));
+  // Non-MC questions have null correctOptionId; they are scored by #91 grading logic.
+  const key = rawKey.filter((q): q is AnswerKeyEntry => q.correctOptionId !== null);
 
   const stored = await db
     .select({

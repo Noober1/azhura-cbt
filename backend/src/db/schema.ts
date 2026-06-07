@@ -91,8 +91,29 @@ export const examGroups = mysqlTable(
 );
 
 /**
- * A question belonging to an exam. `correctOptionId` is the answer key and must
- * never be exposed to students (see `GET /exams/:examId/questions`).
+ * Junction table for the many-to-many between exams and supervisors: which
+ * supervisors are authorized to enter/edit questions for which exam. Supervisors
+ * can only CRUD questions for exams listed here with their `user_id`.
+ */
+export const examSupervisors = mysqlTable(
+  "exam_supervisors",
+  {
+    examId: varchar("exam_id", { length: 36 })
+      .notNull()
+      .references(() => exams.id, { onDelete: "cascade" }),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.examId, table.userId] }),
+  })
+);
+
+/**
+ * A question belonging to an exam. `correctOptionId` is the answer key for
+ * multiple_choice questions and must never be exposed to students. Non-MC types
+ * store their answer/structure in `config` JSON and leave `correctOptionId` null.
  */
 export const questions = mysqlTable("questions", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -100,8 +121,20 @@ export const questions = mysqlTable("questions", {
     .notNull()
     .references(() => exams.id, { onDelete: "cascade" }),
   text: text("text").notNull(),
-  correctOptionId: varchar("correct_option_id", { length: 36 }).notNull(),
+  /** Answer key for multiple_choice; null for other question types. */
+  correctOptionId: varchar("correct_option_id", { length: 36 }),
   orderIndex: int("order_index").notNull().default(0),
+  /** Discriminates the question type and determines how `config` is interpreted. */
+  type: mysqlEnum("type", ["multiple_choice", "fill_in_blank", "matching", "sorting"])
+    .notNull()
+    .default("multiple_choice"),
+  /**
+   * Type-specific data (null for multiple_choice):
+   * - fill_in_blank: `{ answer: string }`
+   * - matching:      `{ pairs: { left: string; right: string }[] }`
+   * - sorting:       `{ items: string[]; correctOrder: number[] }`
+   */
+  config: json("config"),
 });
 
 /** A selectable answer option for a question. */
@@ -198,6 +231,7 @@ export const cheatLogs = mysqlTable("cheat_logs", {
 export const usersRelations = relations(users, ({ one, many }) => ({
   sessions: many(examSessions),
   group: one(groups, { fields: [users.groupId], references: [groups.id] }),
+  examSupervisors: many(examSupervisors),
 }));
 
 export const groupsRelations = relations(groups, ({ many }) => ({
@@ -209,11 +243,17 @@ export const examsRelations = relations(exams, ({ many }) => ({
   questions: many(questions),
   sessions: many(examSessions),
   examGroups: many(examGroups),
+  supervisors: many(examSupervisors),
 }));
 
 export const examGroupsRelations = relations(examGroups, ({ one }) => ({
   exam: one(exams, { fields: [examGroups.examId], references: [exams.id] }),
   group: one(groups, { fields: [examGroups.groupId], references: [groups.id] }),
+}));
+
+export const examSupervisorsRelations = relations(examSupervisors, ({ one }) => ({
+  exam: one(exams, { fields: [examSupervisors.examId], references: [exams.id] }),
+  user: one(users, { fields: [examSupervisors.userId], references: [users.id] }),
 }));
 
 export const questionsRelations = relations(questions, ({ one, many }) => ({
@@ -348,6 +388,7 @@ export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type Exam = typeof exams.$inferSelect;
 export type ExamGroup = typeof examGroups.$inferSelect;
+export type ExamSupervisor = typeof examSupervisors.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type ExamSession = typeof examSessions.$inferSelect;

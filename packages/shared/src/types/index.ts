@@ -24,10 +24,37 @@ export interface QuestionOption {
   text: string;
 }
 
+// ── Question types (#90) ──────────────────────────────────────────────────────
+
+export type QuestionType = 'multiple_choice' | 'fill_in_blank' | 'matching' | 'sorting';
+
+export interface FillInBlankConfig {
+  answer: string;
+}
+
+export interface MatchingConfig {
+  pairs: { left: string; right: string }[];
+}
+
+export interface SortingConfig {
+  items: string[];
+  correctOrder: number[];
+}
+
+export type QuestionConfig = FillInBlankConfig | MatchingConfig | SortingConfig;
+
 export interface Question {
   id: string;
   text: string;
+  /** Discriminates the question type. Defaults to `multiple_choice` for legacy questions. */
+  type: QuestionType;
+  /** Options list — only present for `multiple_choice` questions. */
   options: QuestionOption[];
+  /**
+   * Type-specific answer/structure data. `null` for `multiple_choice` (uses `options` instead).
+   * Contains the answer key for non-MC types — **must be stripped before sending to students**.
+   */
+  config: QuestionConfig | null;
   correctAnswerId?: string; // Stored securely on the server
 }
 
@@ -206,6 +233,20 @@ export type BroadcastTarget =
 export interface GroupOption {
   id: string;
   name: string;
+}
+
+// ── Supervisor–exam assignment (#83) ─────────────────────────────────────────
+
+/** A row in `exam_supervisors`: a supervisor authorized to edit questions for an exam. */
+export interface ExamSupervisor {
+  examId: string;
+  userId: string;
+}
+
+/** Extended view returned by the list endpoint: includes supervisor display info. */
+export interface ExamSupervisorDetail extends ExamSupervisor {
+  name: string;
+  nis: string;
 }
 
 // ── Public chat room (#17) ───────────────────────────────────────────────────
