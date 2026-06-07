@@ -31,6 +31,7 @@ import { notifyRosterPatch } from "../lib/roster-events";
 import { buildRosterParticipant } from "../lib/roster";
 import { shuffle, applyQuestionOrder } from "../lib/question-order";
 import { dedupeAnswersByQuestion } from "../lib/answer-batch";
+import { notifyDashboardStats } from "./admin/dashboard";
 
 const { exams, questions, options, examSessions, answers, examGroups, sessionQuestions } =
   schema;
@@ -520,6 +521,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
             reason: error instanceof Error ? error.message : String(error),
           });
         });
+      void notifyDashboardStats().catch(() => {});
       return { ...result, passingGrade };
     },
     {
@@ -693,6 +695,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     if (rosterEntry) {
       notifyRosterPatch({ type: "upsert", participant: rosterEntry });
     }
+    void notifyDashboardStats().catch(() => {});
 
     return {
       id: sessionId,

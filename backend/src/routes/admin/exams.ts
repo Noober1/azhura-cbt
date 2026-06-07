@@ -24,6 +24,7 @@ import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors"
 import { notifyExamListChanged } from "../../lib/exam-events";
 import { deriveSessionStatus } from "../../lib/exam-scoring";
 import { supervisorActions } from "../../socket";
+import { notifyDashboardStats } from "./dashboard";
 import { createLogger } from "../../lib/logger";
 
 const { exams, examGroups, groups, questions, options, examSessions, users } =
@@ -352,6 +353,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
 
       notifyExamListChanged(allowedGroups);
       log.info("Exam created", { id, title: body.title });
+      void notifyDashboardStats().catch(() => {});
       set.status = 201;
       return getExamDetail(id);
     },
@@ -458,6 +460,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
       const affected = new Set([...groupsBefore, ...(body.allowedGroups ?? [])]);
       notifyExamListChanged([...affected]);
       log.info("Exam updated", { id });
+      void notifyDashboardStats().catch(() => {});
       return getExamDetail(id);
     },
     {
@@ -510,6 +513,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
 
     notifyExamListChanged(groupsBefore);
     log.info("Exam deleted", { id });
+    void notifyDashboardStats().catch(() => {});
     return { success: true };
   })
 

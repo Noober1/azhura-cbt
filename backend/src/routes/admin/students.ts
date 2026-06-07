@@ -24,6 +24,7 @@ import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors";
+import { notifyDashboardStats } from "./dashboard";
 import { createLogger } from "../../lib/logger";
 
 const { users, groups, examSessions } = schema;
@@ -214,6 +215,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
       });
 
       log.info("Student created", { id, nis });
+      void notifyDashboardStats().catch(() => {});
       set.status = 201;
       return getStudentDetail(id);
     },
@@ -299,5 +301,6 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
 
     await db.delete(users).where(eq(users.id, studentId));
     log.info("Student deleted", { id: studentId });
+    void notifyDashboardStats().catch(() => {});
     return { success: true };
   });

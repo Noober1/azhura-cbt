@@ -21,6 +21,7 @@ import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { NotFoundError } from "../../lib/errors";
+import { notifyDashboardStats } from "./dashboard";
 import { createLogger } from "../../lib/logger";
 
 const { groups, users } = schema;
@@ -130,6 +131,7 @@ export const adminGroupRoutes = new Elysia({ prefix: "/admin" })
       const name = body.name.trim();
       await db.insert(groups).values({ id, name });
       log.info("Group created", { id, name });
+      void notifyDashboardStats().catch(() => {});
       set.status = 201;
       return { id, name, memberCount: 0 };
     },
@@ -178,5 +180,6 @@ export const adminGroupRoutes = new Elysia({ prefix: "/admin" })
     const memberCount = await getMemberCount(groupId);
     await db.delete(groups).where(eq(groups.id, groupId));
     log.info("Group deleted", { id: groupId, unassignedMembers: memberCount });
+    void notifyDashboardStats().catch(() => {});
     return { success: true, unassignedMembers: memberCount };
   });

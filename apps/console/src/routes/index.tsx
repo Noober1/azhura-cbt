@@ -18,6 +18,7 @@ import { ExamSessionsPage } from "../components/exams/ExamSessionsPage";
 import { StudentListPage } from "../components/students/StudentListPage";
 import { GroupListPage } from "../components/groups/GroupListPage";
 import { StatusPesertaPage } from "../components/monitoring/StatusPesertaPage";
+import { DashboardPage } from "../components/dashboard/DashboardPage";
 import { SettingsPage } from "../components/settings/SettingsPage";
 import { LogViewerPage } from "../components/logs/LogViewerPage";
 import { RecapPage } from "../components/recap/RecapPage";
@@ -41,7 +42,7 @@ function AdminRoute({ children }: { children: ReactNode }) {
 
 function DefaultRedirect() {
   const role = useAuthStore((s) => s.role);
-  return <Navigate to={role === "admin" ? "/exams" : "/monitoring"} replace />;
+  return <Navigate to={role === "admin" ? "/dashboard" : "/monitoring"} replace />;
 }
 
 export function AppRoutes() {
@@ -55,6 +56,7 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        <Route path="/dashboard" element={<AdminRoute><DashboardPage /></AdminRoute>} />
         <Route path="/exams" element={<AdminRoute><ExamListPage /></AdminRoute>} />
         <Route path="/exams/:examId" element={<AdminRoute><ExamDetailPage /></AdminRoute>} />
         <Route path="/exams/:examId/sessions" element={<AdminRoute><ExamSessionsPage /></AdminRoute>} />

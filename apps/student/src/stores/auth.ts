@@ -12,6 +12,7 @@
 import { create } from "zustand";
 import { User } from "../types";
 import api from "../lib/api";
+import { disconnectSocket } from "../lib/socket";
 import { createLogger } from "../lib/logger";
 import { getErrorMessage, safeJsonParse, toErrorContext } from "../lib/errors";
 
@@ -103,6 +104,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     set({ isLoading: true });
     try {
+      // Disconnect the socket before clearing credentials so the backend's
+      // disconnect handler fires immediately and the dashboard online count drops.
+      disconnectSocket();
       // TODO: In Tauri production, delete the token from Stronghold.
       if (isTauri()) {
         log.debug("Stronghold token deletion not yet implemented.");

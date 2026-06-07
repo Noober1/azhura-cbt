@@ -24,6 +24,7 @@ import { createChatRateLimiter } from "./lib/chat-rate-limiter";
 import { chatMuteRegistry } from "./lib/chat-mute";
 import { sanitizeChatContent } from "./lib/chat-content";
 import { readSettings } from "./lib/settings-service";
+import { setDashboardBroadcaster, notifyDashboardStats, setOnlineStudentCountGetter } from "./routes/admin/dashboard";
 import type {
   BroadcastTarget,
   ChatPresenceMember,
@@ -170,6 +171,20 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       for (const s of sockets) s.leave(CHAT_ROOM);
     }
     io.emit("chat:config", { enabled });
+  });
+
+  // Push a fresh stats snapshot to all admins/supervisors on relevant mutations (#78).
+  setDashboardBroadcaster((stats) => {
+    io.to("supervisors").emit("dashboard:stats", stats);
+  });
+
+  // Count student sockets directly from Socket.io — no Redis grace-period lag.
+  setOnlineStudentCountGetter(() => {
+    let count = 0;
+    for (const [, s] of io.sockets.sockets) {
+      if ((s.data.role as string) === "student") count++;
+    }
+    return count;
   });
 
   // Handshake auth: verify the JWT before allowing the connection.
@@ -364,6 +379,8 @@ export function initSocket(httpServer: HttpServer): SocketServer {
               reason: error instanceof Error ? error.message : String(error),
             });
           });
+        // Dashboard (#78): online count changed — push updated stats.
+        void notifyDashboardStats().catch(() => {});
         heartbeat = setInterval(() => {
           const flatlined = tracker.recordPing();
           if (flatlined) {
@@ -398,6 +415,10 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       // Chat (#17): the socket has already left its rooms by now, so refresh the
       // remaining members' presence/mention list. No-op when the room is empty.
       void emitChatPresence().catch(() => {});
+      // Dashboard (#78): online count changed — only students affect the count.
+      if (role === "student") {
+        void notifyDashboardStats().catch(() => {});
+      }
       // Start the grace window: a reconnect with the same sessionId refreshes the
       // TTL back; otherwise the key expires and the account becomes free again.
       if (role === "student" && sessionId) {
