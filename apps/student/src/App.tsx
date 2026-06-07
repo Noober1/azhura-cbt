@@ -4,6 +4,8 @@ import { Toaster } from "sonner";
 import { SupervisorMessageModal } from "./components/SupervisorMessageModal";
 import { PassphraseDialog } from "./components/settings/PassphraseDialog";
 import { SettingsPanel } from "./components/settings/SettingsPanel";
+import { useConfigStore } from "./stores/config";
+import { enterKiosk, exitKiosk, listenKioskEvents } from "./lib/kiosk";
 
 /**
  * Key chord that opens the hidden settings panel: Ctrl+Shift+O, then Ctrl+Shift+S (within 2 s).
@@ -25,6 +27,27 @@ function App() {
 
   // Two-step chord state: null = waiting for step 1, timer = waiting for step 2.
   const chordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // L2 lockdown is app-wide: when anti-cheat is enabled the OS window is locked
+  // into kiosk mode from launch (fullscreen, always-on-top, no close) and stays
+  // locked across login/dashboard/exam/result — a mischievous student can't just
+  // close the app between sessions. The only way out is the hidden panel's
+  // "Keluar dari aplikasi" (which uses destroy() to bypass the close guard).
+  const antiCheatEnabled = useConfigStore((s) => s.antiCheat.enabled);
+
+  useEffect(() => {
+    if (!antiCheatEnabled) {
+      void exitKiosk();
+      return;
+    }
+
+    void enterKiosk();
+    const unlistenPromise = listenKioskEvents();
+
+    return () => {
+      void unlistenPromise.then((off) => off());
+    };
+  }, [antiCheatEnabled]);
 
   useEffect(() => {
     if (!isTauri()) return;

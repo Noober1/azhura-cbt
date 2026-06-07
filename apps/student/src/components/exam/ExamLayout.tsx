@@ -9,7 +9,6 @@ import {
   enterFullscreen,
   detectMultiMonitor,
 } from "../../lib/anti-cheat-config";
-import { enterKiosk, exitKiosk, listenKioskEvents } from "../../lib/kiosk";
 import { QuestionRenderer } from "./QuestionRenderer";
 import { ExamSidebar } from "./ExamSidebar";
 import { NavigationPanel } from "./NavigationPanel";
@@ -88,28 +87,20 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
     };
   }, [token, setQuestions]);
 
-  // 2. Anti-Cheat: L1 web/DOM monitoring + L2 Tauri kiosk window.
+  // 2. Anti-Cheat L1 (web/DOM) monitoring, scoped to the exam screen to avoid
+  //    false positives at login/dashboard. The L2 Tauri kiosk window is managed
+  //    app-wide (see App.tsx) so the window stays locked from launch.
   useEffect(() => {
     // L1 listeners always attach; each handler self-gates on the config flags,
     // so a runtime toggle in the hidden panel (#42) takes effect immediately.
     const cleanMonitoring = startAntiCheatMonitoring();
 
-    if (!config.enabled) {
-      return () => cleanMonitoring();
+    if (config.enabled) {
+      if (config.fullscreen) enterFullscreen();
+      void detectMultiMonitor();
     }
 
-    if (config.fullscreen) enterFullscreen();
-    void detectMultiMonitor();
-
-    // L2: lock the OS window into kiosk mode and react to window-level events.
-    void enterKiosk();
-    const unlistenKiosk = listenKioskEvents();
-
-    return () => {
-      cleanMonitoring();
-      void unlistenKiosk.then((off) => off());
-      void exitKiosk();
-    };
+    return () => cleanMonitoring();
   }, [config.enabled, config.fullscreen, config.detectMultiMonitor]);
 
   // 3. Confirm Final Submit — hand off to finalizeExam, which shows the blocking
