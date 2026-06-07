@@ -29,24 +29,26 @@ const { exams, examGroups, groups, questions, options, examSessions, users } =
 
 const log = createLogger("AdminExam");
 
-/** Exam access token: case-sensitive, alphanumeric, 1–5 chars (see #1). */
+/** Exam access token: case-insensitive, alphanumeric, 1–5 chars (see #1, #47). */
 const TOKEN_REGEX = /^[A-Za-z0-9]{1,5}$/;
 
 const tinyToBool = (v: number): boolean => v === 1;
 const boolToTiny = (v: boolean): number => (v ? 1 : 0);
 
 /**
- * Validates an exam token. Returns the normalized value (string or null).
+ * Validates an exam token and normalizes it to upper case (#47) so the stored
+ * value is canonical and case-insensitive matching is trivial at session time.
+ * Returns the normalized value (string or null for "no token").
  * @throws {BadRequestError} when a non-empty token violates the format.
  */
 function normalizeToken(token: string | null | undefined): string | null {
   if (token === undefined || token === null || token === "") return null;
   if (!TOKEN_REGEX.test(token)) {
     throw new BadRequestError(
-      "Token harus 1–5 karakter alfanumerik (huruf/angka, case-sensitive)."
+      "Token harus 1–5 karakter alfanumerik (huruf/angka)."
     );
   }
-  return token;
+  return token.toUpperCase();
 }
 
 /**

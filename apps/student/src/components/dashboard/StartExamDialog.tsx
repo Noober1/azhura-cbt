@@ -11,11 +11,21 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "../ui/alert-dialog";
-import { Input } from "../ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "../ui/input-otp";
+import { REGEXP_ONLY_DIGITS_AND_CHARS } from "input-otp";
 import { Label } from "../ui/label";
 
 /** Mirrors the server rule: 1–5 alphanumeric characters (see lib/exam-token.ts). */
 const TOKEN_PATTERN = /^[A-Za-z0-9]{1,5}$/;
+
+/**
+ * Number of OTP boxes rendered. The client never learns a token's exact length
+ * (the raw token never leaves the server — only the `requiresToken` flag does),
+ * so we render the column maximum (5, per `exams.token varchar(5)`). A shorter
+ * token of 1–4 chars is still accepted; the student just leaves trailing boxes
+ * empty and presses Lanjutkan.
+ */
+const TOKEN_LENGTH = 5;
 
 interface StartExamDialogProps {
   /** The exam awaiting confirmation, or `null` when the dialog is closed. */
@@ -114,23 +124,32 @@ export const StartExamDialog = ({
               <KeyRound className="w-4 h-4 text-indigo-500" />
               Token Akses Ujian
             </Label>
-            <Input
+            <InputOTP
               id="exam-token"
+              maxLength={TOKEN_LENGTH}
+              // Alphanumeric only — mirrors the server token format so symbols
+              // can't even be typed. Upper-case as the student types so the box
+              // display matches the canonical (case-insensitive) stored token.
+              pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
               value={token}
-              onChange={(e) => setToken(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleConfirm();
-              }}
-              maxLength={5}
+              onChange={(value) => setToken(value.toUpperCase())}
+              // Enter confirms once a token of valid length has been entered.
+              onComplete={handleConfirm}
               autoFocus
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
               disabled={isStarting}
-              placeholder="Masukkan token dari pengawas"
               aria-invalid={showFormatError}
-              className="font-mono tracking-widest"
-            />
+              containerClassName="justify-center"
+            >
+              <InputOTPGroup className="gap-2">
+                {Array.from({ length: TOKEN_LENGTH }, (_, i) => (
+                  <InputOTPSlot
+                    key={i}
+                    index={i}
+                    className="h-11 w-11 rounded-md border-l font-mono text-lg font-bold"
+                  />
+                ))}
+              </InputOTPGroup>
+            </InputOTP>
             <p
               className={`text-xs font-medium ${
                 showFormatError
@@ -140,7 +159,7 @@ export const StartExamDialog = ({
             >
               {showFormatError
                 ? "Token hanya boleh huruf dan angka, maksimal 5 karakter."
-                : "Token bersifat case-sensitive (huruf besar/kecil dibedakan)."}
+                : "Masukkan token dari pengawas. Huruf besar/kecil tidak dibedakan."}
             </p>
           </div>
         )}
