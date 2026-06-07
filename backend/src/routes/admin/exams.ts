@@ -479,6 +479,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
    * DELETE /api/admin/exams/:id
    * Deletes the exam; questions, options and group links cascade via FK.
    * @throws {NotFoundError} when the exam does not exist.
+   * @throws {ConflictError} when the exam already has participant sessions.
    */
   .delete("/exams/:examId", async ({ params }) => {
     const id = params.examId;
@@ -487,6 +488,22 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
       where: eq(exams.id, id),
     });
     if (!existing) throw new NotFoundError("Ujian tidak ditemukan.");
+
+    // Guard: an exam with recorded participant sessions can't be deleted — that
+    // would destroy results, answers, and anti-cheat logs (the underlying FKs on
+    // exam_sessions/answers/cheat_logs RESTRICT it at the DB level anyway, which
+    // would otherwise surface as an opaque 500). Surface a clear 409 instead and
+    // tell the admin to deactivate the exam if they no longer want it used.
+    const session = await db.query.examSessions.findFirst({
+      columns: { id: true },
+      where: eq(examSessions.examId, id),
+    });
+    if (session) {
+      throw new ConflictError(
+        "Ujian sudah memiliki sesi peserta dan tidak dapat dihapus. " +
+          "Nonaktifkan ujian jika tidak ingin digunakan lagi."
+      );
+    }
 
     const groupsBefore = await getExamGroupIds(id);
     await db.delete(exams).where(eq(exams.id, id));
