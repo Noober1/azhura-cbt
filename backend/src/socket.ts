@@ -24,7 +24,7 @@ import { createChatRateLimiter } from "./lib/chat-rate-limiter";
 import { chatMuteRegistry } from "./lib/chat-mute";
 import { sanitizeChatContent } from "./lib/chat-content";
 import { readSettings } from "./lib/settings-service";
-import { setDashboardBroadcaster, notifyDashboardStats } from "./routes/admin/dashboard";
+import { setDashboardBroadcaster, notifyDashboardStats, setOnlineStudentCountGetter } from "./routes/admin/dashboard";
 import type {
   BroadcastTarget,
   ChatPresenceMember,
@@ -176,6 +176,15 @@ export function initSocket(httpServer: HttpServer): SocketServer {
   // Push a fresh stats snapshot to all admins/supervisors on relevant mutations (#78).
   setDashboardBroadcaster((stats) => {
     io.to("supervisors").emit("dashboard:stats", stats);
+  });
+
+  // Count student sockets directly from Socket.io — no Redis grace-period lag.
+  setOnlineStudentCountGetter(() => {
+    let count = 0;
+    for (const [, s] of io.sockets.sockets) {
+      if ((s.data.role as string) === "student") count++;
+    }
+    return count;
   });
 
   // Handshake auth: verify the JWT before allowing the connection.

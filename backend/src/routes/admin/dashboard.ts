@@ -12,7 +12,6 @@
 import { Elysia } from "elysia";
 import { and, eq, gt, or, sql } from "drizzle-orm";
 import { db, schema } from "../../db";
-import { sessionRegistry } from "../../lib/session-registry";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { createLogger } from "../../lib/logger";
@@ -25,10 +24,21 @@ const { users, groups, exams, examGroups, examSessions, questions, answers } = s
 // ── Broadcaster seam ─────────────────────────────────────────────────────────
 
 let broadcaster: ((stats: DashboardSnapshot) => void) | null = null;
+/** Returns the number of student sockets currently connected. Wired by socket.ts. */
+let getOnlineStudentCount: () => number = () => 0;
 
 /** Called from `socket.ts` once the Socket.io server is ready. */
 export function setDashboardBroadcaster(fn: (stats: DashboardSnapshot) => void): void {
   broadcaster = fn;
+}
+
+/**
+ * Called from `socket.ts` to wire in a live socket count. Using the actual
+ * Socket.io server avoids the Redis session-registry grace-period lag: the
+ * count drops to zero the moment the socket physically disconnects.
+ */
+export function setOnlineStudentCountGetter(fn: () => number): void {
+  getOnlineStudentCount = fn;
 }
 
 // ── Stats computation ─────────────────────────────────────────────────────────
@@ -58,10 +68,8 @@ async function computeStats(adminName: string): Promise<DashboardSnapshot> {
     db.select({ count: sql<number>`count(*)` }).from(groups),
     db.select({ count: sql<number>`count(*)` }).from(exams),
 
-    // Online students: Redis session registry, status=connected only
-    sessionRegistry.listActive().then((list) =>
-      list.filter((s) => s.status === "connected").length
-    ),
+    // Online students: live Socket.io socket count (no Redis lag)
+    Promise.resolve(getOnlineStudentCount()),
 
     // Completed + in-progress session counts
     db
