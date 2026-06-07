@@ -34,6 +34,26 @@ export const E2E_EXAM_TOKEN = {
   token: "AB12",
 } as const;
 
+/**
+ * A pre-graded, submitted session used by the recap E2E (#19). Uses a DEDICATED
+ * student that no other spec touches, so its submitted session never collides
+ * with the resume/reset specs (which would otherwise 409 on retake). Seeded by
+ * `seedRecapSession()` in global-setup: 2 of 3 questions correct on the open
+ * exam → score 67.
+ */
+export const E2E_RECAP = {
+  sessionId: "sess_e2e_recap",
+  studentId: "usr_e2e_recap",
+  studentNis: "910003",
+  studentName: "E2E Rekap Siswa",
+  examId: E2E_EXAM.id,
+  examTitle: E2E_EXAM.title,
+  score: 67,
+  totalCorrect: 2,
+  totalWrong: 1,
+  totalEmpty: 0,
+} as const;
+
 /** Admin account for console E2E tests. */
 export const E2E_ADMIN = {
   id: "usr_e2e_admin",
