@@ -23,7 +23,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" /> },
+  { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" />, adminOnly: true },
   { to: "/students", label: "Siswa", icon: <UsersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/groups", label: "Group", icon: <LayersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon className="size-[18px]" /> },
