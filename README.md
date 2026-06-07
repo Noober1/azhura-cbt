@@ -99,17 +99,22 @@ Tugas DB (dari folder `backend/`): `bun run seed`, `bun run migrate`, `bun run d
 ### 1. Siapkan Backend & Seed
 
 ```bash
-bun run backend:dev          # jalankan API (default http://localhost:3000)
-cd backend && bun run seed   # isi data awal (users, groups, exams)
+bun run backend:dev               # jalankan API (default http://localhost:3000)
+cd backend && bun run migrate     # terapkan skema
+cd backend && bun run seed        # data lengkap: admin + supervisor + siswa + exam
+# atau, untuk mensimulasikan instalasi baru (lihat "Setup Awal" di bawah):
+cd backend && bun run seed:demo   # 4 siswa / 2 group + 1 exam, TANPA admin → memicu Setup Wizard
 ```
 
-Kredensial siswa hasil seed:
+Kredensial hasil `seed`:
 
-| NIS | Password | Nama | Kelas |
+| NIS | Password | Nama | Peran / Kelas |
 | :--- | :--- | :--- | :--- |
-| `12345` | `student@123` | Ahmad Faisal | 7A |
-| `67890` | `student@123` | Budi Santoso | 7B |
-| `99999` | `student@123` | Citra Lestari | 8A |
+| `88888` | `admin@123` | Administrator | Admin (console) |
+| `00001` | `supervisor@123` | Pengawas Utama | Supervisor (console) |
+| `12345` | `student@123` | Ahmad Faisal | Siswa · 7A |
+| `67890` | `student@123` | Budi Santoso | Siswa · 7B |
+| `99999` | `student@123` | Citra Lestari | Siswa · 8A |
 
 ### 2. Jalankan Klien Siswa
 
@@ -121,6 +126,30 @@ bun run dev          # atau: bun run tauri:dev untuk frame desktop
 ### 3. Event Real-time Pengawas
 
 Event pengawas (`alert-message`, `force-submit`, `kick`) dikirim oleh server Socket.io di `backend/src/socket.ts`. _(Catatan: lapisan mock MSW & `window.mockSocket` dari versi lama sudah dihapus — kini selalu memakai backend asli.)_
+
+---
+
+## 🧭 Setup Awal Console (First-Run Wizard)
+
+Saat database **belum punya akun admin**, console (`bun run console:dev`, port 1430) otomatis menampilkan **Setup Wizard** alih-alih halaman login:
+
+1. Isi **identitas sekolah** (nama + alamat) dan buat **akun admin pertama**.
+2. Opsional: centang **Aktifkan Chat Publik** untuk menyalakan ruang obrolan siswa sejak awal.
+3. Selesai → otomatis login ke workspace admin.
+
+Begitu admin pertama dibuat, endpoint setup **mengunci diri** (`409`) sehingga aman dibiarkan ter-mount. Deteksi first-run = "belum ada user `role=admin`" — admin **hanya** lahir dari wizard ini atau dari `bun run seed`.
+
+**Mensimulasikan instalasi baru:**
+
+```bash
+cd backend
+bun run migrate        # skema bersih
+bun run seed:demo      # 4 siswa / 2 group + 1 exam, TANPA admin
+# (opsional) redis-cli FLUSHALL  &&  hapus azhura-config.json klien Tauri
+bun run dev            # buka console → Setup Wizard muncul
+```
+
+Endpoint terkait: `GET /api/setup/status` (`{ needsSetup }`) dan `POST /api/setup`. `GET /api/info` (nama/alamat sekolah untuk wizard koneksi klien siswa) kini bersumber dari tabel `settings` — sumber kebenaran yang sama dengan halaman **Pengaturan** console. Default global **anti-cheat kini aktif** dan dapat diubah di Pengaturan. Detail kontrak: lihat `API_CONTRACT.md`.
 
 ---
 
