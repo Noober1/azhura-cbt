@@ -5,7 +5,7 @@ import { useSocketStore } from "../../stores/socket";
 import { useConnectivityStore } from "../../stores/connectivity";
 import { useConfigStore } from "../../stores/config";
 import {
-  startAntiCheatMonitoring,
+  startExamMonitoring,
   enterFullscreen,
   detectMultiMonitor,
 } from "../../lib/anti-cheat-config";
@@ -91,9 +91,9 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
   //    false positives at login/dashboard. The L2 Tauri kiosk window is managed
   //    app-wide (see App.tsx) so the window stays locked from launch.
   useEffect(() => {
-    // L1 listeners always attach; each handler self-gates on the config flags,
-    // so a runtime toggle in the hidden panel (#42) takes effect immediately.
-    const cleanMonitoring = startAntiCheatMonitoring();
+    // Exam-scoped detection (focus loss + fullscreen). Input prevention
+    // (right-click/shortcuts/clipboard) is app-wide in App.tsx.
+    const cleanMonitoring = startExamMonitoring();
 
     if (config.enabled) {
       if (config.fullscreen) enterFullscreen();

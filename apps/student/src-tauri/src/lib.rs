@@ -67,13 +67,21 @@ fn exit_kiosk(window: WebviewWindow, state: tauri::State<ExamLockState>) -> Resu
     Ok(())
 }
 
+/// Quits the application. Invoked from the hidden settings panel's "Keluar dari
+/// aplikasi" button. Goes through `AppHandle::exit` (not a window close) so the
+/// kiosk close guard does not block it — this is the sanctioned admin exit.
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(ExamLockState::default())
-        .invoke_handler(tauri::generate_handler![enter_kiosk, exit_kiosk])
+        .invoke_handler(tauri::generate_handler![enter_kiosk, exit_kiosk, exit_app])
         .on_window_event(|window, event| match event {
             // Window lost focus (Alt+Tab, click-away): yank it back to the
             // foreground and report the violation. True prevention is L3.

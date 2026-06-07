@@ -6,6 +6,7 @@ import { PassphraseDialog } from "./components/settings/PassphraseDialog";
 import { SettingsPanel } from "./components/settings/SettingsPanel";
 import { useConfigStore } from "./stores/config";
 import { enterKiosk, exitKiosk, listenKioskEvents } from "./lib/kiosk";
+import { startInputHardening } from "./lib/anti-cheat-config";
 
 /**
  * Key chord that opens the hidden settings panel: Ctrl+Shift+O, then Ctrl+Shift+S (within 2 s).
@@ -43,9 +44,13 @@ function App() {
 
     void enterKiosk();
     const unlistenPromise = listenKioskEvents();
+    // Right-click / shortcut / clipboard prevention is active app-wide while
+    // anti-cheat is on — not just on the exam screen.
+    const stopHardening = startInputHardening();
 
     return () => {
       void unlistenPromise.then((off) => off());
+      stopHardening();
     };
   }, [antiCheatEnabled]);
 

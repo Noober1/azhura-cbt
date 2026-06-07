@@ -32,18 +32,90 @@ const logEvent = (eventType: AntiCheatEvent["eventType"], details: string): void
   useAntiCheatStore.getState().logCheatEvent(eventType, details);
 
 /**
- * Attaches anti-cheat event listeners (focus loss, fullscreen exit, blocked
- * shortcuts, right-click, clipboard/selection) to the global window/document.
- * Each handler is a no-op unless the corresponding feature is enabled.
+ * Attaches *input-prevention* listeners (right-click, blocked shortcuts,
+ * clipboard/selection/drag) to the global window/document. These are pure
+ * preventDefault guards with no false-positive risk, so they run **app-wide**
+ * whenever anti-cheat is enabled (login/dashboard/exam alike) — see App.tsx.
  *
- * @returns A cleanup function that removes all registered listeners. Call it on
- *          unmount to avoid duplicate listeners / leaks.
+ * Right-click is gated on the master `enabled` flag (blocked everywhere while
+ * anti-cheat is on); keyboard shortcuts and clipboard additionally respect the
+ * `blockShortcuts` sub-toggle. Each handler reads config fresh, so runtime
+ * toggles in the hidden panel (#42) take effect immediately.
+ *
+ * @returns A cleanup function that removes all registered listeners.
  */
-export const startAntiCheatMonitoring = (): (() => void) => {
+export const startInputHardening = (): (() => void) => {
+  // Block critical keyboard shortcuts. Alt+Tab is logged but cannot truly be
+  // prevented at the DOM level — that is L3's job (Windows low-level hook).
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const config = getConfig();
+    if (!config.enabled || !config.blockShortcuts) return;
+
+    const key = e.key?.toLowerCase();
+    const blocked = matchBlockedShortcut(e, key);
+    if (!blocked) return;
+
+    if (blocked === "Alt+Tab") {
+      logEvent("shortcut_attempt", "Siswa mencoba berpindah jendela (Alt+Tab).");
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    logEvent("shortcut_attempt", `Siswa mencoba pintasan keyboard terlarang: ${blocked}`);
+    toast.error(`Pintasan terlarang diblokir: ${blocked}`);
+  };
+
+  // Block right-click context menu everywhere while anti-cheat is on.
+  const handleContextMenu = (e: MouseEvent) => {
+    if (!getConfig().enabled) return;
+    e.preventDefault();
+  };
+
+  // Block clipboard / selection / drag to prevent copying questions out or
+  // pasting prepared answers in.
+  const handleClipboard = (e: Event) => {
+    const config = getConfig();
+    if (!config.enabled || !config.blockShortcuts) return;
+    e.preventDefault();
+    logEvent("clipboard_blocked", `Aksi clipboard/seleksi diblokir: ${e.type}`);
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("contextmenu", handleContextMenu);
+    for (const type of CLIPBOARD_EVENTS) {
+      window.addEventListener(type, handleClipboard);
+    }
+  }
+
+  log.info("Input hardening listeners registered.");
+
+  return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("contextmenu", handleContextMenu);
+      for (const type of CLIPBOARD_EVENTS) {
+        window.removeEventListener(type, handleClipboard);
+      }
+    }
+    log.info("Input hardening listeners cleaned up.");
+  };
+};
+
+/**
+ * Attaches *exam-scoped detection* listeners (focus loss + fullscreen exit).
+ * These log violations and would false-positive at login/dashboard, so they are
+ * mounted only on the exam screen (see ExamLayout). No-op handlers unless the
+ * matching config flag is on.
+ *
+ * @returns A cleanup function that removes the registered listeners.
+ */
+export const startExamMonitoring = (): (() => void) => {
   let lastFocusLossAt = 0;
 
-  // 1. Focus loss — both window blur and tab/visibility change (Alt+Tab,
-  //    minimize, switching desktops). Deduped so one action logs once.
+  // Focus loss — both window blur and tab/visibility change (Alt+Tab, minimize,
+  // switching desktops). Deduped so one action logs once.
   const handleFocusLoss = () => {
     const config = getConfig();
     if (!config.enabled || !config.detectFocusLoss) return;
@@ -65,9 +137,9 @@ export const startAntiCheatMonitoring = (): (() => void) => {
     if (document.hidden) handleFocusLoss();
   };
 
-  // 2. Fullscreen transitions — suppress the expected exit that happens while
-  //    the exam is being finalized (manual submit, timer expiry, force-finish
-  //    all funnel through finalizeExam → `finalizing`).
+  // Fullscreen transitions — suppress the expected exit that happens while the
+  // exam is being finalized (manual submit, timer expiry, force-finish all
+  // funnel through finalizeExam → `finalizing`).
   const handleFullscreenChange = () => {
     const config = getConfig();
     if (!config.enabled || !config.fullscreen) return;
@@ -81,70 +153,21 @@ export const startAntiCheatMonitoring = (): (() => void) => {
     });
   };
 
-  // 3. Block critical keyboard shortcuts. Alt+Tab is logged but cannot truly be
-  //    prevented at the DOM level — that is L3's job (Windows low-level hook).
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const config = getConfig();
-    if (!config.enabled || !config.blockShortcuts) return;
-
-    const key = e.key?.toLowerCase();
-    const blocked = matchBlockedShortcut(e, key);
-    if (!blocked) return;
-
-    // Alt+Tab can't be swallowed here; record it without claiming we blocked it.
-    if (blocked === "Alt+Tab") {
-      logEvent("shortcut_attempt", "Siswa mencoba berpindah jendela (Alt+Tab).");
-      return;
-    }
-
-    e.preventDefault();
-    e.stopPropagation();
-    logEvent("shortcut_attempt", `Siswa mencoba pintasan keyboard terlarang: ${blocked}`);
-    toast.error(`Pintasan terlarang diblokir: ${blocked}`);
-  };
-
-  // 4. Block right-click context menu.
-  const handleContextMenu = (e: MouseEvent) => {
-    const config = getConfig();
-    if (!config.enabled || !config.blockShortcuts) return;
-    e.preventDefault();
-    toast.error("Klik kanan tidak diizinkan selama ujian!");
-  };
-
-  // 5. Block clipboard / selection / drag to prevent copying questions out or
-  //    pasting prepared answers in.
-  const handleClipboard = (e: Event) => {
-    const config = getConfig();
-    if (!config.enabled || !config.blockShortcuts) return;
-    e.preventDefault();
-    logEvent("clipboard_blocked", `Aksi clipboard/seleksi diblokir: ${e.type}`);
-  };
-
   if (typeof window !== "undefined") {
     window.addEventListener("blur", handleFocusLoss);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
-    window.addEventListener("keydown", handleKeyDown, true);
-    window.addEventListener("contextmenu", handleContextMenu);
-    for (const type of CLIPBOARD_EVENTS) {
-      window.addEventListener(type, handleClipboard);
-    }
   }
 
-  log.info("Global monitoring listeners registered.");
+  log.info("Exam monitoring listeners registered.");
 
   return () => {
     if (typeof window !== "undefined") {
       window.removeEventListener("blur", handleFocusLoss);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      window.removeEventListener("keydown", handleKeyDown, true);
-      window.removeEventListener("contextmenu", handleContextMenu);
-      for (const type of CLIPBOARD_EVENTS) {
-        window.removeEventListener(type, handleClipboard);
-      }
     }
-    log.info("Global monitoring listeners cleaned up.");
+    log.info("Exam monitoring listeners cleaned up.");
   };
 };
 

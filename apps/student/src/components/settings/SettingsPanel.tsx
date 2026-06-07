@@ -45,8 +45,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const normalizeUrl = (raw: string) => raw.replace(/\/+$/, "");
 
   /**
-   * Force-quits the desktop app. Uses `destroy()` (not `close()`) so it bypasses
-   * the kiosk close-requested guard (L2) and shuts down even mid-exam. No-op on
+   * Quits the desktop app via the custom `exit_app` Rust command. A custom
+   * command isn't gated by the capability system (unlike `window.destroy()`,
+   * which needs `core:window:allow-destroy`) and `AppHandle::exit` bypasses the
+   * kiosk close guard — so this is the reliable, sanctioned admin exit. No-op on
    * web, where the panel is normally unavailable.
    */
   const handleExitApp = async () => {
@@ -56,8 +58,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       toast.error("Keluar aplikasi hanya tersedia di aplikasi desktop.");
       return;
     }
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    await getCurrentWindow().destroy();
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("exit_app");
+    } catch (err) {
+      toast.error("Gagal menutup aplikasi.");
+      throw err;
+    }
   };
 
   const handleTestAndSaveUrl = async () => {
