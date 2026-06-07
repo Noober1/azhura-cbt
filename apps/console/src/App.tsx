@@ -8,12 +8,15 @@
 
 import { BrowserRouter } from "react-router-dom";
 import { AppRoutes } from "./routes";
+import { SetupGate } from "./components/setup/SetupGate";
 import { Toaster } from "./components/ui/Toaster";
 
 export function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <SetupGate>
+        <AppRoutes />
+      </SetupGate>
       <Toaster />
     </BrowserRouter>
   );

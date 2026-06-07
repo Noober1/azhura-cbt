@@ -22,6 +22,7 @@ import { adminSettingsRoutes } from "./routes/admin/settings";
 import { adminLogsRoutes } from "./routes/admin/logs";
 import { adminRecapRoutes } from "./routes/admin/recap";
 import { infoRoutes } from "./routes/info";
+import { setupRoutes } from "./routes/setup";
 import { initSocket } from "./socket";
 import { getServerConfig } from "./lib/env";
 import { assertDbConnection } from "./db";
@@ -82,6 +83,7 @@ const app = new Elysia()
   .group("/api", (app) =>
     app
       .use(infoRoutes)
+      .use(setupRoutes)
       .use(authRoutes)
       .use(examRoutes)
       .use(supervisorRoutes)

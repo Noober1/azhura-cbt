@@ -1,43 +1,54 @@
+/**
+ * Azhura CBT Backend — Public Info Route Tests
+ *
+ * `GET /api/info` now composes its school name/address from the `settings` table
+ * (single source of truth) and the app version from env. The DB read is covered
+ * manually / by E2E (route tests avoid the live DB per project convention); here
+ * we unit-test the pure mapping and the env-backed app version.
+ */
+
+// Load the DB module first to defuse the latent db → logger → log-files →
+// log-store → db import cycle (env.ts also pulls in the logger). Loading `db`
+// as the cycle entry avoids a `createLogger` TDZ error when this file shares a
+// `bun test` run with others.
+import "../db";
+
 import { describe, it, expect, beforeEach } from "bun:test";
-import { Elysia } from "elysia";
-import { infoRoutes } from "./info";
-import { _resetSchoolInfoConfig } from "../lib/env";
+import { buildSchoolInfo } from "./info";
+import { getAppVersion, _resetAppVersion } from "../lib/env";
 
-const app = new Elysia().group("/api", (a) => a.use(infoRoutes));
+describe("buildSchoolInfo", () => {
+  it("maps settings school name/address and app version onto SchoolInfo", () => {
+    const info = buildSchoolInfo(
+      { schoolName: "SMP Negeri Test", schoolAddress: "Jl. Test No. 1" },
+      "2.0.0"
+    );
+    expect(info).toStrictEqual({
+      schoolName: "SMP Negeri Test",
+      address: "Jl. Test No. 1",
+      appVersion: "2.0.0",
+    });
+  });
 
-describe("GET /api/info", () => {
+  it("passes an empty address through unchanged", () => {
+    const info = buildSchoolInfo({ schoolName: "Azhura CBT", schoolAddress: "" }, "1.0.0");
+    expect(info.address).toBe("");
+  });
+});
+
+describe("getAppVersion", () => {
   beforeEach(() => {
-    delete process.env.SCHOOL_NAME;
-    delete process.env.SCHOOL_ADDRESS;
     delete process.env.APP_VERSION;
-    _resetSchoolInfoConfig();
+    _resetAppVersion();
   });
 
-  it("returns 200 with required shape when env vars are unset", async () => {
-    const res = await app.handle(new Request("http://localhost/api/info"));
-    expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
-    expect(typeof body.schoolName).toBe("string");
-    expect(typeof body.address).toBe("string");
-    expect(typeof body.appVersion).toBe("string");
+  it("defaults to 1.0.0 when APP_VERSION is unset", () => {
+    expect(getAppVersion()).toBe("1.0.0");
   });
 
-  it("returns env-configured values", async () => {
-    process.env.SCHOOL_NAME = "SMP Negeri Test";
-    process.env.SCHOOL_ADDRESS = "Jl. Test No. 1";
-    process.env.APP_VERSION = "2.0.0";
-
-    const res = await app.handle(new Request("http://localhost/api/info"));
-    expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
-    expect(body.schoolName).toBe("SMP Negeri Test");
-    expect(body.address).toBe("Jl. Test No. 1");
-    expect(body.appVersion).toBe("2.0.0");
-  });
-
-  it("does not require authentication", async () => {
-    const res = await app.handle(new Request("http://localhost/api/info"));
-    expect(res.status).not.toBe(401);
-    expect(res.status).not.toBe(403);
+  it("returns the env-configured version", () => {
+    process.env.APP_VERSION = "3.1.4";
+    _resetAppVersion();
+    expect(getAppVersion()).toBe("3.1.4");
   });
 });

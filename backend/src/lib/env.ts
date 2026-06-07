@@ -157,29 +157,24 @@ export const getRedisConfig = (): RedisConfig => {
   return redisConfig;
 };
 
-/** Public school/app info returned by GET /api/info (no auth required). */
-export interface SchoolInfoConfig {
-  schoolName: string;
-  address: string;
-  appVersion: string;
-}
+let appVersion: string | null = null;
 
-let schoolInfoConfig: SchoolInfoConfig | null = null;
-
-/** Returns school name, address, and app version from env. No required fields — all optional. */
-export const getSchoolInfoConfig = (): SchoolInfoConfig => {
-  if (schoolInfoConfig) return schoolInfoConfig;
-  schoolInfoConfig = {
-    schoolName: optionalEnv("SCHOOL_NAME", "Azhura CBT"),
-    address: optionalEnv("SCHOOL_ADDRESS", ""),
-    appVersion: optionalEnv("APP_VERSION", "1.0.0"),
-  };
-  return schoolInfoConfig;
+/**
+ * Returns the application version shown by `GET /api/info`. Optional, defaults to
+ * "1.0.0". School name/address are no longer read from env — they live in the
+ * `settings` table (set during first-run setup, editable on the admin Settings
+ * page) so a single source of truth feeds both the admin console and the student
+ * client's connection wizard.
+ */
+export const getAppVersion = (): string => {
+  if (appVersion) return appVersion;
+  appVersion = optionalEnv("APP_VERSION", "1.0.0");
+  return appVersion;
 };
 
-/** Test-only: clears the memoized school info so env changes take effect. */
-export const _resetSchoolInfoConfig = (): void => {
-  schoolInfoConfig = null;
+/** Test-only: clears the memoized app version so env changes take effect. */
+export const _resetAppVersion = (): void => {
+  appVersion = null;
 };
 
 /** Validated HTTP/socket server settings. */

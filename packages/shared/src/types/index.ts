@@ -320,6 +320,44 @@ export interface SchoolInfo {
   appVersion: string;
 }
 
+/**
+ * First-run provisioning status from `GET /api/setup/status` (no auth required).
+ * `needsSetup` is true while the system has no admin account — the console then
+ * shows the setup wizard instead of the login page. It flips to false for good
+ * once the first admin is created via `POST /api/setup`.
+ */
+export interface SetupStatus {
+  needsSetup: boolean;
+}
+
+/**
+ * Body of `POST /api/setup` — creates the first admin and records school info on
+ * a fresh install. Rejected with 409 once any admin already exists (self-locks).
+ */
+export interface SetupRequest {
+  /** Display name of the school (stored in system settings). */
+  schoolName: string;
+  /** Optional street/address line of the school. */
+  schoolAddress?: string;
+  /** Full name of the first administrator account. */
+  adminName: string;
+  /** Login NIS/username for the admin (min 5 chars, must be unique). */
+  adminNis: string;
+  /** Plaintext password for the admin (min 6 chars); hashed server-side. */
+  adminPassword: string;
+  /**
+   * Enable the public student chat room from the outset. Optional — when omitted
+   * the global default (chat off) applies and it can be toggled later in admin
+   * settings.
+   */
+  chatEnabled?: boolean;
+}
+
+/** Success payload from `POST /api/setup`. */
+export interface SetupResult {
+  success: true;
+}
+
 export interface AntiCheatEvent {
   id: string;
   eventType:
