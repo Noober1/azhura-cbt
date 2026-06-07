@@ -222,11 +222,19 @@ export const getStudentRecap = async (
   studentId: string,
   opts: RecapPaging & { examId?: string } = {}
 ): Promise<StudentRecapResponse> => {
-  const student = await db.query.users.findFirst({
-    columns: { id: true, name: true, nis: true },
-    with: { group: { columns: { name: true } } },
-    where: eq(users.id, studentId),
-  });
+  // Plain left join for the group name — the relational `with` API emits a
+  // LEFT JOIN LATERAL + json_array that MariaDB rejects.
+  const [student] = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      nis: users.nis,
+      groupName: groups.name,
+    })
+    .from(users)
+    .leftJoin(groups, eq(groups.id, users.groupId))
+    .where(eq(users.id, studentId))
+    .limit(1);
   if (!student) throw new NotFoundError("Siswa tidak ditemukan.");
 
   const conditions = [eq(examSessions.userId, studentId)];
@@ -293,7 +301,7 @@ export const getStudentRecap = async (
       id: student.id,
       name: student.name,
       nis: student.nis,
-      groupName: student.group?.name ?? null,
+      groupName: student.groupName ?? null,
     },
     stats: {
       examsTaken: history.length,
