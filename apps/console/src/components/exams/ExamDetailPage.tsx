@@ -3,19 +3,19 @@
  *
  * Loads a single exam (with its questions, options, and answer key) and provides
  * full question CRUD: add/edit via <QuestionFormModal/>, delete via
- * <ConfirmDialog/>. Also surfaces exam metadata, an edit shortcut, a live lock
- * banner when students are mid-exam (#46), and the full participant/session list
- * with a reset action for submitted sessions (#45).
+ * <ConfirmDialog/>. Also surfaces exam metadata, an edit shortcut, and a live
+ * lock banner when students are mid-exam (#46). The participant/session list and
+ * reset action live on a dedicated page (<ExamSessionsPage/>, #59), linked from
+ * the header.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useAuthStore } from "../../stores/auth";
 import { examsApi } from "../../lib/exams-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { formatDateTime, formatDuration, isPast } from "../../lib/format";
-import type { AdminQuestion, ExamDetail, ExamSessionRow, SessionStatus } from "../../types";
+import type { AdminQuestion, ExamDetail } from "../../types";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { Spinner, CenterState } from "../ui/Spinner";
@@ -31,26 +31,14 @@ import {
   KeyIcon,
   CheckIcon,
   AlertIcon,
+  UsersIcon,
 } from "../ui/icons";
-
-const SESSION_STATUS: Record<SessionStatus, { tone: "accent" | "positive" | "neutral"; label: string }> = {
-  in_progress: { tone: "accent", label: "Mengerjakan" },
-  completed: { tone: "positive", label: "Selesai" },
-  expired: { tone: "neutral", label: "Kedaluwarsa" },
-};
-
-function SessionStatusBadge({ status }: { status: SessionStatus }) {
-  const { tone, label } = SESSION_STATUS[status];
-  return <Badge tone={tone}>{label}</Badge>;
-}
 
 export function ExamDetailPage() {
   const { examId = "" } = useParams();
   const navigate = useNavigate();
-  const role = useAuthStore((s) => s.role);
 
   const [exam, setExam] = useState<ExamDetail | null>(null);
-  const [sessions, setSessions] = useState<ExamSessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,18 +46,13 @@ export function ExamDetailPage() {
   const [questionFormOpen, setQuestionFormOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<AdminQuestion | null>(null);
   const [deletingQuestion, setDeletingQuestion] = useState<AdminQuestion | null>(null);
-  const [resettingSession, setResettingSession] = useState<ExamSessionRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [examData, sessionsData] = await Promise.all([
-        examsApi.get(examId),
-        examsApi.listSessions(examId),
-      ]);
+      const examData = await examsApi.get(examId);
       setExam(examData);
-      setSessions(sessionsData);
     } catch (err) {
       setError(getErrorMessage(err, "Gagal memuat ujian."));
     } finally {
@@ -79,12 +62,8 @@ export function ExamDetailPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [examData, sessionsData] = await Promise.all([
-        examsApi.get(examId),
-        examsApi.listSessions(examId),
-      ]);
+      const examData = await examsApi.get(examId);
       setExam(examData);
-      setSessions(sessionsData);
     } catch {
       // silent — polling errors don't surface to the user
     }
@@ -123,18 +102,6 @@ export function ExamDetailPage() {
       load();
     } catch (err) {
       toast.error(getErrorMessage(err, "Gagal menghapus soal."));
-      throw err;
-    }
-  }
-
-  async function confirmResetSession() {
-    if (!resettingSession) return;
-    try {
-      await examsApi.resetSession(resettingSession.id);
-      toast.success(`Status ujian ${resettingSession.name} berhasil direset.`);
-      refresh();
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Gagal mereset status ujian."));
       throw err;
     }
   }
@@ -218,13 +185,22 @@ export function ExamDetailPage() {
               )}
             </div>
           </div>
-          <Button
-            variant="secondary"
-            onClick={() => setExamFormOpen(true)}
-            leadingIcon={<PencilIcon className="size-4" />}
-          >
-            Edit ujian
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => navigate(`/exams/${examId}/sessions`)}
+              leadingIcon={<UsersIcon className="size-4" />}
+            >
+              Status peserta
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setExamFormOpen(true)}
+              leadingIcon={<PencilIcon className="size-4" />}
+            >
+              Edit ujian
+            </Button>
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4 text-xs text-faint">
@@ -362,68 +338,6 @@ export function ExamDetailPage() {
         </ol>
       )}
 
-      {/* Participants */}
-      <div className="mt-10">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight text-ink">Peserta</h2>
-          <p className="mt-0.5 text-sm text-faint">
-            {sessions.length > 0
-              ? `${sessions.length} sesi tercatat`
-              : "Belum ada peserta"}
-          </p>
-        </div>
-
-        {sessions.length === 0 ? (
-          <div className="mt-4 rounded-[var(--radius-card)] border border-dashed border-line bg-surface">
-            <CenterState>
-              <span>Belum ada peserta yang mengikuti ujian ini.</span>
-            </CenterState>
-          </div>
-        ) : (
-          <div className="mt-4 overflow-hidden rounded-[var(--radius-card)] border border-line">
-            <table className="w-full text-sm">
-              <thead className="border-b border-line bg-canvas">
-                <tr>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-faint">Nama</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-faint tabular">NIS</th>
-                  <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-faint md:table-cell">Group</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium text-faint">Status</th>
-                  <th className="px-4 py-2.5 text-right text-xs font-medium text-faint">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {sessions.map((s) => (
-                  <tr key={s.id} className="bg-surface">
-                    <td className="px-4 py-3 font-medium text-ink">{s.name}</td>
-                    <td className="tabular px-4 py-3 text-ink-soft">{s.nis}</td>
-                    <td className="hidden px-4 py-3 md:table-cell">
-                      {s.groupName ? (
-                        <Badge tone="accent">{s.groupName}</Badge>
-                      ) : (
-                        <span className="text-faint">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <SessionStatusBadge status={s.status} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {s.status === "completed" && role === "admin" && (
-                        <button
-                          onClick={() => setResettingSession(s)}
-                          className="focus-ring rounded-md px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent-wash"
-                        >
-                          Reset
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
       {/* Modals */}
       <ExamFormModal
         open={examFormOpen}
@@ -454,16 +368,6 @@ export function ExamDetailPage() {
         confirmLabel="Hapus soal"
         onConfirm={confirmDeleteQuestion}
         onClose={() => setDeletingQuestion(null)}
-      />
-
-      <ConfirmDialog
-        open={Boolean(resettingSession)}
-        title="Reset status ujian?"
-        message={`Reset ujian ${resettingSession?.name ?? ""}? Jawaban yang sudah dijawab tetap tersimpan. Peserta dapat melanjutkan ujian dari kondisi terakhir dengan waktu penuh.`}
-        confirmLabel="Reset"
-        tone="primary"
-        onConfirm={confirmResetSession}
-        onClose={() => setResettingSession(null)}
       />
     </div>
   );
