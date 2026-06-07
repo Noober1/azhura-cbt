@@ -19,6 +19,7 @@ import { Badge } from "../ui/Badge";
 import { Input } from "../ui/Field";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { IconButton } from "../ui/IconButton";
 import { ExamFormModal } from "./ExamFormModal";
 import {
   PlusIcon,
@@ -230,35 +231,27 @@ export function ExamListPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="secondary"
-                        size="sm"
+                      <IconButton
+                        icon={<UsersIcon className="size-4" />}
+                        label="Status peserta"
                         onClick={() => navigate(`/exams/${exam.id}/sessions`)}
-                        leadingIcon={<UsersIcon className="size-4" />}
-                      >
-                        Status peserta
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
+                      />
+                      <IconButton
+                        icon={<FileTextIcon className="size-4" />}
+                        label="Kelola soal"
                         onClick={() => navigate(`/exams/${exam.id}`)}
-                      >
-                        Kelola soal
-                      </Button>
-                      <button
+                      />
+                      <IconButton
+                        icon={<PencilIcon className="size-4" />}
+                        label={`Edit ${exam.title}`}
                         onClick={() => openEdit(exam)}
-                        aria-label={`Edit ${exam.title}`}
-                        className="focus-ring rounded-md p-2 text-faint transition-colors hover:bg-canvas hover:text-ink"
-                      >
-                        <PencilIcon className="size-4" />
-                      </button>
-                      <button
+                      />
+                      <IconButton
+                        icon={<TrashIcon className="size-4" />}
+                        label={`Hapus ${exam.title}`}
+                        variant="danger"
                         onClick={() => setDeleting(exam)}
-                        aria-label={`Hapus ${exam.title}`}
-                        className="focus-ring rounded-md p-2 text-faint transition-colors hover:bg-danger-wash hover:text-danger"
-                      >
-                        <TrashIcon className="size-4" />
-                      </button>
+                      />
                     </div>
                   </td>
                 </tr>
