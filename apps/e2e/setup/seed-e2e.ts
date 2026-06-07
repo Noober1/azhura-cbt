@@ -8,7 +8,7 @@
 
 import bcrypt from "bcryptjs";
 import mysql from "mysql2/promise";
-import { E2E_ADMIN, E2E_EXAM, E2E_EXAM_TOKEN, E2E_GROUP, E2E_RECAP, E2E_STUDENT, E2E_STUDENT_ALT, E2E_SUPERVISOR } from "../data/users.ts";
+import { E2E_ADMIN, E2E_EXAM, E2E_EXAM_TOKEN, E2E_GROUP, E2E_STUDENT, E2E_STUDENT_ALT, E2E_SUPERVISOR } from "../data/users.ts";
 
 function createPool() {
   return mysql.createPool({
@@ -152,56 +152,6 @@ export async function seedE2E(): Promise<void> {
           );
         }
       }
-    }
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Seeds one pre-graded, submitted session for the recap E2E (#19): a DEDICATED
- * recap student on the open exam, 2 of 3 questions correct → score 67. Uses its
- * own student (not E2E_STUDENT/ALT) so the submitted session never collides with
- * the resume/reset specs. Runs AFTER resetE2ESessions() in global-setup.
- * Idempotent via INSERT ... ON DUPLICATE KEY UPDATE.
- */
-export async function seedRecapSession(): Promise<void> {
-  const pool = createPool();
-  try {
-    const hash = await bcrypt.hash("student@123", 10);
-
-    // Dedicated recap student (in the e2e group so groupName renders).
-    await pool.execute(
-      `INSERT INTO users (id, nis, \`name\`, \`password\`, role, is_active, group_id)
-       VALUES (?, ?, ?, ?, 'student', 1, ?)
-       ON DUPLICATE KEY UPDATE \`name\` = VALUES(\`name\`), is_active = 1, group_id = VALUES(group_id)`,
-      [E2E_RECAP.studentId, E2E_RECAP.studentNis, E2E_RECAP.studentName, hash, E2E_GROUP.id]
-    );
-
-    const start = Date.now() - 3 * 24 * 60 * 60 * 1000;
-    const end = start + 60 * 60 * 1000;
-
-    await pool.execute(
-      `INSERT INTO exam_sessions (id, exam_id, user_id, start_time, end_time, submitted)
-       VALUES (?, ?, ?, ?, ?, 1)
-       ON DUPLICATE KEY UPDATE exam_id = VALUES(exam_id), user_id = VALUES(user_id),
-         start_time = VALUES(start_time), end_time = VALUES(end_time), submitted = 1`,
-      [E2E_RECAP.sessionId, E2E_RECAP.examId, E2E_RECAP.studentId, start, end]
-    );
-
-    // 2 correct (q1, q2) + 1 wrong (q3) for the "open" exam → score 67.
-    const picks: Array<[string, string, string]> = [
-      ["ans_e2e_recap_1", "q_e2e_1_open", "opt_e2e_1b_open"], // correct
-      ["ans_e2e_recap_2", "q_e2e_2_open", "opt_e2e_2c_open"], // correct
-      ["ans_e2e_recap_3", "q_e2e_3_open", "opt_e2e_3a_open"], // wrong (correct is _3d_open)
-    ];
-    for (const [id, questionId, selectedOptionId] of picks) {
-      await pool.execute(
-        `INSERT INTO answers (id, session_id, question_id, selected_option_id, timestamp, is_flagged)
-         VALUES (?, ?, ?, ?, ?, 0)
-         ON DUPLICATE KEY UPDATE selected_option_id = VALUES(selected_option_id)`,
-        [id, E2E_RECAP.sessionId, questionId, selectedOptionId, start]
-      );
     }
   } finally {
     await pool.end();

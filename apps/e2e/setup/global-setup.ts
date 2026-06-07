@@ -48,12 +48,9 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   await preflightBackend();
 
   // Dynamic imports happen AFTER env vars are set
-  const { seedE2E, seedRecapSession } = await import("./seed-e2e.ts");
+  const { seedE2E } = await import("./seed-e2e.ts");
   const { resetE2ESessions } = await import("./reset-e2e-sessions.ts");
 
   await seedE2E();
   await resetE2ESessions();
-  // Recap (#19) needs a pre-graded session; seed it AFTER the reset so it isn't
-  // wiped along with the e2e students' other sessions.
-  await seedRecapSession();
 }

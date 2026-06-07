@@ -44,9 +44,4 @@ export class ConsoleRecapPage {
   selectExam(title: string) {
     return this.examSelect.selectOption({ label: title });
   }
-
-  /** A participant/history row addressed by accessible name (its cell text). */
-  row(name: string | RegExp) {
-    return this.page.getByRole("row", { name });
-  }
 }
