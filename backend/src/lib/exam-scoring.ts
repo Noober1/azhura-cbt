@@ -87,6 +87,7 @@ export interface ActiveSession {
   id: string;
   examId: string;
   examTitle: string;
+  passingGrade: number;
   totalQuestions: number;
   startTime: number;
   endTime: number;
@@ -104,6 +105,7 @@ export const findActiveSession = async (
       id: examSessions.id,
       examId: examSessions.examId,
       examTitle: exams.title,
+      passingGrade: exams.passingGrade,
       startTime: examSessions.startTime,
       endTime: examSessions.endTime,
     })

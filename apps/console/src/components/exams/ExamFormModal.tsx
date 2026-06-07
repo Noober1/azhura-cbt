@@ -19,6 +19,7 @@ import { examsApi } from "../../lib/exams-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { useGroups } from "../../hooks/useGroups";
+import { useSettings } from "../../hooks/useSettings";
 import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/format";
 import type { AdminGroupRef, ExamDetail, ExamSummary } from "../../types";
 import { Modal } from "../ui/Modal";
@@ -43,18 +44,20 @@ interface FormState {
   durationMinutes: string;
   expiredAt: string;
   token: string;
+  passingGrade: string;
   isActive: boolean;
   randomizeQuestion: boolean;
   randomizeAnswer: boolean;
 }
 
-function initialState(exam?: ExamSummary | ExamDetail | null): FormState {
+function initialState(exam?: ExamSummary | ExamDetail | null, defaultPassingGrade = 0): FormState {
   if (exam) {
     return {
       title: exam.title,
       durationMinutes: String(exam.durationMinutes),
       expiredAt: toDatetimeLocal(exam.expiredAt),
       token: exam.token ?? "",
+      passingGrade: String(exam.passingGrade),
       isActive: exam.isActive,
       randomizeQuestion: exam.randomizeQuestion,
       randomizeAnswer: exam.randomizeAnswer,
@@ -65,6 +68,7 @@ function initialState(exam?: ExamSummary | ExamDetail | null): FormState {
     durationMinutes: "60",
     expiredAt: toDatetimeLocal(Date.now() + DEFAULT_EXPIRY_OFFSET_MS),
     token: "",
+    passingGrade: String(defaultPassingGrade),
     isActive: false,
     randomizeQuestion: true,
     randomizeAnswer: true,
@@ -86,12 +90,17 @@ function validate(form: FormState): Errors {
   if (form.token && !TOKEN_REGEX.test(form.token)) {
     errors.token = "Token 1–5 karakter alfanumerik (huruf/angka).";
   }
+  const pg = Number(form.passingGrade);
+  if (!Number.isInteger(pg) || pg < 0 || pg > 100) {
+    errors.passingGrade = "Passing grade antara 0–100.";
+  }
   return errors;
 }
 
 export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalProps) {
   const isEdit = Boolean(exam);
   const { groups } = useGroups(open);
+  const { settings } = useSettings(open && !isEdit);
   const [form, setForm] = useState<FormState>(() => initialState(exam));
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   // groupId -> active participant count, for groups locked because students are
@@ -100,10 +109,22 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
 
+  // When settings load (async) while creating a new exam, pre-fill passingGrade
+  // only if the user hasn't changed it from the initial "0" placeholder.
+  useEffect(() => {
+    if (!open || isEdit || !settings) return;
+    setForm((f) => ({
+      ...f,
+      passingGrade: f.passingGrade === "0"
+        ? String(settings.defaultPassingGrade)
+        : f.passingGrade,
+    }));
+  }, [settings, open, isEdit]);
+
   // Reset form + group selection each time the modal opens.
   useEffect(() => {
     if (!open) return;
-    setForm(initialState(exam));
+    setForm(initialState(exam, settings?.defaultPassingGrade ?? 0));
     setErrors({});
     setBusy(false);
 
@@ -190,6 +211,7 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
       isActive: form.isActive,
       randomizeQuestion: form.randomizeQuestion,
       randomizeAnswer: form.randomizeAnswer,
+      passingGrade: Number(form.passingGrade),
       allowedGroups: selectedGroupIds,
     };
 
@@ -258,6 +280,26 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
             )}
           </Field>
 
+          <Field
+            label="Passing grade (%)"
+            hint="0 = semua peserta dianggap lulus"
+            error={errors.passingGrade}
+          >
+            {(id) => (
+              <Input
+                id={id}
+                type="number"
+                min={0}
+                max={100}
+                value={form.passingGrade}
+                onChange={(e) => set("passingGrade", e.target.value)}
+                className="tabular"
+              />
+            )}
+          </Field>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field
             label="Token akses"
             hint="Opsional · 1–5 karakter, huruf/angka"

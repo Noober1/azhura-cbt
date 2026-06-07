@@ -41,13 +41,24 @@ export const ResultPage = ({ onFinish }: ResultPageProps) => {
     );
   }
 
-  // Determine score color badge
   const score = examResult.score;
-  let scoreColor = "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50";
-  if (score < 60) {
+  const { passingGrade } = examResult;
+
+  const passed = passingGrade > 0 && score >= passingGrade;
+  const failed = passingGrade > 0 && score < passingGrade;
+
+  // Color: passing-grade-aware when set, otherwise legacy heuristic.
+  let scoreColor: string;
+  if (failed) {
+    scoreColor = "text-destructive bg-destructive/5 border-destructive/20";
+  } else if (passed) {
+    scoreColor = "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50";
+  } else if (score < 60) {
     scoreColor = "text-destructive bg-destructive/5 border-destructive/20";
   } else if (score < 85) {
     scoreColor = "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50";
+  } else {
+    scoreColor = "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50";
   }
 
   return (
@@ -106,6 +117,18 @@ export const ResultPage = ({ onFinish }: ResultPageProps) => {
           >
             {score}
           </div>
+          {passingGrade > 0 && (
+            <span
+              className={`mt-3 text-sm font-semibold ${
+                passed ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
+              }`}
+            >
+              {passed ? "Lulus" : "Tidak Lulus"}
+              <span className="ml-1 font-normal text-neutral-400">
+                (KKM {passingGrade})
+              </span>
+            </span>
+          )}
         </div>
 
         {/* Details Grid */}

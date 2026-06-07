@@ -72,6 +72,8 @@ export interface AvailableExam {
    * never sent to the client — only this flag — and verification is server-side.
    */
   requiresToken: boolean;
+  /** Minimum passing score (0–100). 0 means no passing grade (all pass). */
+  passingGrade: number;
 }
 
 export interface ExamResult {
@@ -79,6 +81,8 @@ export interface ExamResult {
   totalCorrect: number;
   totalWrong: number;
   totalEmpty: number;
+  /** Minimum passing score from the exam (0–100). 0 = no passing grade. */
+  passingGrade: number;
 }
 
 /**

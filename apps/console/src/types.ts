@@ -28,6 +28,7 @@ export interface ExamSummary {
   expiredAt: number;
   randomizeQuestion: boolean;
   randomizeAnswer: boolean;
+  passingGrade: number;
   createdAt: number;
   totalQuestions: number;
   totalGroups: number;
@@ -61,6 +62,7 @@ export interface ExamDetail {
   expiredAt: number;
   randomizeQuestion: boolean;
   randomizeAnswer: boolean;
+  passingGrade: number;
   createdAt: number;
   allowedGroups: AdminGroupRef[];
   questions: AdminQuestion[];
@@ -75,6 +77,7 @@ export interface ExamCreateInput {
   token?: string | null;
   randomizeQuestion?: boolean;
   randomizeAnswer?: boolean;
+  passingGrade?: number;
   allowedGroups?: string[];
 }
 
