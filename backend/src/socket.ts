@@ -283,4 +283,13 @@ export const supervisorActions = {
   kickUser: (userId: string, reason?: string) => {
     io.to(`user:${userId}`).emit("kick", { reason });
   },
+  /**
+   * Signals a single user's client that one of their sessions was reset (#58):
+   * the client re-checks its active session and resumes into the exam. The
+   * payload is intentionally empty — the client refetches over HTTP, mirroring
+   * the `exam-list-updated` seam, so no session data crosses the socket.
+   */
+  resumeSessionUser: (userId: string) => {
+    io.to(`user:${userId}`).emit("session-reset");
+  },
 };
