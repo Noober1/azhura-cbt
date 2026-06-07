@@ -21,6 +21,7 @@ import { adminStudentRoutes } from "./routes/admin/students";
 import { adminSettingsRoutes } from "./routes/admin/settings";
 import { adminLogsRoutes } from "./routes/admin/logs";
 import { adminRecapRoutes } from "./routes/admin/recap";
+import { adminSystemRoutes } from "./routes/admin/system";
 import { infoRoutes } from "./routes/info";
 import { setupRoutes } from "./routes/setup";
 import { initSocket } from "./socket";
@@ -94,6 +95,7 @@ const app = new Elysia()
       .use(adminSettingsRoutes)
       .use(adminLogsRoutes)
       .use(adminRecapRoutes)
+      .use(adminSystemRoutes)
   );
 
 // Compile Elysia routes before using .handle() outside of .listen().

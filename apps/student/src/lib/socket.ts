@@ -159,6 +159,19 @@ export const connectSocket = (token: string): void => {
     if (typeof window !== "undefined") window.location.hash = "/login";
   });
 
+  // Admin reset the entire system (#79). Force-logout all connected clients so
+  // they don't hold stale data or session state after the wipe.
+  socket.on("system:reset", async () => {
+    toast.info("Sistem direset oleh admin. Sesi Anda akan berakhir.", { duration: 5000 });
+    disconnectSocket();
+    try {
+      await useAuthStore.getState().logout();
+    } catch (error) {
+      log.error("Logout during system:reset failed", error);
+    }
+    if (typeof window !== "undefined") window.location.hash = "/login";
+  });
+
   // ── Public chat (#17) ──────────────────────────────────────────────────────
   // The server gates membership: these events only arrive on the dashboard
   // socket (never mid-exam), so the chat surface is inherently dashboard-only.
