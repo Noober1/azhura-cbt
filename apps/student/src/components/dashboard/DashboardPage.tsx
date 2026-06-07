@@ -41,6 +41,9 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
   const [selectedExam, setSelectedExam] = useState<AvailableExam | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [startingExamId, setStartingExamId] = useState<string | null>(null);
+  // Bumped each time a start attempt is rejected for a wrong access token (#47),
+  // signalling the dialog to clear and refocus the OTP boxes.
+  const [tokenRejectedNonce, setTokenRejectedNonce] = useState(0);
   // While true, an in-progress session check (#4) is running — render a spinner
   // so the exam list is never shown/clickable before a redirect decision.
   const [isCheckingResume, setIsCheckingResume] = useState(true);
@@ -164,7 +167,14 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
         examId: selectedExam.id,
         ...toErrorContext(error),
       });
-      toast.error(getErrorMessage(error, "Gagal memulai sesi ujian. Coba lagi."));
+      const message = getErrorMessage(error, "Gagal memulai sesi ujian. Coba lagi.");
+      toast.error(message);
+      // A wrong/invalid access token (#47): the server's token errors all mention
+      // "Token". Signal the dialog to clear + refocus the OTP so the student can
+      // retype immediately, rather than leaving the stale, rejected value.
+      if (token && /token/i.test(message)) {
+        setTokenRejectedNonce((n) => n + 1);
+      }
     } finally {
       setStartingExamId(null);
     }
@@ -224,6 +234,7 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
         }}
         onConfirm={handleConfirmStart}
         isStarting={startingExamId !== null}
+        tokenRejectedNonce={tokenRejectedNonce}
       />
     </div>
   );

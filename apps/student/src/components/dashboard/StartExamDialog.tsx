@@ -39,6 +39,13 @@ interface StartExamDialogProps {
   onConfirm: (token?: string) => void;
   /** When `true`, disables actions and shows a loading label. */
   isStarting: boolean;
+  /**
+   * A monotonically increasing nonce the parent bumps whenever a start attempt
+   * is rejected because the access token was wrong (#47). Each new value clears
+   * the OTP boxes and refocuses them so the student can retype immediately.
+   * Ignored at its initial `0`.
+   */
+  tokenRejectedNonce?: number;
 }
 
 /**
@@ -52,24 +59,49 @@ export const StartExamDialog = ({
   onOpenChange,
   onConfirm,
   isStarting,
+  tokenRejectedNonce = 0,
 }: StartExamDialogProps) => {
   const requiresToken = exam?.requiresToken ?? false;
   const [token, setToken] = useState("");
+  // True after the server rejects the token; cleared as soon as the student
+  // types again. Drives the red error styling and message.
+  const [tokenRejected, setTokenRejected] = useState(false);
 
   // Reset the token field whenever the dialog targets a different exam (or
   // reopens) so a previous entry never carries over.
   useEffect(() => {
     setToken("");
+    setTokenRejected(false);
   }, [exam?.id, open]);
 
+  // On a wrong-token rejection (#47): clear the boxes and refocus so the student
+  // can retype straight away. The input exposes id="exam-token" (input-otp
+  // forwards it to the real <input>), so focus it once the cleared value paints.
+  useEffect(() => {
+    if (!tokenRejectedNonce) return; // ignore the initial 0
+    setToken("");
+    setTokenRejected(true);
+    const raf = requestAnimationFrame(() => {
+      document.getElementById("exam-token")?.focus();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [tokenRejectedNonce]);
+
   const tokenValid = !requiresToken || TOKEN_PATTERN.test(token);
-  // Show the inline format hint only once the student has typed something.
+  // Show an error hint for a bad format (once the student types) or a rejection.
   const showFormatError = requiresToken && token.length > 0 && !tokenValid;
+  const showTokenError = showFormatError || tokenRejected;
 
   const handleConfirm = () => {
     if (!exam || isStarting) return;
     if (requiresToken && !tokenValid) return;
     onConfirm(requiresToken ? token : undefined);
+  };
+
+  // Typing a new character dismisses a prior rejection and normalizes to upper.
+  const handleTokenChange = (value: string) => {
+    setToken(value.toUpperCase());
+    if (tokenRejected) setTokenRejected(false);
   };
 
   return (
@@ -132,12 +164,12 @@ export const StartExamDialog = ({
               // display matches the canonical (case-insensitive) stored token.
               pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
               value={token}
-              onChange={(value) => setToken(value.toUpperCase())}
+              onChange={handleTokenChange}
               // Enter confirms once a token of valid length has been entered.
               onComplete={handleConfirm}
               autoFocus
               disabled={isStarting}
-              aria-invalid={showFormatError}
+              aria-invalid={showTokenError}
               containerClassName="justify-center"
             >
               <InputOTPGroup className="gap-2">
@@ -145,21 +177,25 @@ export const StartExamDialog = ({
                   <InputOTPSlot
                     key={i}
                     index={i}
-                    className="h-11 w-11 rounded-md border-l font-mono text-lg font-bold"
+                    className={`h-11 w-11 rounded-md border-l font-mono text-lg font-bold ${
+                      showTokenError ? "border-destructive text-destructive" : ""
+                    }`}
                   />
                 ))}
               </InputOTPGroup>
             </InputOTP>
             <p
               className={`text-xs font-medium ${
-                showFormatError
+                showTokenError
                   ? "text-destructive"
                   : "text-neutral-500 dark:text-neutral-400"
               }`}
             >
-              {showFormatError
-                ? "Token hanya boleh huruf dan angka, maksimal 5 karakter."
-                : "Masukkan token dari pengawas. Huruf besar/kecil tidak dibedakan."}
+              {tokenRejected
+                ? "Token salah. Silakan masukkan ulang."
+                : showFormatError
+                  ? "Token hanya boleh huruf dan angka, maksimal 5 karakter."
+                  : "Masukkan token dari pengawas. Huruf besar/kecil tidak dibedakan."}
             </p>
           </div>
         )}
