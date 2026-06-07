@@ -65,8 +65,10 @@ export const adminSystemRoutes = new Elysia({ prefix: "/admin" })
     await wipeExamData();
     log.info("Database wiped successfully.");
 
-    // Flush the session registry so stale single-session guards don't block
-    // re-created students from logging in after the reset.
+    // Flush the session registry. flushdb wipes the entire logical DB — safe
+    // here because Redis is used exclusively for the session registry in this
+    // deployment. If other namespaces are ever added, replace with targeted
+    // key deletion (e.g. redis.keys("session:*") + redis.del(...keys)).
     try {
       await redis.flushdb();
       log.info("Redis session registry flushed.");

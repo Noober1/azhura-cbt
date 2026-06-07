@@ -262,7 +262,6 @@ export function SettingsPage() {
             hint="Ruang obrolan publik siswa di dashboard (di luar ujian), dengan anti-spam dan pengumuman."
           />
         </SettingsSection>
-      </div>
 
         {/* ── Zona Berbahaya ── */}
         <section className="rounded-xl border border-danger/40 bg-danger-wash/30 p-6">
@@ -285,6 +284,7 @@ export function SettingsPage() {
             </Button>
           </div>
         </section>
+      </div>
 
       {/* Footer actions */}
       <div className="mt-8 flex items-center justify-end gap-3 border-t border-line pt-6">
