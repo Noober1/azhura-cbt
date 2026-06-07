@@ -15,3 +15,32 @@
 export function isSetupNeeded(adminCount: number): boolean {
   return adminCount <= 0;
 }
+
+/** Minimum length of the admin NIS/username (matches the login constraint). */
+export const MIN_ADMIN_NIS_LENGTH = 5;
+
+/** Already-trimmed setup fields that carry a length/presence invariant. */
+export interface TrimmedSetupInput {
+  adminNis: string;
+  adminName: string;
+  schoolName: string;
+}
+
+/**
+ * Validates the trimmed setup fields, returning a user-facing error message or
+ * `null` when valid. The route schema only length-checks the RAW body, so an
+ * all-whitespace value (e.g. "     ") would otherwise pass and create a broken
+ * admin that still locks setup — this guards the post-trim values.
+ */
+export function validateTrimmedSetup({
+  adminNis,
+  adminName,
+  schoolName,
+}: TrimmedSetupInput): string | null {
+  if (!schoolName) return "Nama sekolah wajib diisi.";
+  if (!adminName) return "Nama admin wajib diisi.";
+  if (adminNis.length < MIN_ADMIN_NIS_LENGTH) {
+    return `NIS admin minimal ${MIN_ADMIN_NIS_LENGTH} karakter.`;
+  }
+  return null;
+}

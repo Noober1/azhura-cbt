@@ -13,16 +13,22 @@
  * leaving the route mounted in production cannot be used to mint extra admins.
  * Both endpoints are intentionally public — there is no credential to present
  * before the first admin is created.
+ *
+ * Trust model: before the first admin exists, anyone who can reach the backend
+ * can claim it. That is acceptable for the intended air-gapped on-prem exam LAN
+ * (the operator runs setup immediately after install). If the backend is ever
+ * exposed to an untrusted network, gate this behind a one-time `SETUP_TOKEN`
+ * env or bind it to localhost.
  */
 
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db, schema } from "../db";
-import { isSetupNeeded } from "../lib/setup-service";
+import { isSetupNeeded, validateTrimmedSetup } from "../lib/setup-service";
 import { serialize } from "../lib/settings-registry";
 import { invalidateSettingsCache } from "../lib/settings-service";
-import { ConflictError } from "../lib/errors";
+import { BadRequestError, ConflictError } from "../lib/errors";
 import { createLogger } from "../lib/logger";
 import { writeEventLog } from "../lib/log-files";
 
@@ -39,33 +45,6 @@ async function countAdmins(): Promise<number> {
     .from(users)
     .where(eq(users.role, "admin"));
   return rows.length;
-}
-
-/** The settings written during first-run setup. */
-interface SetupSettings {
-  name: string;
-  address: string;
-  /** Optional initial public-chat toggle; left untouched (default) when omitted. */
-  chatEnabled?: boolean;
-}
-
-/** Persists school info (and an optional chat toggle) into the settings table. */
-async function writeSetupSettings({ name, address, chatEnabled }: SetupSettings): Promise<void> {
-  const now = Date.now();
-  const entries: [string, string][] = [
-    ["schoolName", serialize("schoolName", name)],
-    ["schoolAddress", serialize("schoolAddress", address)],
-  ];
-  if (chatEnabled !== undefined) {
-    entries.push(["chatEnabled", serialize("chatEnabled", chatEnabled)]);
-  }
-  for (const [key, value] of entries) {
-    await db
-      .insert(settings)
-      .values({ key, value, updatedAt: now })
-      .onDuplicateKeyUpdate({ set: { value, updatedAt: now } });
-  }
-  invalidateSettingsCache();
 }
 
 export const setupRoutes = new Elysia({ prefix: "/setup" })
@@ -91,8 +70,16 @@ export const setupRoutes = new Elysia({ prefix: "/setup" })
         throw new ConflictError("Setup sudah selesai. Admin sudah ada.");
       }
 
+      // Validate the TRIMMED values: the body schema only length-checks the raw
+      // input, so an all-whitespace NIS/name would otherwise slip through.
       const adminNis = body.adminNis.trim();
       const adminName = body.adminName.trim();
+      const schoolName = body.schoolName.trim();
+      const schoolAddress = body.schoolAddress?.trim() ?? "";
+      const trimError = validateTrimmedSetup({ adminNis, adminName, schoolName });
+      if (trimError) {
+        throw new BadRequestError(trimError);
+      }
 
       // Reject a NIS already taken by any account (e.g. a seeded student) up
       // front, so the error is a clear 409 rather than a raw duplicate-key 500.
@@ -106,29 +93,44 @@ export const setupRoutes = new Elysia({ prefix: "/setup" })
 
       const id = crypto.randomUUID();
       const passwordHash = await bcrypt.hash(body.adminPassword, BCRYPT_ROUNDS);
+      const now = Date.now();
 
-      await db.insert(users).values({
-        id,
-        nis: adminNis,
-        password: passwordHash,
-        name: adminName,
-        role: "admin",
-        isActive: 1,
-        groupId: null,
-      });
+      // Provision the admin and school settings atomically: a partial failure
+      // must not leave an admin (which locks setup) without the school info.
+      await db.transaction(async (tx) => {
+        await tx.insert(users).values({
+          id,
+          nis: adminNis,
+          password: passwordHash,
+          name: adminName,
+          role: "admin",
+          isActive: 1,
+          groupId: null,
+        });
 
-      await writeSetupSettings({
-        name: body.schoolName.trim(),
-        address: body.schoolAddress?.trim() ?? "",
-        chatEnabled: body.chatEnabled,
+        const entries: [string, string][] = [
+          ["schoolName", serialize("schoolName", schoolName)],
+          ["schoolAddress", serialize("schoolAddress", schoolAddress)],
+        ];
+        if (body.chatEnabled !== undefined) {
+          entries.push(["chatEnabled", serialize("chatEnabled", body.chatEnabled)]);
+        }
+        for (const [key, value] of entries) {
+          await tx
+            .insert(settings)
+            .values({ key, value, updatedAt: now })
+            .onDuplicateKeyUpdate({ set: { value, updatedAt: now } });
+        }
       });
+      // Drop the cached settings read so /api/info reflects the new school info.
+      invalidateSettingsCache();
 
       log.info("First admin provisioned via setup wizard", { userId: id, nis: adminNis });
       // Audit event (#18) — never include the password.
       writeEventLog(
         "setup",
         `Setup awal selesai: admin ${adminNis} dibuat`,
-        { nis: adminNis, schoolName: body.schoolName.trim() },
+        { nis: adminNis, schoolName },
         { id, role: "admin" }
       );
 

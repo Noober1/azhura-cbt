@@ -21,7 +21,7 @@ import "../db";
 import { describe, it, expect } from "bun:test";
 import { Elysia } from "elysia";
 import { AppError } from "../lib/errors";
-import { isSetupNeeded } from "../lib/setup-service";
+import { isSetupNeeded, validateTrimmedSetup } from "../lib/setup-service";
 import { setupRoutes } from "./setup";
 
 // ── Predicate unit tests ─────────────────────────────────────────────────────
@@ -38,6 +38,40 @@ describe("isSetupNeeded", () => {
 
   it("treats a negative count defensively as needing setup", () => {
     expect(isSetupNeeded(-1)).toBe(true);
+  });
+});
+
+// ── Trimmed-field validation unit tests ──────────────────────────────────────
+// Guards the post-trim invariant the route schema can't express (the schema
+// length-checks the raw body, before trimming).
+
+describe("validateTrimmedSetup", () => {
+  const valid = { adminNis: "88888", adminName: "Admin", schoolName: "SMP Test" };
+
+  it("returns null for valid trimmed input", () => {
+    expect(validateTrimmedSetup(valid)).toBeNull();
+  });
+
+  it("rejects a blank school name", () => {
+    expect(validateTrimmedSetup({ ...valid, schoolName: "" })).toBe(
+      "Nama sekolah wajib diisi."
+    );
+  });
+
+  it("rejects a blank admin name", () => {
+    expect(validateTrimmedSetup({ ...valid, adminName: "" })).toBe(
+      "Nama admin wajib diisi."
+    );
+  });
+
+  it("rejects an admin NIS shorter than the minimum (the all-whitespace case)", () => {
+    // "     ".trim() === "" — exactly the value that slips past the raw schema.
+    expect(validateTrimmedSetup({ ...valid, adminNis: "" })).toBe(
+      "NIS admin minimal 5 karakter."
+    );
+    expect(validateTrimmedSetup({ ...valid, adminNis: "1234" })).toBe(
+      "NIS admin minimal 5 karakter."
+    );
   });
 });
 
