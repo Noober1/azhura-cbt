@@ -275,8 +275,8 @@ export function SettingsPage() {
             <div>
               <p className="text-sm font-medium text-ink">Reset Sistem</p>
               <p className="mt-0.5 text-sm text-faint">
-                Hapus semua data ujian, sesi, siswa, dan kelompok. Akun admin/supervisor
-                dan pengaturan sistem tetap dipertahankan.
+                Hapus seluruh data termasuk semua akun pengguna. Setelah reset,
+                wizard setup awal akan muncul kembali untuk membuat akun admin baru.
               </p>
             </div>
             <Button variant="danger" size="sm" onClick={openReset}>
@@ -305,7 +305,7 @@ export function SettingsPage() {
       <Modal
         open={resetOpen}
         title="Konfirmasi Reset Sistem"
-        description="Tindakan ini tidak dapat dibatalkan. Semua data ujian dan siswa akan dihapus permanen."
+        description="Tindakan ini tidak dapat dibatalkan. Seluruh database akan dikosongkan dan semua akun dihapus."
         onClose={() => { if (!resetting) setResetOpen(false); }}
         footer={
           <>
@@ -330,9 +330,13 @@ export function SettingsPage() {
           <ul className="list-disc pl-5 text-sm text-faint space-y-1">
             <li>Semua ujian, soal, dan pilihan jawaban</li>
             <li>Semua sesi ujian dan jawaban siswa</li>
-            <li>Semua akun siswa dan kelompok</li>
-            <li>Riwayat chat dan log aplikasi</li>
+            <li>Semua akun pengguna — siswa, pengawas, dan <strong>admin</strong></li>
+            <li>Semua kelompok, riwayat chat, dan log aplikasi</li>
           </ul>
+          <p className="text-sm text-faint rounded-lg border border-line bg-canvas px-3 py-2">
+            Setelah reset, wizard setup awal akan muncul untuk membuat akun admin baru.
+            Pengaturan sistem (nama sekolah, dll.) tetap dipertahankan.
+          </p>
           <Field label="Ketik 'reset' untuk mengkonfirmasi">
             {(id) => (
               <Input
