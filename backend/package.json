@@ -8,6 +8,7 @@
     "start": "bun run src/index.ts",
     "test": "bun test",
     "seed": "bun run src/seed.ts",
+    "seed:demo": "bun run src/seed-demo.ts",
     "migrate": "bun run src/migrate.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

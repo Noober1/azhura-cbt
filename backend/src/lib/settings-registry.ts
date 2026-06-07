@@ -35,7 +35,7 @@ export const SETTINGS_DEFAULTS: Readonly<SystemSettings> = {
   schoolAddress: "",
   defaultExamDurationMinutes: 30,
   defaultPassingGrade: 0,
-  antiCheatEnabled: false,
+  antiCheatEnabled: true,
   chatEnabled: false,
 };
 
