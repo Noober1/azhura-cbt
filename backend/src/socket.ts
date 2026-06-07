@@ -9,7 +9,7 @@
 import type { Server as HttpServer } from "http";
 import { Server as SocketServer } from "socket.io";
 import jwt from "jsonwebtoken";
-import { getJwtSecret, getServerConfig } from "./lib/env";
+import { getJwtSecret, getServerConfig, getChatConfig } from "./lib/env";
 import { createLogger } from "./lib/logger";
 import { setLogBroadcaster } from "./lib/log-files";
 import { setExamListBroadcaster } from "./lib/exam-events";
@@ -18,12 +18,64 @@ import { buildRosterParticipant, hasActiveExam } from "./lib/roster";
 import { sessionRegistry } from "./lib/session-registry";
 import { createHeartbeatTracker } from "./lib/heartbeat";
 import { resolveBroadcast } from "./lib/broadcast";
-import type { BroadcastTarget, SupervisorMessage, SupervisorMessageVariant } from "@azhura/shared";
+import { setChatBroadcaster, setChatConfigApplier, broadcastChatMessage } from "./lib/chat-events";
+import { getRecentChat, saveChatMessage, getChatIdentity } from "./lib/chat-store";
+import { createChatRateLimiter } from "./lib/chat-rate-limiter";
+import { chatMuteRegistry } from "./lib/chat-mute";
+import { sanitizeChatContent } from "./lib/chat-content";
+import { readSettings } from "./lib/settings-service";
+import type {
+  BroadcastTarget,
+  ChatPresenceMember,
+  SupervisorMessage,
+  SupervisorMessageVariant,
+} from "@azhura/shared";
 
 const log = createLogger("Socket");
 
 /** The active Socket.io server; assigned by {@link initSocket}. */
 export let io: SocketServer;
+
+/** Socket.io room that fans out public chat (#17) to its members. */
+const CHAT_ROOM = "chat";
+
+/** Public-chat tuning + the process-wide anti-spam limiter (#17). */
+const chatConfig = getChatConfig();
+const chatLimiter = createChatRateLimiter(chatConfig);
+
+/**
+ * Sentinel "lifts far in the future" used for an indefinite supervisor mute:
+ * `ChatMutedEvent.mutedUntil` is a number, but the client keys off the `manual`
+ * flag (not a countdown) for supervisor mutes, so the exact value is cosmetic.
+ */
+const INDEFINITE_MUTE_MS = 1000 * 60 * 60 * 24 * 365;
+
+/**
+ * Collects the distinct **students** currently in the chat room — the @mention
+ * candidate list (#17). Supervisors/admins are in the room to observe/moderate
+ * but are intentionally excluded so their identities aren't surfaced to students.
+ */
+async function computeChatPresence(): Promise<ChatPresenceMember[]> {
+  const sockets = await io.in(CHAT_ROOM).fetchSockets();
+  const byUser = new Map<string, ChatPresenceMember>();
+  for (const s of sockets) {
+    if (s.data.role !== "student") continue;
+    const userId = s.data.userId as string;
+    if (!userId || byUser.has(userId)) continue;
+    byUser.set(userId, {
+      userId,
+      name: (s.data.name as string) ?? "",
+      groupName: (s.data.groupName as string | null) ?? null,
+    });
+  }
+  return [...byUser.values()];
+}
+
+/** Broadcasts the current chat presence to everyone in the room. */
+async function emitChatPresence(): Promise<void> {
+  const members = await computeChatPresence();
+  io.to(CHAT_ROOM).emit("chat:presence", { members });
+}
 
 /** Shape of the JWT payload expected in the socket handshake. */
 interface SocketJwt {
@@ -80,6 +132,46 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     io.to("supervisors").emit("roster-update", patch);
   });
 
+  // Public chat (#17): fan a saved message out to everyone in the chat room.
+  setChatBroadcaster((message) => {
+    io.to(CHAT_ROOM).emit("chat:message", message);
+  });
+
+  // Apply a global chat on/off toggle live (#17). On enable, pull eligible
+  // sockets into the room and backfill history + presence; on disable, evict the
+  // room. Either way, tell every client so the UI shows/hides the chat surface.
+  setChatConfigApplier(async (enabled) => {
+    if (enabled) {
+      const sockets = await io.fetchSockets();
+      for (const s of sockets) {
+        const role = s.data.role as string;
+        const userId = s.data.userId as string;
+        if (role === "supervisor" || role === "admin") {
+          s.join(CHAT_ROOM);
+        } else if (role === "student" && !(await hasActiveExam(userId))) {
+          s.join(CHAT_ROOM);
+          // Re-lock the composer for a student who was muted while chat was off,
+          // so it doesn't look usable until their first send is rejected.
+          const muted = await chatMuteRegistry.isMuted(userId);
+          if (muted) {
+            io.to(`user:${userId}`).emit("chat:muted", {
+              mutedUntil: muted.mutedUntil ?? Date.now() + INDEFINITE_MUTE_MS,
+              reason: muted.reason || "Anda dibisukan oleh pengawas.",
+              manual: true,
+            });
+          }
+        }
+      }
+      const messages = await getRecentChat(chatConfig.historyLimit);
+      io.to(CHAT_ROOM).emit("chat:history", { messages });
+      await emitChatPresence();
+    } else {
+      const sockets = await io.in(CHAT_ROOM).fetchSockets();
+      for (const s of sockets) s.leave(CHAT_ROOM);
+    }
+    io.emit("chat:config", { enabled });
+  });
+
   // Handshake auth: verify the JWT before allowing the connection.
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
@@ -122,6 +214,105 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       socket.join(`group:${groupId}`);
     }
 
+    // Guards async work (chat setup below, single-session heartbeat further down)
+    // that may resolve after a fast disconnect — set true in the disconnect handler.
+    let disconnected = false;
+
+    // Public chat (#17): tell the client whether chat is on, and — if it is —
+    // pull this socket into the room with history + presence. Students join only
+    // when NOT mid-exam, so the room is dashboard-only even though the same
+    // socket also serves the exam (defense-in-depth, not just a UI gate).
+    void (async () => {
+      try {
+        const { chatEnabled } = await readSettings();
+        socket.emit("chat:config", { enabled: chatEnabled });
+        if (!chatEnabled || disconnected) return;
+
+        if (role === "student") {
+          const identity = await getChatIdentity(userId);
+          socket.data.name = identity?.name ?? nis;
+          socket.data.groupName = identity?.groupName ?? null;
+          if (await hasActiveExam(userId)) return; // dashboard-only
+        }
+        if (disconnected) return;
+        socket.join(CHAT_ROOM);
+        socket.emit("chat:history", { messages: await getRecentChat(chatConfig.historyLimit) });
+        // Lock the composer up front if this student is already muted, so it
+        // doesn't look usable until their first send round-trips a rejection.
+        if (role === "student") {
+          const muted = await chatMuteRegistry.isMuted(userId);
+          if (muted) {
+            socket.emit("chat:muted", {
+              mutedUntil: muted.mutedUntil ?? Date.now() + INDEFINITE_MUTE_MS,
+              reason: muted.reason || "Anda dibisukan oleh pengawas.",
+              manual: true,
+            });
+          }
+        }
+        await emitChatPresence();
+      } catch (error) {
+        log.warn("Chat connect setup failed", {
+          nis,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
+
+    // Inbound student message (#17). This is the only socket event the server
+    // *receives* from clients besides heartbeat, so it is the trust boundary:
+    // role, feature flag, mid-exam, sanitization, mute, and rate limit are all
+    // enforced here before anything is persisted or broadcast.
+    socket.on("chat:send", async (payload: { content?: unknown }) => {
+      try {
+        if (role !== "student") return;
+        const { chatEnabled } = await readSettings();
+        if (!chatEnabled) return;
+        if (await hasActiveExam(userId)) return; // tamper guard: no chat mid-exam
+
+        const result = sanitizeChatContent(payload?.content, chatConfig.maxLength);
+        if (!result.ok) {
+          socket.emit("chat:error", { reason: result.reason });
+          return;
+        }
+
+        // A supervisor/admin manual mute takes precedence over anti-spam.
+        const manual = await chatMuteRegistry.isMuted(userId);
+        if (manual) {
+          socket.emit("chat:muted", {
+            mutedUntil: manual.mutedUntil ?? Date.now() + INDEFINITE_MUTE_MS,
+            reason: manual.reason || "Anda dibisukan oleh pengawas.",
+            manual: true,
+          });
+          return;
+        }
+        const rate = chatLimiter.check(userId, Date.now());
+        if (!rate.allowed) {
+          socket.emit("chat:muted", {
+            // The limiter always sets a real deadline when rejecting; the
+            // fallback keeps the client coherently muted if it ever doesn't.
+            mutedUntil: rate.mutedUntil ?? Date.now() + chatConfig.muteMs,
+            reason: "Terlalu banyak pesan. Mohon tunggu sebentar.",
+            manual: false,
+          });
+          return;
+        }
+
+        const message = await saveChatMessage({
+          kind: "user",
+          userId,
+          name: (socket.data.name as string) ?? nis,
+          groupName: (socket.data.groupName as string | null) ?? null,
+          content: result.content,
+        });
+        broadcastChatMessage(message);
+      } catch (error) {
+        log.warn("Chat send failed", {
+          nis,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
     // Single-session liveness (#5): bind this socket to the student's active
     // session and keep its Redis TTL refreshed while connected. Only a genuine
     // `heartbeat:pong` (below) extends the key, so a dead socket/crashed server
@@ -129,10 +320,6 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     // account can deadlock.
     const sessionId = socket.data.sessionId as string | undefined;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
-    // Guards the race where a fast disconnect fires before the async
-    // markConnected below resolves: without it the interval could be started
-    // *after* disconnect and never cleared (leaking + defeating the grace TTL).
-    let disconnected = false;
 
     if (role === "student" && sessionId) {
       // App-level heartbeat (#9): a pong proves the client's JS is genuinely
@@ -208,6 +395,9 @@ export function initSocket(httpServer: HttpServer): SocketServer {
         clearInterval(heartbeat);
         heartbeat = null;
       }
+      // Chat (#17): the socket has already left its rooms by now, so refresh the
+      // remaining members' presence/mention list. No-op when the room is empty.
+      void emitChatPresence().catch(() => {});
       // Start the grace window: a reconnect with the same sessionId refreshes the
       // TTL back; otherwise the key expires and the account becomes free again.
       if (role === "student" && sessionId) {
@@ -282,6 +472,22 @@ export const supervisorActions = {
   /** Revokes a single user's access (client logs out). */
   kickUser: (userId: string, reason?: string) => {
     io.to(`user:${userId}`).emit("kick", { reason });
+  },
+  /**
+   * Notifies a single user that a supervisor/admin muted them in chat (#17), so
+   * their client locks the composer. `mutedUntil` null ⇒ indefinite (lifts only
+   * on unmute); the client keys off `manual: true` rather than a countdown.
+   */
+  muteChatUser: (userId: string, mutedUntil: number | null, reason: string) => {
+    io.to(`user:${userId}`).emit("chat:muted", {
+      mutedUntil: mutedUntil ?? Date.now() + INDEFINITE_MUTE_MS,
+      reason,
+      manual: true,
+    });
+  },
+  /** Notifies a single user that their chat mute was lifted (#17). */
+  unmuteChatUser: (userId: string) => {
+    io.to(`user:${userId}`).emit("chat:unmuted", { userId });
   },
   /**
    * Signals a single user's client that one of their sessions was reset (#58):

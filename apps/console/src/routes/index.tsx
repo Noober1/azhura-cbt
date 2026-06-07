@@ -18,6 +18,7 @@ import { ExamSessionsPage } from "../components/exams/ExamSessionsPage";
 import { StudentListPage } from "../components/students/StudentListPage";
 import { GroupListPage } from "../components/groups/GroupListPage";
 import { StatusPesertaPage } from "../components/monitoring/StatusPesertaPage";
+import { ChatRoomPage } from "../components/chat/ChatRoomPage";
 import { SettingsPage } from "../components/settings/SettingsPage";
 import { LogViewerPage } from "../components/logs/LogViewerPage";
 
@@ -60,6 +61,7 @@ export function AppRoutes() {
         <Route path="/students" element={<AdminRoute><StudentListPage /></AdminRoute>} />
         <Route path="/groups" element={<AdminRoute><GroupListPage /></AdminRoute>} />
         <Route path="/monitoring" element={<StatusPesertaPage />} />
+        <Route path="/chat" element={<ChatRoomPage />} />
         <Route path="/logs" element={<AdminRoute><LogViewerPage /></AdminRoute>} />
         <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
       </Route>

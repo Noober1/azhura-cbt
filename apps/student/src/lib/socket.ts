@@ -12,11 +12,20 @@
  */
 
 import { io, Socket } from "socket.io-client";
-import type { ActiveSessionResponse } from "@azhura/shared";
+import type {
+  ActiveSessionResponse,
+  ChatConfigEvent,
+  ChatErrorEvent,
+  ChatHistoryEvent,
+  ChatMessage,
+  ChatMutedEvent,
+  ChatPresenceEvent,
+} from "@azhura/shared";
 import { useSocketStore } from "../stores/socket";
 import { useExamStore } from "../stores/exam";
 import { useConnectivityStore } from "../stores/connectivity";
 import { useAuthStore } from "../stores/auth";
+import { useChatStore } from "../stores/chat";
 import { toast } from "sonner";
 import api from "./api";
 import { createLogger } from "./logger";
@@ -149,6 +158,51 @@ export const connectSocket = (token: string): void => {
     }
     if (typeof window !== "undefined") window.location.hash = "/login";
   });
+
+  // ── Public chat (#17) ──────────────────────────────────────────────────────
+  // The server gates membership: these events only arrive on the dashboard
+  // socket (never mid-exam), so the chat surface is inherently dashboard-only.
+
+  socket.on("chat:config", (data: ChatConfigEvent) => {
+    useChatStore.getState().setEnabled(data.enabled);
+  });
+
+  socket.on("chat:history", (data: ChatHistoryEvent) => {
+    useChatStore.getState().setHistory(data.messages);
+  });
+
+  socket.on("chat:message", (message: ChatMessage) => {
+    useChatStore.getState().pushMessage(message);
+  });
+
+  socket.on("chat:presence", (data: ChatPresenceEvent) => {
+    useChatStore.getState().setPresence(data.members);
+  });
+
+  socket.on("chat:muted", (data: ChatMutedEvent) => {
+    useChatStore.getState().setMuted(data.mutedUntil, data.reason, data.manual);
+    toast.warning(
+      data.manual ? `Anda dibisukan pengawas: ${data.reason}` : data.reason,
+      { duration: 6000 }
+    );
+  });
+
+  socket.on("chat:unmuted", () => {
+    useChatStore.getState().clearMute();
+    toast.info("Anda dapat mengirim pesan di chat kembali.");
+  });
+
+  socket.on("chat:error", (data: ChatErrorEvent) => {
+    toast.error(data.reason);
+  });
+};
+
+/**
+ * Sends a chat message (#17). No-op when the socket is down — the composer is
+ * disabled in that state, but this stays defensive.
+ */
+export const sendChat = (content: string): void => {
+  socket?.emit("chat:send", { content });
 };
 
 /** Closes the realtime connection and releases the singleton. */

@@ -3,7 +3,9 @@
  *
  * Admin-only endpoints for reading and updating global application settings.
  * Settings are stored in the `settings` table as key/value text rows and
- * projected onto a strongly-typed `SystemSettings` object by the registry.
+ * projected onto a strongly-typed `SystemSettings` object by the registry. The
+ * cached read lives in `settings-service.ts` so non-route modules (e.g. the
+ * socket layer reading `chatEnabled`, #17) can consult settings too.
  *
  * Endpoints (all under `/api/admin`):
  * - `GET  /admin/settings` — return the full settings object (defaults applied).
@@ -20,34 +22,14 @@ import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { createLogger } from "../../lib/logger";
-import {
-  SETTING_KEYS,
-  projectRows,
-  serialize,
-} from "../../lib/settings-registry";
+import { SETTING_KEYS, serialize } from "../../lib/settings-registry";
 import type { SystemSettings } from "../../lib/settings-registry";
+import { readSettings, invalidateSettingsCache } from "../../lib/settings-service";
+import { notifyChatEnabledChanged } from "../../lib/chat-events";
 
 const { settings } = schema;
 
 const log = createLogger("AdminSettings");
-
-/**
- * In-process cache: avoids a DB round-trip on every GET when settings rarely
- * change. Invalidated on every PATCH so reads stay consistent.
- * Redis is a future option if this service runs multi-instance.
- */
-let cachedSettings: SystemSettings | null = null;
-
-function invalidateCache(): void {
-  cachedSettings = null;
-}
-
-async function readSettings(): Promise<SystemSettings> {
-  if (cachedSettings) return cachedSettings;
-  const rows = await db.select().from(settings);
-  cachedSettings = projectRows(rows);
-  return cachedSettings;
-}
 
 export const adminSettingsRoutes = new Elysia({ prefix: "/admin" })
   .use(authPlugin)
@@ -72,6 +54,7 @@ export const adminSettingsRoutes = new Elysia({ prefix: "/admin" })
   .patch(
     "/settings",
     async ({ body }) => {
+      const previous = await readSettings();
       const now = Date.now();
       const changedKeys: string[] = [];
 
@@ -89,9 +72,16 @@ export const adminSettingsRoutes = new Elysia({ prefix: "/admin" })
         changedKeys.push(key);
       }
 
-      invalidateCache();
+      invalidateSettingsCache();
       const updated = await readSettings();
       log.info("Settings updated", { keys: changedKeys });
+
+      // Apply a chat on/off toggle live (#17): only when it actually changed, so
+      // the socket layer joins/leaves room members and pushes `chat:config`.
+      if (updated.chatEnabled !== previous.chatEnabled) {
+        notifyChatEnabledChanged(updated.chatEnabled);
+      }
+
       return updated;
     },
     {
@@ -105,13 +95,7 @@ export const adminSettingsRoutes = new Elysia({ prefix: "/admin" })
           t.Integer({ minimum: 0, maximum: 100 })
         ),
         antiCheatEnabled: t.Optional(t.Boolean()),
+        chatEnabled: t.Optional(t.Boolean()),
       }),
     }
   );
-
-/**
- * Exposed for use in other modules that need current settings (e.g. `GET /api/info`
- * could prefer DB-stored school name as a future consolidation step — see plan §15).
- */
-export { readSettings, invalidateCache };
-

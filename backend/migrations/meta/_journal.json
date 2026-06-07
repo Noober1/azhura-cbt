@@ -50,6 +50,13 @@
       "when": 1780809006447,
       "tag": "0006_flimsy_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1780819324531,
+      "tag": "0007_parallel_thor",
+      "breakpoints": true
     }
   ]
 }

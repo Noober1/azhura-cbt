@@ -32,6 +32,9 @@ export const pool = mysql.createPool({
   database: config.database,
   waitForConnections: true,
   connectionLimit: 10,
+  // utf8mb4 so 4-byte code points (emoji in chat messages, #17) round-trip
+  // correctly; mysql2 otherwise defaults to utf8mb3 and would corrupt them.
+  charset: "utf8mb4",
 });
 
 /** The Drizzle query client. Import this for all data access. */

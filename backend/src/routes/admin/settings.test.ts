@@ -35,6 +35,11 @@ describe("settings-registry: serialize", () => {
     expect(serialize("antiCheatEnabled", false)).toBe("false");
   });
 
+  it("serializes the chatEnabled boolean (#17)", () => {
+    expect(serialize("chatEnabled", true)).toBe("true");
+    expect(serialize("chatEnabled", false)).toBe("false");
+  });
+
   it("serializes numbers as decimal strings", () => {
     expect(serialize("defaultExamDurationMinutes", 60)).toBe("60");
     expect(serialize("defaultPassingGrade", 75)).toBe("75");
@@ -52,6 +57,8 @@ describe("settings-registry: deserialize", () => {
     expect(deserialize("antiCheatEnabled", "false")).toBe(false);
     // Anything other than "true" is false
     expect(deserialize("antiCheatEnabled", "1")).toBe(false);
+    expect(deserialize("chatEnabled", "true")).toBe(true);
+    expect(deserialize("chatEnabled", "false")).toBe(false);
   });
 
   it("parses numeric strings to numbers", () => {
@@ -115,6 +122,7 @@ describe("settings-registry: projectRows", () => {
       { key: "defaultExamDurationMinutes", value: "45", updatedAt: 0 },
       { key: "defaultPassingGrade", value: "70", updatedAt: 0 },
       { key: "antiCheatEnabled", value: "true", updatedAt: 0 },
+      { key: "chatEnabled", value: "true", updatedAt: 0 },
     ];
     const result = projectRows(rows);
     expect(result).toStrictEqual({
@@ -123,6 +131,7 @@ describe("settings-registry: projectRows", () => {
       defaultExamDurationMinutes: 45,
       defaultPassingGrade: 70,
       antiCheatEnabled: true,
+      chatEnabled: true,
     });
   });
 });

@@ -309,6 +309,38 @@ export const appLogs = mysqlTable(
   ]
 );
 
+/**
+ * Public chat room messages (#17). Holds both student messages (`kind = user`)
+ * and admin/supervisor announcements (`kind = system`, `user_id` null). The join
+ * history reads the most recent rows ordered by `created_at` (indexed). `content`
+ * must be stored as utf8mb4 so emoji (4-byte code points) survive — see the pool
+ * `charset` in `db/index.ts`.
+ */
+export const chatMessages = mysqlTable(
+  "chat_messages",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    /** `user` (student message) or `system` (admin announcement). */
+    kind: mysqlEnum("kind", ["user", "system"]).notNull().default("user"),
+    /** Sender user id; null for system messages (and on user delete). */
+    userId: varchar("user_id", { length: 36 }).references(() => users.id, {
+      onDelete: "set null",
+    }),
+    /** Sender display name; "Pengumuman" for system messages. */
+    name: varchar("name", { length: 100 }).notNull(),
+    /** Sender group name; null for system messages or groupless users. */
+    groupName: varchar("group_name", { length: 30 }),
+    content: varchar("content", { length: 500 }).notNull(),
+    /** Epoch-ms of creation (matches `Date.now()`), indexed for history/order. */
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [index("idx_chat_created_at").on(t.createdAt)]
+);
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  user: one(users, { fields: [chatMessages.userId], references: [users.id] }),
+}));
+
 /** Convenience row types inferred from the schema. */
 export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
@@ -321,3 +353,4 @@ export type SessionQuestion = typeof sessionQuestions.$inferSelect;
 export type Answer = typeof answers.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
 export type AppLog = typeof appLogs.$inferSelect;
+export type ChatMessageRow = typeof chatMessages.$inferSelect;

@@ -228,3 +228,36 @@ export const getServerConfig = (): ServerConfig => {
   log.debug("Server configuration loaded.", { ...serverConfig });
   return serverConfig;
 };
+
+/** Validated public-chat tuning (#17). */
+export interface ChatConfig {
+  /** Sliding-window length (ms) for anti-spam rate limiting. */
+  windowMs: number;
+  /** Max messages allowed within the window before an auto-mute triggers. */
+  maxInWindow: number;
+  /** Auto-mute duration (ms) once the window limit is exceeded. */
+  muteMs: number;
+  /** Number of recent messages sent to a client as join history. */
+  historyLimit: number;
+  /** Maximum message length (characters) accepted after sanitization. */
+  maxLength: number;
+}
+
+let chatConfig: ChatConfig | null = null;
+
+/**
+ * Returns validated public-chat tuning. All values are optional with sane
+ * defaults so a fresh checkout boots without extra configuration; the global
+ * on/off switch lives in admin settings (`chatEnabled`), not here.
+ */
+export const getChatConfig = (): ChatConfig => {
+  if (chatConfig) return chatConfig;
+  chatConfig = {
+    windowMs: numberEnv("CHAT_RATE_WINDOW_MS", 5000),
+    maxInWindow: numberEnv("CHAT_RATE_MAX", 5),
+    muteMs: numberEnv("CHAT_MUTE_MS", 60000),
+    historyLimit: numberEnv("CHAT_HISTORY_LIMIT", 50),
+    maxLength: numberEnv("CHAT_MAX_LENGTH", 500),
+  };
+  return chatConfig;
+};
