@@ -52,10 +52,10 @@ test.describe("Session reset (#58)", () => {
     await page.goto("/#/dashboard");
     await expect(page.getByRole("heading", { name: /Selamat datang/i })).toBeVisible();
 
-    const ws = await wsPromise;
-    // A frame from the server confirms the Socket.io handshake completed (the
-    // server-side `connection` handler ran and joined the user room).
-    await ws.waitForEvent("framereceived").catch(() => {});
+    // A WebSocket means Socket.io upgraded past its initial polling connection —
+    // the server-side `connection` handler already ran during that polling phase
+    // and joined the user room, so the reset event will reach this client.
+    await wsPromise;
 
     // Admin resets the student's completed session out-of-band.
     const { token: adminToken } = await apiLogin(E2E_ADMIN.nis, E2E_ADMIN.password);
