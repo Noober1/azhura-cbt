@@ -8,6 +8,8 @@
  */
 
 import http from "http";
+import { createReadStream, existsSync, statSync } from "fs";
+import { extname } from "path";
 import type { IncomingMessage, ServerResponse } from "http";
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
@@ -24,6 +26,7 @@ import { adminRecapRoutes } from "./routes/admin/recap";
 import { adminSystemRoutes } from "./routes/admin/system";
 import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { adminExamSupervisorRoutes } from "./routes/admin/exam-supervisors";
+import { adminMediaRoutes } from "./routes/admin/media";
 import { supervisorQuestionRoutes } from "./routes/supervisor-questions";
 import { infoRoutes } from "./routes/info";
 import { setupRoutes } from "./routes/setup";
@@ -35,8 +38,37 @@ import { AppError } from "./lib/errors";
 import { createLogger } from "./lib/logger";
 import { writeAccessLog, logDirectory } from "./lib/log-files";
 import { pruneOldLogs, LOG_RETENTION_DAYS } from "./lib/log-store";
+import { ensureUploadDirs, MIME_MAP } from "./lib/upload";
 
 const log = createLogger("Server");
+
+/**
+ * Streams a file from the `uploads/` directory to the response.
+ * Runs before the Elysia bridge so large files are not buffered in-memory.
+ * Rejects path traversal attempts with 403.
+ */
+async function serveUpload(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const urlPath = (req.url ?? "").replace(/^\/uploads\//, "");
+  if (urlPath.includes("..") || urlPath.includes("\0")) {
+    res.writeHead(403);
+    res.end();
+    return;
+  }
+  const filePath = `./uploads/${urlPath}`;
+  if (!existsSync(filePath)) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+  const contentType = MIME_MAP[extname(filePath).toLowerCase()] ?? "application/octet-stream";
+  const { size } = statSync(filePath);
+  res.writeHead(200, {
+    "Content-Type": contentType,
+    "Content-Length": size,
+    "Cache-Control": "public, max-age=31536000, immutable",
+  });
+  createReadStream(filePath).pipe(res);
+}
 
 /** Per-request start time, keyed off Elysia's request-scoped store. */
 interface AccessStore {
@@ -47,6 +79,9 @@ const { port, corsOrigins } = getServerConfig();
 
 // Fail fast if the database is unreachable.
 await assertDbConnection();
+
+// Ensure upload directories exist before serving any requests.
+ensureUploadDirs();
 
 const app = new Elysia()
   .use(cors({ origin: corsOrigins, credentials: true }))
@@ -101,6 +136,7 @@ const app = new Elysia()
       .use(adminSystemRoutes)
       .use(adminDashboardRoutes)
       .use(adminExamSupervisorRoutes)
+      .use(adminMediaRoutes)
       .use(supervisorQuestionRoutes)
   );
 
@@ -172,6 +208,10 @@ initSocket(httpServer);
 // claims /ws* requests; our early return prevents double-handling.
 httpServer.on("request", async (req: IncomingMessage, res: ServerResponse) => {
   if ((req.url ?? "").startsWith("/ws")) return;
+  if ((req.url ?? "").startsWith("/uploads/")) {
+    await serveUpload(req, res);
+    return;
+  }
   await handleWithElysia(req, res);
 });
 
