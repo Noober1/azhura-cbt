@@ -22,6 +22,7 @@ import { DashboardPage } from "../components/dashboard/DashboardPage";
 import { SettingsPage } from "../components/settings/SettingsPage";
 import { LogViewerPage } from "../components/logs/LogViewerPage";
 import { RecapPage } from "../components/recap/RecapPage";
+import { MediaGalleryPage } from "../components/media/MediaGalleryPage";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -62,6 +63,7 @@ export function AppRoutes() {
         <Route path="/exams/:examId/sessions" element={<AdminRoute><ExamSessionsPage /></AdminRoute>} />
         <Route path="/students" element={<AdminRoute><StudentListPage /></AdminRoute>} />
         <Route path="/groups" element={<AdminRoute><GroupListPage /></AdminRoute>} />
+        <Route path="/media" element={<MediaGalleryPage />} />
         <Route path="/monitoring" element={<StatusPesertaPage />} />
         <Route path="/recap" element={<AdminRoute><RecapPage /></AdminRoute>} />
         <Route path="/logs" element={<AdminRoute><LogViewerPage /></AdminRoute>} />

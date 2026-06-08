@@ -11,7 +11,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/Button";
-import { FileTextIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon, BarChartIcon, LayoutDashboardIcon } from "../ui/icons";
+import { FileTextIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon, BarChartIcon, LayoutDashboardIcon, ImageIcon } from "../ui/icons";
 import { ChatLauncher } from "../chat/ChatLauncher";
 
 interface NavItem {
@@ -28,6 +28,7 @@ const NAV: NavItem[] = [
   { to: "/groups", label: "Grup", icon: <LayersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/students", label: "Peserta", icon: <UsersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" />, adminOnly: true },
+  { to: "/media", label: "Media", icon: <ImageIcon className="size-[18px]" /> },
   { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon className="size-[18px]" /> },
   { to: "/recap", label: "Rekap Nilai", icon: <BarChartIcon className="size-[18px]" />, adminOnly: true },
   { to: "/logs", label: "Log", icon: <ScrollTextIcon className="size-[18px]" />, adminOnly: true },

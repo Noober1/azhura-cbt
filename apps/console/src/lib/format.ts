@@ -50,3 +50,10 @@ export function fromDatetimeLocal(value: string): number {
 export function isPast(epochMs: number): boolean {
   return epochMs <= Date.now();
 }
+
+/** Byte count → human-readable string: "4.2 MB", "320 KB", "512 B". */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
