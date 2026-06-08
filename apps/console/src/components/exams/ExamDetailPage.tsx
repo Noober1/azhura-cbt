@@ -15,12 +15,13 @@ import { examsApi } from "../../lib/exams-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { formatDateTime, formatDuration, isPast } from "../../lib/format";
-import type { AdminQuestion, ExamDetail } from "../../types";
+import type { AdminQuestion, ExamDetail, ExamSupervisorDetail } from "../../types";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { ExamFormModal } from "./ExamFormModal";
+import { SupervisorAssignModal } from "./SupervisorAssignModal";
 import { QuestionFormModal } from "../questions/QuestionFormModal";
 import {
   PlusIcon,
@@ -32,6 +33,7 @@ import {
   CheckIcon,
   AlertIcon,
   UsersIcon,
+  ShieldIcon,
 } from "../ui/icons";
 
 export function ExamDetailPage() {
@@ -42,10 +44,22 @@ export function ExamDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [supervisors, setSupervisors] = useState<ExamSupervisorDetail[]>([]);
+  const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
+
   const [examFormOpen, setExamFormOpen] = useState(false);
   const [questionFormOpen, setQuestionFormOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<AdminQuestion | null>(null);
   const [deletingQuestion, setDeletingQuestion] = useState<AdminQuestion | null>(null);
+
+  const loadSupervisors = useCallback(async () => {
+    try {
+      const data = await examsApi.listSupervisors(examId);
+      setSupervisors(data);
+    } catch {
+      // non-critical — supervisors are a secondary section
+    }
+  }, [examId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,7 +85,8 @@ export function ExamDetailPage() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadSupervisors();
+  }, [load, loadSupervisors]);
 
   useEffect(() => {
     const id = setInterval(refresh, 15_000);
@@ -218,6 +233,40 @@ export function ExamDetailPage() {
         </div>
       </section>
 
+      {/* Supervisors */}
+      <div className="mt-8 flex items-end justify-between">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-ink">Pengawas</h2>
+          <p className="mt-0.5 text-sm text-faint">
+            {supervisors.length > 0
+              ? `${supervisors.length} pengawas ditugaskan`
+              : "Belum ada pengawas ditugaskan"}
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() => setSupervisorModalOpen(true)}
+          leadingIcon={<ShieldIcon className="size-4" />}
+        >
+          Kelola pengawas
+        </Button>
+      </div>
+
+      {supervisors.length > 0 && (
+        <ul className="mt-3 flex flex-col gap-2">
+          {supervisors.map((s) => (
+            <li
+              key={s.userId}
+              className="flex items-center gap-3 rounded-[var(--radius-card)] border border-line bg-surface px-4 py-3 text-sm"
+            >
+              <ShieldIcon className="size-4 shrink-0 text-accent" />
+              <span className="font-medium text-ink">{s.name}</span>
+              <span className="text-faint">({s.nis})</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
       {/* Questions */}
       <div className="mt-8 flex items-end justify-between">
         <div>
@@ -339,6 +388,13 @@ export function ExamDetailPage() {
       )}
 
       {/* Modals */}
+      <SupervisorAssignModal
+        open={supervisorModalOpen}
+        examId={examId}
+        onClose={() => setSupervisorModalOpen(false)}
+        onSaved={setSupervisors}
+      />
+
       <ExamFormModal
         open={examFormOpen}
         exam={exam}

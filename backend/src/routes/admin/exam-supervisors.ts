@@ -11,7 +11,7 @@
  */
 
 import { Elysia, t } from "elysia";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
@@ -25,6 +25,21 @@ const log = createLogger("AdminExamSupervisors");
 export const adminExamSupervisorRoutes = new Elysia({ prefix: "/admin" })
   .use(authPlugin)
   .onBeforeHandle(requireAdmin)
+
+  /**
+   * GET /api/admin/supervisors
+   *
+   * Returns all users with role = supervisor (for the assignment picker).
+   */
+  .get("/supervisors", async () => {
+    const rows = await db
+      .select({ id: users.id, name: users.name, nis: users.nis })
+      .from(users)
+      .where(and(eq(users.role, "supervisor"), eq(users.isActive, 1)))
+      .orderBy(asc(users.name))
+      .limit(200);
+    return rows;
+  })
 
   /**
    * GET /api/admin/exams/:examId/supervisors

@@ -12,6 +12,7 @@ import type {
   ExamDetail,
   ExamListResponse,
   ExamSessionRow,
+  ExamSupervisorDetail,
   ExamUpdateInput,
   QuestionCreateInput,
   QuestionUpdateInput,
@@ -69,5 +70,18 @@ export const examsApi = {
 
   async resetSession(sessionId: string): Promise<void> {
     await api.patch(`/admin/sessions/${sessionId}/reset`);
+  },
+
+  async listSupervisors(examId: string): Promise<ExamSupervisorDetail[]> {
+    const { data } = await api.get<ExamSupervisorDetail[]>(`/admin/exams/${examId}/supervisors`);
+    return data;
+  },
+
+  async addSupervisor(examId: string, userId: string): Promise<void> {
+    await api.post(`/admin/exams/${examId}/supervisors`, { userId });
+  },
+
+  async removeSupervisor(examId: string, userId: string): Promise<void> {
+    await api.delete(`/admin/exams/${examId}/supervisors/${userId}`);
   },
 };
