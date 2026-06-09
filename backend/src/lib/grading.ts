@@ -5,6 +5,7 @@ import type { FillInBlankConfig, MatchingConfig, SortingConfig } from "@azhura/s
  * Case-insensitive, whitespace-trimmed exact match.
  */
 export function gradeFillInBlank(answer: string, config: FillInBlankConfig): boolean {
+  if (!config?.answer) return false;
   return answer.trim().toLowerCase() === config.answer.trim().toLowerCase();
 }
 

@@ -26,25 +26,36 @@ export function gradeQuestion(
   selectedOptionId: string | null,
   answerValue: string | null
 ): boolean {
+  // MariaDB returns JSON columns as raw strings — parse before use.
+  let cfg: unknown = config;
+  if (typeof config === "string") {
+    try {
+      cfg = JSON.parse(config);
+    } catch {
+      log.warn("Failed to parse question config JSON during grading", { type, config });
+      cfg = null;
+    }
+  }
+
   switch (type) {
     case "multiple_choice":
       return !!correctOptionId && selectedOptionId === correctOptionId;
     case "fill_in_blank": {
-      if (!answerValue) return false;
-      return gradeFillInBlank(answerValue, config as FillInBlankConfig);
+      if (!answerValue || !cfg) return false;
+      return gradeFillInBlank(answerValue, cfg as FillInBlankConfig);
     }
     case "matching": {
-      if (!answerValue) return false;
+      if (!answerValue || !cfg) return false;
       try {
-        return gradeMatching(JSON.parse(answerValue) as [number, number][], config as MatchingConfig);
+        return gradeMatching(JSON.parse(answerValue) as [number, number][], cfg as MatchingConfig);
       } catch {
         return false;
       }
     }
     case "sorting": {
-      if (!answerValue) return false;
+      if (!answerValue || !cfg) return false;
       try {
-        return gradeSorting(JSON.parse(answerValue) as number[], config as SortingConfig);
+        return gradeSorting(JSON.parse(answerValue) as number[], cfg as SortingConfig);
       } catch {
         return false;
       }

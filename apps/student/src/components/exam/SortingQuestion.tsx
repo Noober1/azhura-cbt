@@ -55,19 +55,33 @@ function SortableItem({ id, label }: SortableItemProps) {
   );
 }
 
+/** Deterministic Fisher-Yates shuffle seeded from a string (question id). */
+function shuffledIndices(n: number, seed: string): number[] {
+  const indices = Array.from({ length: n }, (_, i) => i);
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  for (let i = n - 1; i > 0; i--) {
+    h = (Math.imul(h, 1664525) + 1013904223) | 0;
+    const j = (h >>> 0) % (i + 1);
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices;
+}
+
 export function SortingQuestion({ question, questionNumber }: Props) {
-  const { answers, submitAnswer } = useExamStore();
+  const { answers, submitAnswer, questions } = useExamStore();
   const items = ((question.config as SortingConfig)?.items) ?? [];
 
   // `order` holds the CURRENT order of original indices.
   // e.g. order = [2, 0, 1] means item originally at index 2 is now first, etc.
+  // Default: deterministic shuffle (not sequential) so correct order is never pre-shown.
   const savedOrder = (() => {
     try {
       const v = answers[question.id]?.answerValue;
-      if (!v) return items.map((_, i) => i);
+      if (!v) return shuffledIndices(items.length, question.id);
       return JSON.parse(v) as number[];
     } catch {
-      return items.map((_, i) => i);
+      return shuffledIndices(items.length, question.id);
     }
   })();
 
@@ -98,7 +112,7 @@ export function SortingQuestion({ question, questionNumber }: Props) {
           Urutkan
         </span>
         <span className="text-sm font-bold text-neutral-500 dark:text-neutral-400">
-          Nomor {questionNumber} dari {useExamStore.getState().questions.length}
+          Nomor {questionNumber} dari {questions.length}
         </span>
       </div>
 
