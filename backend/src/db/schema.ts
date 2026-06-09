@@ -159,6 +159,8 @@ export const examSessions = mysqlTable("exam_sessions", {
   startTime: bigint("start_time", { mode: "number" }).notNull(),
   endTime: bigint("end_time", { mode: "number" }).notNull(),
   submitted: tinyint("submitted").notNull().default(0),
+  /** Set on socket disconnect mid-exam; cleared on reconnect. Remaining = endTime − pausedAt. */
+  pausedAt: bigint("paused_at", { mode: "number" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

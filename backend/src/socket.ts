@@ -16,6 +16,8 @@ import { setExamListBroadcaster } from "./lib/exam-events";
 import { setRosterBroadcaster, notifyRosterPatch } from "./lib/roster-events";
 import { buildRosterParticipant, hasActiveExam } from "./lib/roster";
 import { sessionRegistry } from "./lib/session-registry";
+import { and, eq } from "drizzle-orm";
+import { db, schema } from "./db";
 import { createHeartbeatTracker } from "./lib/heartbeat";
 import { resolveBroadcast } from "./lib/broadcast";
 import { setChatBroadcaster, setChatConfigApplier, broadcastChatMessage } from "./lib/chat-events";
@@ -364,6 +366,42 @@ export function initSocket(httpServer: HttpServer): SocketServer {
           socket.disconnect(true);
           return;
         }
+
+        // Resume a paused exam timer if the student reconnected mid-exam.
+        // This handles both same-session reconnects (within grace period) and
+        // full re-logins after a crash — whichever brings the socket back first.
+        try {
+          const pausedSession = await db.query.examSessions.findFirst({
+            columns: { id: true, endTime: true, pausedAt: true },
+            where: and(
+              eq(schema.examSessions.userId, userId),
+              eq(schema.examSessions.submitted, 0)
+            ),
+            orderBy: (s, { desc }) => [desc(s.createdAt)],
+          });
+          if (pausedSession?.pausedAt) {
+            const remaining = Math.max(0, pausedSession.endTime - pausedSession.pausedAt);
+            const newEndTime = Date.now() + remaining;
+            await db
+              .update(schema.examSessions)
+              .set({ endTime: newEndTime, pausedAt: null })
+              .where(eq(schema.examSessions.id, pausedSession.id));
+            if (!disconnected) {
+              socket.emit("time-change", { endTime: newEndTime, serverTime: Date.now() });
+              log.info("Exam timer resumed on reconnect", {
+                nis,
+                sessionId: pausedSession.id,
+                remainingMs: remaining,
+              });
+            }
+          }
+        } catch (error) {
+          log.warn("Failed to resume paused exam timer on connect", {
+            nis,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
+
         // Roster (#7): this student is now live — surface them to supervisors.
         // An upsert (not just a connection flag) makes them appear on the roster
         // even when idle on the dashboard, not only once they start an exam.
@@ -432,6 +470,25 @@ export function initSocket(httpServer: HttpServer): SocketServer {
                 ? { type: "connection", userId, connection: "disconnected", lastSeen: Date.now() }
                 : { type: "remove", userId }
             );
+            if (inExam) {
+              // Pause the exam timer so time doesn't drain while the student is
+              // disconnected. The timer resumes automatically on the next connect.
+              void db
+                .update(schema.examSessions)
+                .set({ pausedAt: Date.now() })
+                .where(
+                  and(
+                    eq(schema.examSessions.userId, userId),
+                    eq(schema.examSessions.submitted, 0)
+                  )
+                )
+                .catch((error) => {
+                  log.warn("Failed to pause exam timer on disconnect", {
+                    nis,
+                    reason: error instanceof Error ? error.message : String(error),
+                  });
+                });
+            }
           })
           .catch((error) => {
             log.warn("Roster patch on disconnect failed", {

@@ -126,7 +126,9 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     const active = await findActiveSession(user.userId);
     if (!active) return { status: "none" as const };
 
-    if (Date.now() > active.endTime) {
+    // A paused session (student disconnected) is never treated as expired — its
+    // timer resumes on reconnect, so always return `resume` for paused sessions.
+    if (active.pausedAt === null && Date.now() > active.endTime) {
       const result = await finalizeSession(active);
       return {
         status: "finalized" as const,
@@ -254,7 +256,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
       // Verify the session belongs to this user and is still open.
       const session = await db.query.examSessions.findFirst({
-        columns: { id: true, endTime: true, submitted: true },
+        columns: { id: true, endTime: true, submitted: true, pausedAt: true },
         where: and(
           eq(examSessions.id, sessionId),
           eq(examSessions.userId, user.userId),
@@ -264,7 +266,10 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
       if (!session) throw new NotFoundError("Sesi ujian tidak ditemukan.");
       if (session.submitted) throw new ConflictError("Ujian sudah dikumpulkan.");
-      if (Date.now() > session.endTime) {
+      // A paused session's timer is frozen — treat it as still open so the
+      // offline queue can flush immediately after reconnect (before socket
+      // handler clears pausedAt and updates endTime).
+      if (session.pausedAt === null && Date.now() > session.endTime) {
         throw new GoneError("Waktu ujian sudah habis.");
       }
 
@@ -315,7 +320,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
       // Same guards as the single-answer endpoint: ownership + still open.
       const session = await db.query.examSessions.findFirst({
-        columns: { id: true, endTime: true, submitted: true },
+        columns: { id: true, endTime: true, submitted: true, pausedAt: true },
         where: and(
           eq(examSessions.id, sessionId),
           eq(examSessions.userId, user.userId),
@@ -325,7 +330,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
       if (!session) throw new NotFoundError("Sesi ujian tidak ditemukan.");
       if (session.submitted) throw new ConflictError("Ujian sudah dikumpulkan.");
-      if (Date.now() > session.endTime) {
+      if (session.pausedAt === null && Date.now() > session.endTime) {
         throw new GoneError("Waktu ujian sudah habis.");
       }
 
@@ -585,13 +590,13 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       );
     }
 
-    // Block starting another exam while one is still in progress (#4). An
-    // expired-but-unsubmitted session is finalized here first so it can never
-    // permanently block the account (the resume guard would route the student
-    // to /result for it; this is the authoritative backstop for direct calls).
+    // Block starting another exam while one is still in progress (#4). A
+    // paused session counts as in-progress (the timer resumes on reconnect).
+    // An expired-but-unsubmitted session that is NOT paused is finalized here
+    // so it can never permanently block the account.
     const inProgress = await findActiveSession(user.userId);
     if (inProgress) {
-      if (Date.now() <= inProgress.endTime) {
+      if (inProgress.pausedAt !== null || Date.now() <= inProgress.endTime) {
         throw new ConflictError(
           "Anda masih memiliki ujian yang sedang berlangsung. Selesaikan ujian tersebut dahulu."
         );

@@ -15,7 +15,7 @@
  */
 
 import type { RosterParticipant, RosterSnapshot } from "@azhura/shared";
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db, schema } from "../db";
 import { sessionRegistry, type ActiveSessionWithUser } from "./session-registry";
 import { toLiveness } from "./roster-liveness";
@@ -36,6 +36,7 @@ interface ExamRow extends StudentMeta {
   examTitle: string;
   startTime: number;
   endTime: number;
+  pausedAt: number | null;
 }
 
 /**
@@ -43,7 +44,12 @@ interface ExamRow extends StudentMeta {
  * joins are used because MariaDB rejects Drizzle's relational LATERAL joins.
  */
 async function loadExamRows(userId?: string): Promise<ExamRow[]> {
-  const conditions = [eq(examSessions.submitted, 0), gt(examSessions.endTime, Date.now())];
+  const conditions = [
+    eq(examSessions.submitted, 0),
+    // Include paused sessions even if endTime is technically in the past —
+    // the timer resumes on reconnect, so they must stay visible on the roster.
+    or(gt(examSessions.endTime, Date.now()), isNotNull(examSessions.pausedAt)),
+  ];
   if (userId) conditions.push(eq(examSessions.userId, userId));
 
   const rows = await db
@@ -56,6 +62,7 @@ async function loadExamRows(userId?: string): Promise<ExamRow[]> {
       examTitle: exams.title,
       startTime: examSessions.startTime,
       endTime: examSessions.endTime,
+      pausedAt: examSessions.pausedAt,
     })
     .from(examSessions)
     .innerJoin(users, eq(users.id, examSessions.userId))
@@ -72,6 +79,7 @@ async function loadExamRows(userId?: string): Promise<ExamRow[]> {
     examTitle: r.examTitle,
     startTime: Number(r.startTime),
     endTime: Number(r.endTime),
+    pausedAt: r.pausedAt ?? null,
   }));
 }
 
@@ -110,7 +118,8 @@ export async function hasActiveExam(userId: string): Promise<boolean> {
       and(
         eq(examSessions.userId, userId),
         eq(examSessions.submitted, 0),
-        gt(examSessions.endTime, Date.now())
+        // A paused session counts as active — its timer resumes on reconnect.
+        or(gt(examSessions.endTime, Date.now()), isNotNull(examSessions.pausedAt))
       )
     );
   return Number(count) > 0;
@@ -128,6 +137,7 @@ function examParticipant(row: ExamRow, registry: ActiveSessionWithUser | null): 
       examTitle: row.examTitle,
       startTime: row.startTime,
       endTime: row.endTime,
+      pausedAt: row.pausedAt,
     },
     ...toLiveness(registry),
   };
