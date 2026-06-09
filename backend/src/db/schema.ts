@@ -383,6 +383,37 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
   user: one(users, { fields: [chatMessages.userId], references: [users.id] }),
 }));
 
+/**
+ * Centralized media library (#84). Stores metadata for uploaded files
+ * (images, audio, video). The actual files live under `backend/uploads/`.
+ * Filenames are UUIDs to prevent collisions and avoid exposing original names
+ * in URLs. `uploaded_by` is nullable so rows survive user deletion.
+ */
+export const media = mysqlTable(
+  "media",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    /** UUID-based filename stored on disk (e.g. `abc123.jpg`). */
+    filename: varchar("filename", { length: 255 }).notNull(),
+    /** Original name as supplied by the uploader. */
+    originalName: varchar("original_name", { length: 255 }).notNull(),
+    type: mysqlEnum("type", ["image", "audio", "video"]).notNull(),
+    mimeType: varchar("mime_type", { length: 100 }).notNull(),
+    sizeBytes: int("size_bytes").notNull(),
+    /** Public URL path, e.g. `/uploads/images/abc123.jpg`. */
+    url: varchar("url", { length: 500 }).notNull(),
+    uploadedBy: varchar("uploaded_by", { length: 36 }).references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [index("idx_media_type").on(t.type), index("idx_media_created_at").on(t.createdAt)]
+);
+
+export const mediaRelations = relations(media, ({ one }) => ({
+  uploader: one(users, { fields: [media.uploadedBy], references: [users.id] }),
+}));
+
 /** Convenience row types inferred from the schema. */
 export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
@@ -397,3 +428,4 @@ export type Answer = typeof answers.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
 export type AppLog = typeof appLogs.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
+export type MediaRow = typeof media.$inferSelect;

@@ -630,11 +630,10 @@ export interface StudentRecapResponse {
   limit: number;
 }
 
-// ── Media library (#84) ───────────────────────────────────────────────────────
 
 export type MediaType = "image" | "audio" | "video";
 
-/** A media file stored in the backend uploads directory and tracked in the DB. */
+/** A media file record as returned by `GET /admin/media` and `POST /admin/media`. */
 export interface MediaFile {
   id: string;
   filename: string;
@@ -642,7 +641,6 @@ export interface MediaFile {
   type: MediaType;
   mimeType: string;
   sizeBytes: number;
-  /** Absolute path relative to the backend origin, e.g. `/uploads/images/uuid.jpg`. */
   url: string;
   uploadedBy: string | null;
   createdAt: number;
