@@ -65,6 +65,8 @@ export interface StudentImportRow {
   nis: string;
   nama: string;
   grup: string;
+  /** Exam batch (1–10). Defaults to 1 when the column is empty/omitted. */
+  batch: number;
   /** Resolved group ID — present only when status is "valid". */
   groupId?: string;
   /** Pre-hashed password for new students (absent for existing NIS). */

@@ -212,8 +212,8 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
     "/students/template",
     async ({ query }) => {
       const format = query.format === "csv" ? "csv" : "xlsx";
-      const headers = ["nis", "nama", "grup"];
-      const example = { nis: "12345", nama: "Ahmad Faisal", grup: "7A" };
+      const headers = ["nis", "nama", "grup", "batch"];
+      const example = { nis: "12345", nama: "Ahmad Faisal", grup: "7A", batch: "1" };
 
       if (format === "csv") {
         const csv = generateTemplateCsv(headers, example);
@@ -293,31 +293,38 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
         const nama = (raw["nama"] ?? "").trim();
         const grupCode = (raw["grup"] ?? "").trim().toUpperCase();
 
+        // Batch is optional: empty/omitted → default 1. Otherwise must be 1–10.
+        const batchRaw = (raw["batch"] ?? "").trim();
+        const batch = batchRaw === "" ? 1 : parseInt(batchRaw, 10);
+
         if (!nis) {
-          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "Kolom 'nis' wajib diisi." };
+          return { row: rowNum, nis, nama, grup: grupCode, batch, status: "error", error: "Kolom 'nis' wajib diisi." };
         }
         if (nis.length < 5 || nis.length > 20) {
-          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "NIS harus 5–20 karakter." };
+          return { row: rowNum, nis, nama, grup: grupCode, batch, status: "error", error: "NIS harus 5–20 karakter." };
         }
         const dupRow = seenNis.get(nis);
         if (dupRow !== undefined) {
-          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: `NIS '${nis}' duplikat dengan baris ${dupRow}.` };
+          return { row: rowNum, nis, nama, grup: grupCode, batch, status: "error", error: `NIS '${nis}' duplikat dengan baris ${dupRow}.` };
         }
         seenNis.set(nis, rowNum);
         if (!nama) {
-          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "Kolom 'nama' wajib diisi." };
+          return { row: rowNum, nis, nama, grup: grupCode, batch, status: "error", error: "Kolom 'nama' wajib diisi." };
         }
         if (nama.length > 100) {
-          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "Nama melebihi 100 karakter." };
+          return { row: rowNum, nis, nama, grup: grupCode, batch, status: "error", error: "Nama melebihi 100 karakter." };
         }
         if (!grupCode) {
-          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "Kolom 'grup' wajib diisi." };
+          return { row: rowNum, nis, nama, grup: grupCode, batch, status: "error", error: "Kolom 'grup' wajib diisi." };
         }
         const groupId = groupByCode.get(grupCode);
         if (!groupId) {
-          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: `Grup '${grupCode}' tidak ditemukan.` };
+          return { row: rowNum, nis, nama, grup: grupCode, batch, status: "error", error: `Grup '${grupCode}' tidak ditemukan.` };
         }
-        return { row: rowNum, nis, nama, grup: grupCode, groupId, status: "valid" } as StudentImportRow;
+        if (batchRaw !== "" && (isNaN(batch) || batch < 1 || batch > 10)) {
+          return { row: rowNum, nis, nama, grup: grupCode, batch, status: "error", error: "Batch harus angka 1–10." };
+        }
+        return { row: rowNum, nis, nama, grup: grupCode, batch, groupId, status: "valid" } as StudentImportRow;
       });
 
       const validRows = rows.filter((r) => r.status === "valid");
@@ -455,7 +462,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
               password: r.hashedPassword!,
               role: STUDENT_ROLE,
               groupId: r.groupId ?? null,
-              batch: 1,
+              batch: r.batch,
               isActive: 1,
             }))
           );
@@ -465,7 +472,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
         for (const r of toUpdate) {
           await tx
             .update(users)
-            .set({ name: r.nama, groupId: r.groupId ?? null })
+            .set({ name: r.nama, groupId: r.groupId ?? null, batch: r.batch })
             .where(and(eq(users.nis, r.nis), eq(users.role, STUDENT_ROLE)));
         }
         updated = toUpdate.length;
