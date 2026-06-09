@@ -65,7 +65,7 @@ async function getQuestionDetail(examId: string, questionId: string) {
     .select({ id: options.id, text: options.text })
     .from(options)
     .where(eq(options.questionId, questionId))
-    .orderBy(asc(options.id));
+    .orderBy(asc(options.orderIndex));
 
   return {
     id: question.id,
@@ -114,7 +114,7 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
               questionRows.map((q) => q.id)
             )
           )
-          .orderBy(asc(options.id))
+          .orderBy(asc(options.orderIndex))
       : [];
 
     const byQuestion = new Map<string, { id: string; text: string }[]>();
@@ -153,10 +153,11 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       }
 
       const questionId = randomUUID();
-      const optionRows = body.options.map((o) => ({
+      const optionRows = body.options.map((o, index) => ({
         id: randomUUID(),
         questionId,
         text: o.text,
+        orderIndex: index,
       }));
       const correctOptionId = optionRows[body.correctOptionIndex].id;
 
@@ -214,7 +215,7 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       if (!existing) throw new NotFoundError("Soal tidak ditemukan.");
 
       const replacingOptions = body.options !== undefined;
-      let newOptionRows: { id: string; questionId: string; text: string }[] = [];
+      let newOptionRows: { id: string; questionId: string; text: string; orderIndex: number }[] = [];
       let newCorrectOptionId: string | undefined;
 
       if (replacingOptions) {
@@ -228,10 +229,11 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
             "correctOptionIndex di luar jangkauan daftar opsi."
           );
         }
-        newOptionRows = body.options!.map((o) => ({
+        newOptionRows = body.options!.map((o, index) => ({
           id: randomUUID(),
           questionId: qid,
           text: o.text,
+          orderIndex: index,
         }));
         newCorrectOptionId = newOptionRows[body.correctOptionIndex].id;
       }

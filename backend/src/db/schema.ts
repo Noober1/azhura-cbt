@@ -144,6 +144,7 @@ export const options = mysqlTable("options", {
     .notNull()
     .references(() => questions.id, { onDelete: "cascade" }),
   text: text("text").notNull(),
+  orderIndex: int("order_index").notNull().default(0),
 });
 
 /** A single student's timed attempt at an exam. */

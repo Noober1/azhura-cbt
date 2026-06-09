@@ -174,7 +174,7 @@ async function getExamDetail(examId: string) {
             questionRows.map((q) => q.id)
           )
         )
-        .orderBy(asc(options.id))
+        .orderBy(asc(options.orderIndex))
     : [];
 
   const optionsByQuestion = new Map<string, { id: string; text: string }[]>();
