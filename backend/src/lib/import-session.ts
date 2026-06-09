@@ -71,6 +71,8 @@ export interface StudentImportRow {
   groupId?: string;
   /** Pre-hashed password for new students (absent for existing NIS). */
   hashedPassword?: string;
+  /** Plaintext password (pre-generated) — stored for card printing via initialPassword. */
+  plainPassword?: string;
   /** UUID for new student rows. */
   newId?: string;
   /** True when this NIS already exists in the DB (update path). */

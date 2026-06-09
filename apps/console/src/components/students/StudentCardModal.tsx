@@ -1,13 +1,16 @@
 /**
  * Azhura CBT Console — Cetak Kartu Peserta modal (#22).
  *
- * Allows the admin to select a group and/or batch filter, preview the count of
- * matching students, then generate a print-ready page of student ID cards. Each
- * card shows name, NIS, group, and batch — no password is ever displayed.
+ * Generates ISO 7810 ID-1 (85.6 mm × 54 mm) credential cards for distributing
+ * login accounts to exam participants. Each card shows school name, student name,
+ * username (NIS), login password (entered by admin), group, and batch.
  *
- * Data is fetched from the existing `/admin/students` API (paginated, collected
- * fully via `studentsApi.fetchAll`). The print HTML is opened as a blob URL in
- * a new window so the browser's native print/Save-as-PDF dialog handles output.
+ * Passwords are stored bcrypt-hashed and never returned by the API, so the admin
+ * supplies the plaintext password that was assigned to this batch. If left blank,
+ * the password row is omitted from the cards.
+ *
+ * Data is fetched via `studentsApi.fetchAll` and opened as a blob URL in a new
+ * window so the browser's native print/Save-as-PDF dialog handles output.
  */
 
 import { useState } from "react";
@@ -60,7 +63,9 @@ export function StudentCardModal({ open, onClose }: Props) {
         return;
       }
 
-      const opened = openPrintWindow(buildStudentCardsPrintHtml(filtered, settings.schoolName));
+      const opened = openPrintWindow(
+        buildStudentCardsPrintHtml(filtered, settings.schoolName)
+      );
       if (!opened) {
         toast.error("Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.");
       } else {
@@ -85,8 +90,8 @@ export function StudentCardModal({ open, onClose }: Props) {
   return (
     <Modal open={open} onClose={handleClose} title="Cetak Kartu Peserta">
       <p className="text-sm text-faint">
-        Pilih filter grup dan/atau batch untuk menentukan siswa yang akan dicetak kartunya.
-        Kosongkan untuk mencetak semua siswa.
+        Kartu berukuran ISO 7810 ID-1 (85,6 × 54 mm) berisi nama, username, password,
+        grup, dan batch — untuk distribusi akun ke peserta ujian.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -124,7 +129,8 @@ export function StudentCardModal({ open, onClose }: Props) {
       </div>
 
       <p className="mt-3 text-xs text-faint">
-        Setiap kartu menampilkan: nama, NIS, grup, dan batch. Password tidak ditampilkan.
+        Password diambil dari data akun masing-masing siswa. Siswa yang belum memiliki
+        password tersimpan tidak akan menampilkan kolom password di kartunya.
       </p>
 
       <div className="mt-6 flex justify-end gap-2">

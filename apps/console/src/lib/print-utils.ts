@@ -131,44 +131,134 @@ const BASE_CSS = `
   }
 `;
 
+/**
+ * ISO 7810 ID-1 card layout: 85.6 mm × 54 mm (credit-card size).
+ * Two cards per row on A4 portrait (210 mm wide, 10 mm side margins → 190 mm usable;
+ * 2 × 85.6 = 171.2 mm leaves ~18.8 mm column gap).
+ * Four rows per page (4 × 54 + 3 × 5 mm gap = 231 mm < 277 mm usable height).
+ */
 const CARD_CSS = `
   *, *::before, *::after { box-sizing: border-box; }
-  html { font-size: 10pt; }
+  html { font-size: 8pt; }
   body {
     font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     color: #111;
     background: #fff;
     margin: 0;
-    padding: 10mm 12mm;
+    padding: 10mm 10mm;
   }
-  h1.page-title { font-size: 12pt; font-weight: 700; margin: 0 0 8px; }
-  .meta { font-size: 8.5pt; color: #555; margin: 0 0 10px; }
+  h1.page-title { font-size: 11pt; font-weight: 700; margin: 0 0 4px; }
+  .meta { font-size: 8pt; color: #555; margin: 0 0 8px; }
+
+  /* Grid: 2 exact-size columns, auto rows */
   .cards-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6mm;
+    grid-template-columns: repeat(2, 85.6mm);
+    justify-content: space-between;
+    row-gap: 5mm;
   }
+
+  /* Card fixed to ISO 7810 ID-1 dimensions */
   .card {
-    border: 1.5px solid #ccc;
-    border-radius: 4px;
-    padding: 8px 10px;
+    width: 85.6mm;
+    height: 54mm;
+    border: 1.5px solid #bbb;
+    border-radius: 3px;
+    padding: 3mm 4mm;
     break-inside: avoid;
     page-break-inside: avoid;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
-  .card-school { font-size: 7pt; color: #666; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
-  .card-name { font-size: 11pt; font-weight: 700; margin-bottom: 3px; line-height: 1.2; }
-  .card-divider { border: none; border-top: 1px solid #e0e0e0; margin: 5px 0; }
-  .card-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
-  .card-label { font-size: 7.5pt; color: #666; }
-  .card-value { font-size: 8.5pt; font-weight: 600; }
-  .card-nis { font-size: 9pt; font-weight: 700; letter-spacing: 0.5px; }
+
+  /* Header row: school on left, "KARTU PESERTA" badge on right */
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2mm;
+  }
+  .card-school {
+    font-size: 6.5pt;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    max-width: 55mm;
+  }
+  .card-badge {
+    font-size: 5.5pt;
+    font-weight: 700;
+    color: #fff;
+    background: #1e40af;
+    border-radius: 2px;
+    padding: 1px 4px;
+    white-space: nowrap;
+    letter-spacing: 0.2px;
+  }
+
+  /* Student name */
+  .card-name {
+    font-size: 10.5pt;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 1.5mm;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-divider { border: none; border-top: 1px solid #ddd; margin: 1.5mm 0; }
+
+  /* Credential section */
+  .card-cred-label {
+    font-size: 5.5pt;
+    font-weight: 700;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 1mm;
+  }
+  .card-cred-row {
+    display: flex;
+    align-items: baseline;
+    gap: 2mm;
+    margin-bottom: 1mm;
+  }
+  .card-cred-key {
+    font-size: 7pt;
+    color: #555;
+    min-width: 18mm;
+  }
+  .card-cred-val {
+    font-size: 8pt;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Footer: group + batch */
+  .card-footer {
+    margin-top: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1mm;
+    border-top: 1px solid #eee;
+  }
+  .card-footer-item {
+    font-size: 7pt;
+    color: #444;
+  }
+  .card-footer-item strong { font-weight: 700; }
 
   @media print {
     body { padding: 0; }
-    @page { margin: 10mm 12mm; size: A4 portrait; }
-    .cards-grid {
-      grid-template-columns: repeat(3, 1fr);
-    }
+    @page { margin: 10mm 10mm; size: A4 portrait; }
     .card { break-inside: avoid; page-break-inside: avoid; }
   }
 `;
@@ -373,7 +463,9 @@ export function buildStudentRecapPrintHtml(
 /**
  * Builds print HTML for batch student cards (#22).
  *
- * Each card shows: name, NIS, group, batch — no plaintext password.
+ * Each card is sized to ISO 7810 ID-1 (85.6 mm × 54 mm).
+ * Each card shows: school name, student name, username (NIS), password
+ * (from `student.initialPassword` — set by admin at creation/import), group, and batch.
  *
  * @param students   - The students to print cards for.
  * @param schoolName - Institution name shown on each card.
@@ -388,20 +480,25 @@ export function buildStudentCardsPrintHtml(
     .map(
       (s) => `
       <div class="card">
-        <div class="card-school">${esc(schoolName)}</div>
+        <div class="card-header">
+          <div class="card-school">${esc(schoolName)}</div>
+          <div class="card-badge">KARTU PESERTA</div>
+        </div>
         <div class="card-name">${esc(s.name)}</div>
         <hr class="card-divider">
-        <div class="card-row">
-          <span class="card-label">NIS</span>
-          <span class="card-nis tabular">${esc(s.nis)}</span>
+        <div class="card-cred-label">Login CBT</div>
+        <div class="card-cred-row">
+          <span class="card-cred-key">Username</span>
+          <span class="card-cred-val">${esc(s.nis)}</span>
         </div>
-        <div class="card-row">
-          <span class="card-label">Group</span>
-          <span class="card-value">${esc(s.groupName ?? "—")}</span>
-        </div>
-        <div class="card-row">
-          <span class="card-label">Batch</span>
-          <span class="card-value tabular">${s.batch}</span>
+        ${s.initialPassword ? `
+        <div class="card-cred-row">
+          <span class="card-cred-key">Password</span>
+          <span class="card-cred-val">${esc(s.initialPassword)}</span>
+        </div>` : ""}
+        <div class="card-footer">
+          <span class="card-footer-item">Group: <strong>${esc(s.groupName ?? "—")}</strong></span>
+          <span class="card-footer-item">Batch: <strong>${s.batch}</strong></span>
         </div>
       </div>`
     )

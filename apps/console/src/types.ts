@@ -154,6 +154,8 @@ export interface StudentSummary {
   id: string;
   nis: string;
   name: string;
+  /** Plaintext password stored at creation/update time — for admin card printing only. */
+  initialPassword: string | null;
   groupId: string | null;
   groupName: string | null;
   batch: number;
