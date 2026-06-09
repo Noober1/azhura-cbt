@@ -586,9 +586,8 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     }
 
     // Block starting another exam while one is still in progress (#4). An
-    // expired-but-unsubmitted session is finalized here first so it can never
-    // permanently block the account (the resume guard would route the student
-    // to /result for it; this is the authoritative backstop for direct calls).
+    // expired-but-unsubmitted session is finalized here so it can never
+    // permanently block the account.
     const inProgress = await findActiveSession(user.userId);
     if (inProgress) {
       if (Date.now() <= inProgress.endTime) {

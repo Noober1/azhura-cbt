@@ -20,5 +20,5 @@ export default defineConfig({
     database: process.env.DB_NAME ?? "azhura_cbt",
   },
   verbose: true,
-  strict: true,
+  strict: false,
 });

@@ -22,8 +22,11 @@ export interface UseRosterResult {
   wsConnected: boolean;
   /** Re-runs the HTTP backfill (e.g. after a transient error). */
   reload: () => void;
-  /** Remaining time for a participant, in ms, floored at 0 (skew-corrected). */
-  remainingMs: (endTime: number) => number;
+  /**
+   * Remaining time for a participant, in ms, floored at 0.
+   * When `pausedAt` is set the countdown is frozen at the pause moment.
+   */
+  remainingMs: (endTime: number, pausedAt: number | null) => number;
 }
 
 /** Applies one roster patch to the participant map immutably. */
@@ -128,7 +131,10 @@ export function useRoster(): UseRosterResult {
   }, []);
 
   const remainingMs = useCallback(
-    (endTime: number) => Math.max(0, endTime - (Date.now() + skewRef.current)),
+    (endTime: number, pausedAt: number | null) =>
+      pausedAt !== null
+        ? Math.max(0, endTime - pausedAt)
+        : Math.max(0, endTime - (Date.now() + skewRef.current)),
     []
   );
 

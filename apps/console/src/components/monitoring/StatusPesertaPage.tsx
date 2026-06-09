@@ -58,13 +58,22 @@ function ConnectionBadge({ connection }: { connection: RosterConnection }) {
   );
 }
 
-function RemainingTime({ endTime, remainingMs }: { endTime: number; remainingMs: (e: number) => number }) {
-  const ms = remainingMs(endTime);
-  const urgent = ms > 0 && ms <= 5 * 60 * 1000;
+function RemainingTime({
+  endTime,
+  pausedAt,
+  remainingMs,
+}: {
+  endTime: number;
+  pausedAt: number | null;
+  remainingMs: (e: number, p: number | null) => number;
+}) {
+  const ms = remainingMs(endTime, pausedAt);
+  const isPaused = pausedAt !== null;
+  const urgent = !isPaused && ms > 0 && ms <= 5 * 60 * 1000;
   const expired = ms <= 0;
   return (
     <span className={`tabular font-medium ${expired ? "text-faint" : urgent ? "text-danger" : "text-ink"}`}>
-      {expired ? "Habis" : formatRemaining(ms)}
+      {expired ? "Habis" : isPaused ? `⏸ ${formatRemaining(ms)}` : formatRemaining(ms)}
     </span>
   );
 }
@@ -317,7 +326,13 @@ export function StatusPesertaPage() {
                     <tr key={p.userId} className="border-b border-line/70 transition-colors last:border-0 hover:bg-canvas/60">
                       <IdentityCells p={p} />
                       <td className="px-4 py-3">
-                        {p.exam && <RemainingTime endTime={p.exam.endTime} remainingMs={remainingMs} />}
+                        {p.exam && (
+                          <RemainingTime
+                            endTime={p.exam.endTime}
+                            pausedAt={p.exam.pausedAt}
+                            remainingMs={remainingMs}
+                          />
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">

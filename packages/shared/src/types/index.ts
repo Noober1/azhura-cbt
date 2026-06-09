@@ -157,6 +157,11 @@ export interface RosterExam {
   startTime: number;
   /** Session end, ms epoch. The console derives the live countdown from this. */
   endTime: number;
+  /**
+   * Set (ms epoch) when the student disconnected mid-exam; null while running.
+   * Remaining time = endTime − pausedAt. Console freezes the countdown when set.
+   */
+  pausedAt: number | null;
 }
 
 /**
