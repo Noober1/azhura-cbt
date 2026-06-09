@@ -1,23 +1,20 @@
 /**
- * Azhura CBT Backend — Aggregate Recap Helpers (#19)
+ * Azhura CBT Backend — Aggregate Recap Helpers (#19, fix #114)
  *
- * Server-side scoring and statistics for the admin recap views: a per-exam
- * recap (all participants + class stats) and a per-student recap (one student's
- * history across exams). Scores are derived from `answers.selected_option_id`
- * vs `questions.correct_option_id` — never trusted from any client — using the
- * same percentage semantics as {@link gradeAgainstKey} in `exam-scoring.ts`
- * (`round(totalCorrect / totalQuestions * 100)`, denominator = exam questions).
+ * Server-side scoring for the admin recap views: a per-exam recap (all
+ * participants + class stats) and a per-student recap (one student's history
+ * across exams). Scores are computed by grading each stored answer with
+ * {@link gradeQuestion} (handles MC, fill_in_blank, matching, sorting).
  *
- * The per-session correct/answered counts are computed in a single grouped SQL
- * aggregation (no N+1). Participant/history sets are bounded (one exam or one
- * student's worth of sessions), so the full filtered set is fetched once to
- * compute stats over the whole set, then paginated in memory.
+ * Session metadata and answers are fetched in batch queries (no N+1):
+ * one query for session rows, one for exam questions, one for all answers
+ * across the relevant sessions.
  */
 
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db, schema } from "../db";
 import { NotFoundError } from "./errors";
-import { deriveSessionStatus, type SessionStatus } from "./exam-scoring";
+import { deriveSessionStatus, gradeQuestion, type SessionStatus } from "./exam-scoring";
 import type {
   ExamRecapResponse,
   ExamRecapStats,
@@ -34,16 +31,6 @@ const DEFAULT_LIMIT = 50;
 /** Hard cap on page size so a hostile/buggy caller can't ask for everything. */
 const MAX_LIMIT = 200;
 
-/** Per-session aggregate row produced by the grouped scoring query. */
-interface SessionAggregate {
-  submitted: number;
-  endTime: number;
-  /** Answers matching the question's correct option. */
-  correct: number;
-  /** Answers with a non-null selected option (i.e. actually answered). */
-  answered: number;
-}
-
 /** Filters/paging shared shape for both recap queries. */
 interface RecapPaging {
   page?: number;
@@ -59,8 +46,8 @@ const clampPaging = (page?: number, limit?: number) => ({
 });
 
 /**
- * Score as a rounded percentage of correct answers. Matches `gradeAgainstKey`:
- * an exam with no questions scores 0 (no division by zero).
+ * Score as a rounded percentage of correct answers. An exam with no questions
+ * scores 0 (no division by zero).
  */
 export const scoreFromCounts = (
   totalCorrect: number,
@@ -78,8 +65,7 @@ export interface RecapStats {
 
 /**
  * Computes average (rounded), highest, and lowest over the given graded scores.
- * An empty input yields all-null stats with `completedCount = 0` — callers pass
- * only the scores of sessions that actually have a final grade.
+ * An empty input yields all-null stats with `completedCount = 0`.
  */
 export const computeRecapStats = (scores: readonly number[]): RecapStats => {
   if (scores.length === 0) {
@@ -94,30 +80,109 @@ export const computeRecapStats = (scores: readonly number[]): RecapStats => {
   };
 };
 
+/** One question entry used for application-layer grading. */
+interface QuestionKey {
+  id: string;
+  type: string | null;
+  correctOptionId: string | null;
+  config: unknown;
+}
+
+/** Per-session answer lookup keyed by questionId. */
+type SessionAnswerMap = ReadonlyMap<
+  string,
+  ReadonlyMap<string, { selectedOptionId: string | null; answerValue: string | null }>
+>;
+
 /**
- * Derives the per-question breakdown for one session. `totalCorrect`/`totalWrong`
- * are clamped to non-negative; `totalEmpty` is the questions never answered.
- * `score` is null while the session is still in progress (no final grade yet).
+ * Grades all exam questions for a single session against its stored answers.
+ * Delegates to {@link gradeQuestion} so every question type is handled
+ * correctly — MC, fill_in_blank, matching, and sorting.
  */
-const breakdown = (
-  agg: SessionAggregate,
-  totalQuestions: number,
-  status: SessionStatus
-) => {
-  const totalCorrect = Math.max(0, Number(agg.correct));
-  const answered = Math.max(0, Number(agg.answered));
+function gradeSession(
+  sessionId: string,
+  status: SessionStatus,
+  examQuestions: QuestionKey[],
+  answersBySession: SessionAnswerMap
+): { score: number | null; status: SessionStatus; totalCorrect: number; totalWrong: number; totalEmpty: number } {
+  const sessionAnswers = answersBySession.get(sessionId) ?? new Map();
+  let totalCorrect = 0;
+  let totalWrong = 0;
+  let totalEmpty = 0;
+
+  for (const q of examQuestions) {
+    const ans = sessionAnswers.get(q.id);
+    const isEmpty = !ans || (!ans.selectedOptionId && !ans.answerValue);
+    if (isEmpty) {
+      totalEmpty++;
+    } else if (
+      gradeQuestion(
+        q.type ?? "multiple_choice",
+        q.correctOptionId,
+        q.config,
+        ans.selectedOptionId,
+        ans.answerValue
+      )
+    ) {
+      totalCorrect++;
+    } else {
+      totalWrong++;
+    }
+  }
+
   return {
     status,
-    score: status === "in_progress" ? null : scoreFromCounts(totalCorrect, totalQuestions),
+    score: status === "in_progress" ? null : scoreFromCounts(totalCorrect, examQuestions.length),
     totalCorrect,
-    totalWrong: Math.max(0, answered - totalCorrect),
-    totalEmpty: Math.max(0, totalQuestions - answered),
+    totalWrong,
+    totalEmpty,
   };
-};
+}
 
-/** The grouped correct/answered aggregate, summed per joined answer row. */
-const correctExpr = sql<number>`sum(case when ${answers.selectedOptionId} = ${questions.correctOptionId} then 1 else 0 end)`;
-const answeredExpr = sql<number>`sum(case when ${answers.selectedOptionId} is not null then 1 else 0 end)`;
+/**
+ * Fetches all answers for a set of sessions as a nested Map:
+ * `sessionId → (questionId → {selectedOptionId, answerValue})`.
+ * Single query — no N+1.
+ */
+async function fetchAnswersBySession(sessionIds: string[]): Promise<SessionAnswerMap> {
+  const map = new Map<string, Map<string, { selectedOptionId: string | null; answerValue: string | null }>>();
+  if (sessionIds.length === 0) return map;
+
+  const rows = await db
+    .select({
+      sessionId: answers.sessionId,
+      questionId: answers.questionId,
+      selectedOptionId: answers.selectedOptionId,
+      answerValue: answers.answerValue,
+    })
+    .from(answers)
+    .where(inArray(answers.sessionId, sessionIds));
+
+  for (const row of rows) {
+    if (!map.has(row.sessionId)) map.set(row.sessionId, new Map());
+    map.get(row.sessionId)!.set(row.questionId, {
+      selectedOptionId: row.selectedOptionId,
+      answerValue: row.answerValue,
+    });
+  }
+  return map;
+}
+
+/**
+ * Fetches all questions for a given exam as {@link QuestionKey} entries.
+ * Single query.
+ */
+async function fetchExamQuestions(examId: string): Promise<QuestionKey[]> {
+  return db
+    .select({
+      id: questions.id,
+      type: questions.type,
+      correctOptionId: questions.correctOptionId,
+      config: questions.config,
+    })
+    .from(questions)
+    .where(eq(questions.examId, examId));
+}
 
 /** Filters (no paging) shared by the per-exam recap query and its export. */
 export interface ExamRecapFilters {
@@ -150,8 +215,6 @@ export const collectExamRecap = async (
   });
   if (!exam) throw new NotFoundError("Ujian tidak ditemukan.");
 
-  const totalQuestions = await countExamQuestions(examId);
-
   const conditions = [eq(examSessions.examId, examId)];
   if (opts.groupId) conditions.push(eq(users.groupId, opts.groupId));
   if (opts.from != null) conditions.push(gte(examSessions.startTime, opts.from));
@@ -167,30 +230,24 @@ export const collectExamRecap = async (
       startTime: examSessions.startTime,
       endTime: examSessions.endTime,
       submitted: examSessions.submitted,
-      correct: correctExpr,
-      answered: answeredExpr,
     })
     .from(examSessions)
     .innerJoin(users, eq(users.id, examSessions.userId))
     .leftJoin(groups, eq(groups.id, users.groupId))
-    .leftJoin(answers, eq(answers.sessionId, examSessions.id))
-    .leftJoin(questions, eq(questions.id, answers.questionId))
     .where(and(...conditions))
-    .groupBy(
-      examSessions.id,
-      examSessions.userId,
-      users.name,
-      users.nis,
-      groups.name,
-      examSessions.startTime,
-      examSessions.endTime,
-      examSessions.submitted
-    )
     .orderBy(asc(users.name));
 
+  const sessionIds = rows.map((r) => r.sessionId);
+  const [examQuestions, answersBySession] = await Promise.all([
+    fetchExamQuestions(examId),
+    fetchAnswersBySession(sessionIds),
+  ]);
+  const totalQuestions = examQuestions.length;
   const now = Date.now();
+
   const participants: RecapParticipant[] = rows.map((r) => {
     const status = deriveSessionStatus(r.submitted, r.endTime, now);
+    const grades = gradeSession(r.sessionId, status, examQuestions, answersBySession);
     return {
       sessionId: r.sessionId,
       userId: r.userId,
@@ -199,7 +256,7 @@ export const collectExamRecap = async (
       groupName: r.groupName ?? null,
       startTime: r.startTime,
       endTime: r.endTime,
-      ...breakdown(r, totalQuestions, status),
+      ...grades,
     };
   });
 
@@ -272,8 +329,6 @@ export const collectStudentRecap = async (
   studentId: string,
   opts: StudentRecapFilters = {}
 ): Promise<StudentRecapData> => {
-  // Plain left join for the group name — the relational `with` API emits a
-  // LEFT JOIN LATERAL + json_array that MariaDB rejects.
   const [student] = await db
     .select({
       id: users.id,
@@ -300,42 +355,51 @@ export const collectStudentRecap = async (
       startTime: examSessions.startTime,
       endTime: examSessions.endTime,
       submitted: examSessions.submitted,
-      totalQuestions: sql<number>`count(distinct ${questions.id})`,
-      correct: correctExpr,
-      answered: answeredExpr,
     })
     .from(examSessions)
     .innerJoin(exams, eq(exams.id, examSessions.examId))
-    .leftJoin(questions, eq(questions.examId, examSessions.examId))
-    .leftJoin(
-      answers,
-      and(
-        eq(answers.sessionId, examSessions.id),
-        eq(answers.questionId, questions.id)
-      )
-    )
     .where(and(...conditions))
-    .groupBy(
-      examSessions.id,
-      examSessions.examId,
-      exams.title,
-      examSessions.startTime,
-      examSessions.endTime,
-      examSessions.submitted
-    )
     .orderBy(desc(examSessions.startTime));
+
+  // Batch: fetch questions for all distinct exams + answers for all sessions.
+  const distinctExamIds = [...new Set(rows.map((r) => r.examId))];
+  const sessionIds = rows.map((r) => r.sessionId);
+
+  const [allQuestions, answersBySession] = await Promise.all([
+    distinctExamIds.length > 0
+      ? db
+          .select({
+            examId: questions.examId,
+            id: questions.id,
+            type: questions.type,
+            correctOptionId: questions.correctOptionId,
+            config: questions.config,
+          })
+          .from(questions)
+          .where(inArray(questions.examId, distinctExamIds))
+      : Promise.resolve([] as Array<{ examId: string; id: string; type: string | null; correctOptionId: string | null; config: unknown }>),
+    fetchAnswersBySession(sessionIds),
+  ]);
+
+  // Group questions by examId for O(1) lookup per session.
+  const questionsByExam = new Map<string, QuestionKey[]>();
+  for (const q of allQuestions) {
+    if (!questionsByExam.has(q.examId)) questionsByExam.set(q.examId, []);
+    questionsByExam.get(q.examId)!.push(q);
+  }
 
   const now = Date.now();
   const history: StudentRecapEntry[] = rows.map((r) => {
-    const totalQuestions = Number(r.totalQuestions);
+    const examQs = questionsByExam.get(r.examId) ?? [];
     const status = deriveSessionStatus(r.submitted, r.endTime, now);
+    const grades = gradeSession(r.sessionId, status, examQs, answersBySession);
     return {
       sessionId: r.sessionId,
       examId: r.examId,
       examTitle: r.examTitle,
       startTime: r.startTime,
       endTime: r.endTime,
-      ...breakdown(r, totalQuestions, status),
+      ...grades,
     };
   });
 
@@ -386,13 +450,4 @@ export const getStudentRecap = async (
     page,
     limit,
   };
-};
-
-/** Counts the questions belonging to an exam (the score denominator). */
-const countExamQuestions = async (examId: string): Promise<number> => {
-  const [row] = await db
-    .select({ total: sql<number>`count(*)` })
-    .from(questions)
-    .where(eq(questions.examId, examId));
-  return Number(row?.total ?? 0);
 };
