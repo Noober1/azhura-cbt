@@ -91,11 +91,14 @@ export function AdminQuestionFormPage() {
       const idx = q.options.findIndex((o) => o.id === q.correctOptionId);
       setCorrectIndex(idx >= 0 ? Math.min(idx, opts.length - 1) : 0);
     } else if (type === "fill_in_blank" && q.config) {
-      setFillInBlankConfig(q.config as FillInBlankConfig);
+      const cfg = (typeof q.config === "string" ? JSON.parse(q.config) : q.config) as FillInBlankConfig;
+      setFillInBlankConfig(typeof cfg.answer === "string" ? cfg : DEFAULT_FILL_IN_BLANK);
     } else if (type === "matching" && q.config) {
-      setMatchingConfig(q.config as MatchingConfig);
+      const cfg = (typeof q.config === "string" ? JSON.parse(q.config) : q.config) as MatchingConfig;
+      setMatchingConfig(Array.isArray(cfg.pairs) ? cfg : DEFAULT_MATCHING);
     } else if (type === "sorting" && q.config) {
-      setSortingConfig(q.config as SortingConfig);
+      const cfg = (typeof q.config === "string" ? JSON.parse(q.config) : q.config) as SortingConfig;
+      setSortingConfig(Array.isArray(cfg.items) ? cfg : DEFAULT_SORTING);
     }
   }
 

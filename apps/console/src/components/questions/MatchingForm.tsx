@@ -10,18 +10,20 @@ interface Props {
 const MIN_PAIRS = 2;
 
 export function MatchingForm({ config, onChange, disabled }: Props) {
+  const pairs = config.pairs ?? [];
+
   function updatePair(idx: number, side: "left" | "right", value: string) {
-    const pairs = config.pairs.map((p, i) => (i === idx ? { ...p, [side]: value } : p));
-    onChange({ pairs });
+    const updated = pairs.map((p, i) => (i === idx ? { ...p, [side]: value } : p));
+    onChange({ pairs: updated });
   }
 
   function addPair() {
-    onChange({ pairs: [...config.pairs, { left: "", right: "" }] });
+    onChange({ pairs: [...pairs, { left: "", right: "" }] });
   }
 
   function removePair(idx: number) {
-    if (config.pairs.length <= MIN_PAIRS) return;
-    onChange({ pairs: config.pairs.filter((_, i) => i !== idx) });
+    if (pairs.length <= MIN_PAIRS) return;
+    onChange({ pairs: pairs.filter((_, i) => i !== idx) });
   }
 
   return (
@@ -31,7 +33,7 @@ export function MatchingForm({ config, onChange, disabled }: Props) {
           Pasangan Jawaban <span className="text-danger">*</span>
         </p>
         <span className="text-xs text-faint">
-          {config.pairs.length} pasangan
+          {pairs.length} pasangan
         </span>
       </div>
 
@@ -42,7 +44,7 @@ export function MatchingForm({ config, onChange, disabled }: Props) {
           <span />
         </div>
 
-        {config.pairs.map((pair, idx) => (
+        {pairs.map((pair, idx) => (
           <div key={idx} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
             <input
               type="text"
@@ -63,7 +65,7 @@ export function MatchingForm({ config, onChange, disabled }: Props) {
             <button
               type="button"
               onClick={() => removePair(idx)}
-              disabled={disabled || config.pairs.length <= MIN_PAIRS}
+              disabled={disabled || pairs.length <= MIN_PAIRS}
               aria-label={`Hapus pasangan ${idx + 1}`}
               className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-30"
             >

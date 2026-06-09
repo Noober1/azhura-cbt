@@ -14,32 +14,34 @@ function buildConfig(items: string[]): SortingConfig {
 }
 
 export function SortingForm({ config, onChange, disabled }: Props) {
+  const items = config.items ?? [];
+
   function updateItem(idx: number, value: string) {
-    const items = config.items.map((it, i) => (i === idx ? value : it));
-    onChange(buildConfig(items));
+    const updated = items.map((it, i) => (i === idx ? value : it));
+    onChange(buildConfig(updated));
   }
 
   function addItem() {
-    onChange(buildConfig([...config.items, ""]));
+    onChange(buildConfig([...items, ""]));
   }
 
   function removeItem(idx: number) {
-    if (config.items.length <= MIN_ITEMS) return;
-    onChange(buildConfig(config.items.filter((_, i) => i !== idx)));
+    if (items.length <= MIN_ITEMS) return;
+    onChange(buildConfig(items.filter((_, i) => i !== idx)));
   }
 
   function moveUp(idx: number) {
     if (idx === 0) return;
-    const items = [...config.items];
-    [items[idx - 1], items[idx]] = [items[idx], items[idx - 1]];
-    onChange(buildConfig(items));
+    const updated = [...items];
+    [updated[idx - 1], updated[idx]] = [updated[idx], updated[idx - 1]];
+    onChange(buildConfig(updated));
   }
 
   function moveDown(idx: number) {
-    if (idx === config.items.length - 1) return;
-    const items = [...config.items];
-    [items[idx], items[idx + 1]] = [items[idx + 1], items[idx]];
-    onChange(buildConfig(items));
+    if (idx === items.length - 1) return;
+    const updated = [...items];
+    [updated[idx], updated[idx + 1]] = [updated[idx + 1], updated[idx]];
+    onChange(buildConfig(updated));
   }
 
   return (
@@ -48,11 +50,11 @@ export function SortingForm({ config, onChange, disabled }: Props) {
         <p className="text-sm font-medium text-ink">
           Item Urutan (Jawaban Benar) <span className="text-danger">*</span>
         </p>
-        <span className="text-xs text-faint">{config.items.length} item</span>
+        <span className="text-xs text-faint">{items.length} item</span>
       </div>
 
       <div className="space-y-2">
-        {config.items.map((item, idx) => (
+        {items.map((item, idx) => (
           <div key={idx} className="flex items-center gap-2">
             <span className="w-5 shrink-0 text-center text-xs font-semibold text-faint">
               {idx + 1}
@@ -78,7 +80,7 @@ export function SortingForm({ config, onChange, disabled }: Props) {
               <button
                 type="button"
                 onClick={() => moveDown(idx)}
-                disabled={disabled || idx === config.items.length - 1}
+                disabled={disabled || idx === items.length - 1}
                 aria-label="Pindah ke bawah"
                 className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-surface-raised hover:text-ink disabled:opacity-30"
               >
@@ -88,7 +90,7 @@ export function SortingForm({ config, onChange, disabled }: Props) {
             <button
               type="button"
               onClick={() => removeItem(idx)}
-              disabled={disabled || config.items.length <= MIN_ITEMS}
+              disabled={disabled || items.length <= MIN_ITEMS}
               aria-label={`Hapus item ${idx + 1}`}
               className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-30"
             >
