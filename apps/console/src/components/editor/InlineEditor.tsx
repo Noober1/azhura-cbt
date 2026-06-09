@@ -7,6 +7,7 @@
  */
 
 import "./editor.css";
+import { useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -66,11 +67,12 @@ export function InlineEditor({ value, onChange, placeholder, disabled }: InlineE
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
   });
 
-  // Sync external value (edit mode load / form reset).
-  const editorHTML = editor?.getHTML() ?? "";
-  if (editor && value !== editorHTML && !editor.isFocused) {
+  // Sync external value → editor only when value changes from outside.
+  useEffect(() => {
+    if (!editor || editor.isFocused) return;
+    if (editor.getHTML() === value) return;
     editor.commands.setContent(value, false);
-  }
+  }, [editor, value]);
 
   return (
     <div className={`tiptap-inline overflow-hidden rounded-[var(--radius-field)] border border-line bg-surface transition-colors focus-within:border-accent/60 ${disabled ? "opacity-55" : ""}`}>

@@ -19,7 +19,7 @@ import Underline from "@tiptap/extension-underline";
 import { Mathematics } from "@tiptap/extension-mathematics";
 import { MediaEmbed } from "./MediaEmbed";
 import { MediaPickerModal } from "./MediaPickerModal";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MediaFile, MediaListResponse } from "../../types";
 import {
   BoldIcon,
@@ -103,12 +103,13 @@ export function RichTextEditor({
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
   });
 
-  // Sync external value changes (e.g. on form reset / edit mode load).
-  // Only set content if the value changed from outside (not from typing).
-  const editorHTML = editor?.getHTML() ?? "";
-  if (editor && value !== editorHTML && !editor.isFocused) {
+  // Sync external value → editor only when value changes from outside (edit mode load,
+  // form reset). useEffect ensures this never runs mid-render, avoiding infinite loops.
+  useEffect(() => {
+    if (!editor || editor.isFocused) return;
+    if (editor.getHTML() === value) return;
     editor.commands.setContent(value, false);
-  }
+  }, [editor, value]);
 
   function handleMediaSelect(file: MediaFile) {
     setPickerOpen(false);
