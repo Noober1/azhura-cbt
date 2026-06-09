@@ -3,21 +3,37 @@ import { useExamStore } from "../../stores/exam";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Label } from "../ui/label";
 import { RichContent } from "./RichContent";
+import { FillInBlankQuestion } from "./FillInBlankQuestion";
+import { MatchingQuestion } from "./MatchingQuestion";
+import { SortingQuestion } from "./SortingQuestion";
 import "../../styles/question-renderer.css";
 
 interface QuestionRendererProps {
-  /** The question to display. */
   question: Question;
-  /** 1-based position of this question, shown as "Nomor N dari M". */
   questionNumber: number;
 }
 
 /**
- * Renders a single multiple-choice question with selectable options (A, B, C…).
- * Selecting an option persists the answer via the exam store's `submitAnswer`.
- * Question text and option text are HTML from the WYSIWYG editor (TipTap + KaTeX).
+ * Dispatches to the appropriate question UI by `question.type`.
+ * Defaults to multiple_choice for legacy questions without a type field.
  */
 export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererProps) => {
+  const type = question.type ?? "multiple_choice";
+
+  if (type === "fill_in_blank") {
+    return <FillInBlankQuestion question={question} questionNumber={questionNumber} />;
+  }
+  if (type === "matching") {
+    return <MatchingQuestion question={question} questionNumber={questionNumber} />;
+  }
+  if (type === "sorting") {
+    return <SortingQuestion question={question} questionNumber={questionNumber} />;
+  }
+
+  return <MultipleChoiceQuestion question={question} questionNumber={questionNumber} />;
+};
+
+function MultipleChoiceQuestion({ question, questionNumber }: QuestionRendererProps) {
   const { answers, submitAnswer } = useExamStore();
   const currentAnswer = answers[question.id]?.selectedOptionId || "";
 
@@ -27,7 +43,6 @@ export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererP
 
   return (
     <div className="flex-1 flex flex-col gap-6 p-6 rounded-2xl border border-neutral-200/60 bg-white dark:border-neutral-800/60 dark:bg-neutral-900 shadow-sm">
-      {/* Header Info */}
       <div className="flex items-center justify-between pb-4 border-b border-neutral-100 dark:border-neutral-800">
         <span className="text-sm font-semibold uppercase tracking-wider text-primary bg-primary/5 px-3 py-1 rounded-full">
           Soal Pilihan Ganda
@@ -37,13 +52,11 @@ export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererP
         </span>
       </div>
 
-      {/* Question Stem */}
       <RichContent
         html={question.text}
         className="question-html text-lg font-medium text-neutral-900 dark:text-neutral-100 leading-relaxed"
       />
 
-      {/* Options Panel */}
       <RadioGroup
         value={currentAnswer}
         onValueChange={handleSelectOption}
@@ -93,4 +106,4 @@ export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererP
       </RadioGroup>
     </div>
   );
-};
+}

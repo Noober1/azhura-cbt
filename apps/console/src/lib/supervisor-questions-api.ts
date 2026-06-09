@@ -12,8 +12,10 @@ import type { AdminQuestion, AssignedExam } from "../types";
 export interface SupervisorQuestionInput {
   text: string;
   orderIndex?: number;
-  options: { text: string }[];
-  correctOptionIndex: number;
+  type?: import("@azhura/shared").QuestionType;
+  config?: import("@azhura/shared").QuestionConfig;
+  options?: { text: string }[];
+  correctOptionIndex?: number;
 }
 
 export const supervisorQuestionsApi = {

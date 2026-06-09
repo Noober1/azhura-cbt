@@ -72,7 +72,7 @@ interface ExamState {
   applyFinalizedResult: (result: ExamResult, examTitle: string) => void;
   setQuestions: (questions: Question[]) => void;
   setCurrentQuestionIndex: (index: number) => void;
-  submitAnswer: (questionId: string, selectedOptionId: string | null) => Promise<void>;
+  submitAnswer: (questionId: string, selectedOptionId: string | null, answerValue?: string | null) => Promise<void>;
   toggleFlagQuestion: (questionId: string) => Promise<void>;
   setTimeRemaining: (time: number | ((prev: number) => number)) => void;
   submitExam: () => Promise<ExamResult | null>;
@@ -146,6 +146,7 @@ export const useExamStore = create<ExamState>((set, get) => {
           sessionId: examSessionId,
           questionId,
           selectedOptionId: answer.selectedOptionId ?? null,
+          answerValue: answer.answerValue ?? null,
           timestamp: answer.timestamp,
         });
       } catch (error) {
@@ -232,11 +233,12 @@ export const useExamStore = create<ExamState>((set, get) => {
     }
   },
 
-  submitAnswer: async (questionId, selectedOptionId) => {
+  submitAnswer: async (questionId, selectedOptionId, answerValue) => {
     const timestamp = Date.now();
     const newAnswer: ExamAnswer = {
       questionId,
       selectedOptionId,
+      answerValue: answerValue ?? null,
       timestamp,
       isFlagged: !!get().flaggedQuestions[questionId],
     };

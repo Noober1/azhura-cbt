@@ -71,6 +71,8 @@ async function getQuestionDetail(examId: string, questionId: string) {
     id: question.id,
     examId: question.examId,
     text: question.text,
+    type: question.type ?? "multiple_choice",
+    config: question.config ?? null,
     orderIndex: question.orderIndex,
     correctOptionId: question.correctOptionId,
     options: optionRows,
@@ -93,6 +95,8 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       .select({
         id: questions.id,
         text: questions.text,
+        type: questions.type,
+        config: questions.config,
         orderIndex: questions.orderIndex,
         correctOptionId: questions.correctOptionId,
       })
@@ -127,6 +131,8 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
     return questionRows.map((q) => ({
       id: q.id,
       text: q.text,
+      type: q.type ?? "multiple_choice",
+      config: q.config ?? null,
       orderIndex: q.orderIndex,
       correctOptionId: q.correctOptionId,
       options: byQuestion.get(q.id) ?? [],
@@ -146,20 +152,8 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       const { examId } = params;
       await assertExamExists(examId);
 
-      if (body.correctOptionIndex >= body.options.length) {
-        throw new BadRequestError(
-          "correctOptionIndex di luar jangkauan daftar opsi."
-        );
-      }
-
+      const qType = body.type ?? "multiple_choice";
       const questionId = randomUUID();
-      const optionRows = body.options.map((o, index) => ({
-        id: randomUUID(),
-        questionId,
-        text: o.text,
-        orderIndex: index,
-      }));
-      const correctOptionId = optionRows[body.correctOptionIndex].id;
 
       await db.transaction(async (tx) => {
         const [active] = await tx
@@ -169,19 +163,44 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           .limit(1);
         if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
 
-        await tx.insert(questions).values({
-          id: questionId,
-          examId,
-          text: body.text,
-          correctOptionId,
-          orderIndex: body.orderIndex ?? 0,
-        });
-        await tx.insert(options).values(optionRows);
+        if (qType === "multiple_choice") {
+          if (body.options === undefined || body.correctOptionIndex === undefined) {
+            throw new BadRequestError("options dan correctOptionIndex wajib untuk soal pilihan ganda.");
+          }
+          if (body.correctOptionIndex >= body.options.length) {
+            throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
+          }
+          const optionRows = body.options.map((o, index) => ({
+            id: randomUUID(),
+            questionId,
+            text: o.text,
+            orderIndex: index,
+          }));
+          const correctOptionId = optionRows[body.correctOptionIndex].id;
+          await tx.insert(questions).values({
+            id: questionId,
+            examId,
+            text: body.text,
+            type: "multiple_choice",
+            correctOptionId,
+            orderIndex: body.orderIndex ?? 0,
+          });
+          await tx.insert(options).values(optionRows);
+        } else {
+          if (!body.config) throw new BadRequestError("config wajib untuk tipe soal ini.");
+          await tx.insert(questions).values({
+            id: questionId,
+            examId,
+            text: body.text,
+            type: qType,
+            config: body.config,
+            orderIndex: body.orderIndex ?? 0,
+          });
+        }
       });
 
-      // Question count is part of the student exam listing → notify.
       notifyExamListChanged(await getExamGroupIds(examId));
-      log.info("Question created", { examId, questionId });
+      log.info("Question created", { examId, questionId, type: qType });
       set.status = 201;
       return getQuestionDetail(examId, questionId);
     },
@@ -189,10 +208,15 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       body: t.Object({
         text: t.String({ minLength: 1 }),
         orderIndex: t.Optional(t.Integer({ minimum: 0 })),
-        options: t.Array(t.Object({ text: t.String({ minLength: 1 }) }), {
-          minItems: 2,
-        }),
-        correctOptionIndex: t.Integer({ minimum: 0 }),
+        type: t.Optional(t.Union([
+          t.Literal("multiple_choice"),
+          t.Literal("fill_in_blank"),
+          t.Literal("matching"),
+          t.Literal("sorting"),
+        ])),
+        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }), { minItems: 2 })),
+        correctOptionIndex: t.Optional(t.Integer({ minimum: 0 })),
+        config: t.Optional(t.Any()),
       }),
     }
   )
@@ -241,6 +265,8 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       const patch: Partial<typeof questions.$inferInsert> = {};
       if (body.text !== undefined) patch.text = body.text;
       if (body.orderIndex !== undefined) patch.orderIndex = body.orderIndex;
+      if (body.type !== undefined) patch.type = body.type;
+      if (body.config !== undefined) patch.config = body.config;
       if (newCorrectOptionId !== undefined)
         patch.correctOptionId = newCorrectOptionId;
 
@@ -268,11 +294,14 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       body: t.Object({
         text: t.Optional(t.String({ minLength: 1 })),
         orderIndex: t.Optional(t.Integer({ minimum: 0 })),
-        options: t.Optional(
-          t.Array(t.Object({ text: t.String({ minLength: 1 }) }), {
-            minItems: 2,
-          })
-        ),
+        type: t.Optional(t.Union([
+          t.Literal("multiple_choice"),
+          t.Literal("fill_in_blank"),
+          t.Literal("matching"),
+          t.Literal("sorting"),
+        ])),
+        config: t.Optional(t.Any()),
+        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }), { minItems: 2 })),
         correctOptionIndex: t.Optional(t.Integer({ minimum: 0 })),
       }),
     }

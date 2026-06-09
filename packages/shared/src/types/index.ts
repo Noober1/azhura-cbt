@@ -61,6 +61,8 @@ export interface Question {
 export interface ExamAnswer {
   questionId: string;
   selectedOptionId: string | null;
+  /** JSON-serialized answer for non-MC types; null for multiple_choice. */
+  answerValue?: string | null;
   timestamp: number;
   isFlagged: boolean;
 }

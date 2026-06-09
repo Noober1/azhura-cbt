@@ -17,6 +17,7 @@
 export interface RawBatchAnswer {
   questionId: string;
   selectedOptionId: string | null;
+  answerValue?: string | null;
   timestamp: number;
 }
 
@@ -41,6 +42,7 @@ export const dedupeAnswersByQuestion = (
     const normalized: RawBatchAnswer = {
       questionId: answer.questionId,
       selectedOptionId: answer.selectedOptionId ?? null,
+      answerValue: answer.answerValue ?? null,
       timestamp: answer.timestamp,
     };
 

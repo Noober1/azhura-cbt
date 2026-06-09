@@ -207,6 +207,8 @@ export const answers = mysqlTable(
       .notNull()
       .references(() => questions.id),
     selectedOptionId: varchar("selected_option_id", { length: 36 }),
+    /** JSON-serialized answer for non-MC types; null for multiple_choice. */
+    answerValue: text("answer_value"),
     timestamp: bigint("timestamp", { mode: "number" }).notNull(),
     isFlagged: tinyint("is_flagged").notNull().default(0),
   },
