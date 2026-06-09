@@ -26,6 +26,7 @@ import { MediaGalleryPage } from "../components/media/MediaGalleryPage";
 import { SupervisorExamListPage } from "../components/supervisor/SupervisorExamListPage";
 import { SupervisorQuestionListPage } from "../components/supervisor/SupervisorQuestionListPage";
 import { SupervisorQuestionFormPage } from "../components/supervisor/SupervisorQuestionFormPage";
+import { AdminQuestionFormPage } from "../components/questions/AdminQuestionFormPage";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -64,6 +65,8 @@ export function AppRoutes() {
         <Route path="/exams" element={<AdminRoute><ExamListPage /></AdminRoute>} />
         <Route path="/exams/:examId" element={<AdminRoute><ExamDetailPage /></AdminRoute>} />
         <Route path="/exams/:examId/sessions" element={<AdminRoute><ExamSessionsPage /></AdminRoute>} />
+        <Route path="/exams/:examId/questions/new" element={<AdminRoute><AdminQuestionFormPage /></AdminRoute>} />
+        <Route path="/exams/:examId/questions/:questionId/edit" element={<AdminRoute><AdminQuestionFormPage /></AdminRoute>} />
         <Route path="/students" element={<AdminRoute><StudentListPage /></AdminRoute>} />
         <Route path="/groups" element={<AdminRoute><GroupListPage /></AdminRoute>} />
         <Route path="/media" element={<MediaGalleryPage />} />

@@ -2,7 +2,7 @@
  * Azhura CBT Console — Exam detail & question manager.
  *
  * Loads a single exam (with its questions, options, and answer key) and provides
- * full question CRUD: add/edit via <QuestionFormModal/>, delete via
+ * full question CRUD: add/edit via dedicated full-page routes, delete via
  * <ConfirmDialog/>. Also surfaces exam metadata, an edit shortcut, and a live
  * lock banner when students are mid-exam (#46). The participant/session list and
  * reset action live on a dedicated page (<ExamSessionsPage/>, #59), linked from
@@ -22,7 +22,7 @@ import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { ExamFormModal } from "./ExamFormModal";
 import { SupervisorAssignModal } from "./SupervisorAssignModal";
-import { QuestionFormModal } from "../questions/QuestionFormModal";
+import { QuestionContentRenderer } from "../supervisor/QuestionContentRenderer";
 import {
   PlusIcon,
   PencilIcon,
@@ -48,8 +48,6 @@ export function ExamDetailPage() {
   const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
 
   const [examFormOpen, setExamFormOpen] = useState(false);
-  const [questionFormOpen, setQuestionFormOpen] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<AdminQuestion | null>(null);
   const [deletingQuestion, setDeletingQuestion] = useState<AdminQuestion | null>(null);
 
   const loadSupervisors = useCallback(async () => {
@@ -92,22 +90,6 @@ export function ExamDetailPage() {
     const id = setInterval(refresh, 15_000);
     return () => clearInterval(id);
   }, [refresh]);
-
-  function openAddQuestion() {
-    setEditingQuestion(null);
-    setQuestionFormOpen(true);
-  }
-
-  function openEditQuestion(q: AdminQuestion) {
-    setEditingQuestion(q);
-    setQuestionFormOpen(true);
-  }
-
-  function handleQuestionSaved() {
-    setQuestionFormOpen(false);
-    setEditingQuestion(null);
-    load();
-  }
 
   async function confirmDeleteQuestion() {
     if (!deletingQuestion) return;
@@ -152,9 +134,6 @@ export function ExamDetailPage() {
       </div>
     );
   }
-
-  const nextOrderIndex =
-    exam.questions.reduce((max, q) => Math.max(max, q.orderIndex), -1) + 1;
 
   const activeCount = exam.allowedGroups.reduce((n, g) => n + g.activeParticipants, 0);
   const isLocked = activeCount > 0;
@@ -278,7 +257,7 @@ export function ExamDetailPage() {
           </p>
         </div>
         <Button
-          onClick={openAddQuestion}
+          onClick={() => navigate(`/exams/${examId}/questions/new`)}
           disabled={isLocked}
           leadingIcon={<PlusIcon className="size-4" />}
         >
@@ -302,7 +281,7 @@ export function ExamDetailPage() {
             <span>Tambahkan soal pertama untuk ujian ini.</span>
             <Button
               size="sm"
-              onClick={openAddQuestion}
+              onClick={() => navigate(`/exams/${examId}/questions/new`)}
               disabled={isLocked}
               leadingIcon={<PlusIcon className="size-4" />}
             >
@@ -322,13 +301,11 @@ export function ExamDetailPage() {
                   <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent-wash text-xs font-semibold text-accent-strong tabular">
                     {index + 1}
                   </span>
-                  <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-ink">
-                    {q.text}
-                  </p>
+                  <QuestionContentRenderer html={q.text} className="text-sm font-medium leading-relaxed" />
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
-                    onClick={isLocked ? undefined : () => openEditQuestion(q)}
+                    onClick={isLocked ? undefined : () => navigate(`/exams/${examId}/questions/${q.id}/edit`)}
                     disabled={isLocked}
                     aria-label={`Edit soal ${index + 1}`}
                     aria-disabled={isLocked}
@@ -377,7 +354,7 @@ export function ExamDetailPage() {
                           </span>
                         )}
                       </span>
-                      <span className="whitespace-pre-wrap">{opt.text}</span>
+                      <QuestionContentRenderer html={opt.text} />
                     </li>
                   );
                 })}
@@ -403,18 +380,6 @@ export function ExamDetailPage() {
           setExam(saved);
           setExamFormOpen(false);
         }}
-      />
-
-      <QuestionFormModal
-        open={questionFormOpen}
-        examId={examId}
-        question={editingQuestion}
-        nextOrderIndex={nextOrderIndex}
-        onClose={() => {
-          setQuestionFormOpen(false);
-          setEditingQuestion(null);
-        }}
-        onSaved={handleQuestionSaved}
       />
 
       <ConfirmDialog

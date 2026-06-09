@@ -79,7 +79,7 @@ async function getQuestionDetail(examId: string, questionId: string) {
     .select({ id: options.id, text: options.text })
     .from(options)
     .where(eq(options.questionId, questionId))
-    .orderBy(asc(options.id));
+    .orderBy(asc(options.orderIndex));
 
   return {
     id: question.id,
@@ -146,7 +146,7 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
           .select({ id: options.id, questionId: options.questionId, text: options.text })
           .from(options)
           .where(inArray(options.questionId, questionRows.map((q) => q.id)))
-          .orderBy(asc(options.id))
+          .orderBy(asc(options.orderIndex))
       : [];
 
     const byQuestion = new Map<string, { id: string; text: string }[]>();
@@ -184,10 +184,11 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
       }
 
       const questionId = randomUUID();
-      const optionRows = body.options.map((o) => ({
+      const optionRows = body.options.map((o, index) => ({
         id: randomUUID(),
         questionId,
         text: o.text,
+        orderIndex: index,
       }));
       const correctOptionId = optionRows[body.correctOptionIndex].id;
 
@@ -252,10 +253,11 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
         throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
       }
 
-      const newOptionRows = body.options.map((o) => ({
+      const newOptionRows = body.options.map((o, index) => ({
         id: randomUUID(),
         questionId,
         text: o.text,
+        orderIndex: index,
       }));
       const correctOptionId = newOptionRows[body.correctOptionIndex].id;
 
