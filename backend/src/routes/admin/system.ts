@@ -138,9 +138,10 @@ export const adminSystemRoutes = new Elysia({ prefix: "/admin" })
   /**
    * POST /api/admin/system/reset
    *
-   * Wipes all exam data + student accounts, flushes Redis, and broadcasts
-   * `system:reset` to all connected clients so they log out.
-   * Admin/supervisor accounts and system settings are untouched.
+   * Full nuclear reset: wipes all users (including admins), exam data, sessions,
+   * groups, and logs. Flushes Redis and broadcasts `system:reset` so every client
+   * logs out. After reset the setup wizard appears to create a fresh admin account.
+   * System settings (app_settings) are the only data preserved.
    */
   .post("/system/reset", async ({ user }) => {
     log.warn("System reset initiated", { adminId: user.userId, adminNis: user.nis });
