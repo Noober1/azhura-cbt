@@ -92,7 +92,15 @@ export function AdminQuestionFormPage() {
       setCorrectIndex(idx >= 0 ? Math.min(idx, opts.length - 1) : 0);
     } else if (type === "fill_in_blank" && q.config) {
       const cfg = (typeof q.config === "string" ? JSON.parse(q.config) : q.config) as FillInBlankConfig;
-      setFillInBlankConfig(typeof cfg.answer === "string" ? cfg : DEFAULT_FILL_IN_BLANK);
+      if (typeof cfg.answer === "string") {
+        // Normalise: ensure `answers` is always populated so the form shows a list.
+        setFillInBlankConfig({
+          answer: cfg.answer,
+          answers: cfg.answers?.length ? cfg.answers : [cfg.answer],
+        });
+      } else {
+        setFillInBlankConfig(DEFAULT_FILL_IN_BLANK);
+      }
     } else if (type === "matching" && q.config) {
       const cfg = (typeof q.config === "string" ? JSON.parse(q.config) : q.config) as MatchingConfig;
       setMatchingConfig(Array.isArray(cfg.pairs) ? cfg : DEFAULT_MATCHING);
@@ -142,7 +150,10 @@ export function AdminQuestionFormPage() {
           return `Opsi ${OPTION_LABELS[i]} tidak boleh kosong.`;
       }
     } else if (questionType === "fill_in_blank") {
-      if (!fillInBlankConfig.answer.trim()) return "Jawaban benar tidak boleh kosong.";
+      const candidates = fillInBlankConfig.answers?.length
+        ? fillInBlankConfig.answers
+        : [fillInBlankConfig.answer];
+      if (!candidates.some((a) => a.trim())) return "Jawaban benar tidak boleh kosong.";
     } else if (questionType === "matching") {
       for (const [i, pair] of matchingConfig.pairs.entries()) {
         if (!pair.left.trim() || !pair.right.trim())

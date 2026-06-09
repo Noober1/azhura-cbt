@@ -1,12 +1,21 @@
 import type { FillInBlankConfig, MatchingConfig, SortingConfig } from "@azhura/shared";
 
 /**
- * Grades a fill-in-blank answer against the correct answer.
- * Case-insensitive, whitespace-trimmed exact match.
+ * Grades a fill-in-blank answer against one or more correct answers.
+ * Case-insensitive, whitespace-trimmed exact match against every candidate.
+ *
+ * Backward compatible: if `config.answers` is absent or empty, falls back to
+ * `config.answer` so existing questions without `answers` still grade correctly.
  */
 export function gradeFillInBlank(answer: string, config: FillInBlankConfig): boolean {
-  if (!config?.answer) return false;
-  return answer.trim().toLowerCase() === config.answer.trim().toLowerCase();
+  if (!answer) return false;
+  const normalized = answer.trim().toLowerCase();
+  const candidates = config.answers?.length
+    ? config.answers
+    : config.answer
+    ? [config.answer]
+    : [];
+  return candidates.some((c) => c.trim().toLowerCase() === normalized);
 }
 
 /**
