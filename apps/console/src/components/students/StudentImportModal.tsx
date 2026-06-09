@@ -268,19 +268,6 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
 
       {(step === "preview" || step === "confirming") && preview && (
         <div className="space-y-4">
-          {/* Summary stats */}
-          <div className="flex flex-wrap gap-2">
-            <Badge tone="neutral">{preview.total} baris total</Badge>
-            <Badge tone="positive">{preview.validCount} valid</Badge>
-            {errorCount > 0 && <Badge tone="danger">{errorCount} error</Badge>}
-            {preview.insertCount > 0 && (
-              <Badge tone="accent">{preview.insertCount} siswa baru</Badge>
-            )}
-            {preview.updateCount > 0 && (
-              <Badge tone="neutral">{preview.updateCount} diperbarui</Badge>
-            )}
-          </div>
-
           {/* Sync mode summary */}
           {preview.mode === "sync" && (
             <div className="rounded-md border border-warn-wash bg-warn-wash/40 px-3 py-2 text-sm">
@@ -306,37 +293,63 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
             </p>
           )}
 
-          {/* Row filter */}
+          {/* Row filter pills */}
           <div className="flex flex-wrap gap-1.5">
             {(
               [
-                { key: "all",    label: "Semua",  count: preview.total          },
-                { key: "error",  label: "Error",  count: errorCount             },
-                { key: "new",    label: "Baru",   count: preview.insertCount    },
-                { key: "update", label: "Update", count: preview.updateCount    },
+                {
+                  key: "all",
+                  label: "Semua",
+                  count: preview.total,
+                  active:   "bg-ink text-canvas border-ink",
+                  inactive: "border-line bg-canvas text-ink-soft hover:border-faint hover:text-ink",
+                  badge:    { active: "bg-white/20", inactive: "bg-line" },
+                },
+                {
+                  key: "error",
+                  label: "Error",
+                  count: errorCount,
+                  active:   "bg-danger text-white border-danger",
+                  inactive: "border-danger/20 bg-danger-wash text-danger hover:border-danger/40",
+                  badge:    { active: "bg-white/25", inactive: "bg-danger/15" },
+                },
+                {
+                  key: "new",
+                  label: "Baru",
+                  count: preview.insertCount,
+                  active:   "bg-positive text-white border-positive",
+                  inactive: "border-positive/20 bg-positive-wash text-positive hover:border-positive/40",
+                  badge:    { active: "bg-white/25", inactive: "bg-positive/15" },
+                },
+                {
+                  key: "update",
+                  label: "Update",
+                  count: preview.updateCount,
+                  active:   "bg-accent text-white border-accent",
+                  inactive: "border-accent/20 bg-accent-wash text-accent-strong hover:border-accent/40",
+                  badge:    { active: "bg-white/25", inactive: "bg-accent/15" },
+                },
               ] as const
-            ).map(({ key, label, count }) => (
+            ).map(({ key, label, count, active, inactive, badge }) =>
               count > 0 && (
                 <button
                   key={key}
                   onClick={() => setRowFilter(key)}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    rowFilter === key
-                      ? "border-accent bg-accent text-white"
-                      : "border-line bg-canvas text-faint hover:border-faint hover:text-ink"
+                    rowFilter === key ? active : inactive
                   }`}
                 >
                   {label}
                   <span
                     className={`rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums ${
-                      rowFilter === key ? "bg-white/20" : "bg-line/60"
+                      rowFilter === key ? badge.active : badge.inactive
                     }`}
                   >
                     {count}
                   </span>
                 </button>
               )
-            ))}
+            )}
           </div>
 
           {/* Row table */}
