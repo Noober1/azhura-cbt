@@ -34,7 +34,10 @@ export interface QuestionOption {
 export type QuestionType = 'multiple_choice' | 'fill_in_blank' | 'matching' | 'sorting';
 
 export interface FillInBlankConfig {
+  /** Primary correct answer (legacy field — always present for backward compat). */
   answer: string;
+  /** Additional valid answers. When non-empty, any match in this list also counts as correct. */
+  answers?: string[];
 }
 
 export interface MatchingConfig {

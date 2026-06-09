@@ -18,6 +18,24 @@ describe("gradeFillInBlank", () => {
   test("empty student answer returns false", () => {
     expect(gradeFillInBlank("", { answer: "jakarta" })).toBe(false);
   });
+
+  // Multiple correct answers (answers field)
+  test("matches first alternative answer", () => {
+    expect(gradeFillInBlank("ibu kota", { answer: "jakarta", answers: ["jakarta", "ibu kota"] })).toBe(true);
+  });
+  test("matches second alternative answer case-insensitively", () => {
+    expect(gradeFillInBlank("IBU KOTA", { answer: "jakarta", answers: ["jakarta", "ibu kota"] })).toBe(true);
+  });
+  test("no match in alternatives returns false", () => {
+    expect(gradeFillInBlank("surabaya", { answer: "jakarta", answers: ["jakarta", "ibu kota"] })).toBe(false);
+  });
+  test("empty answers array falls back to answer field", () => {
+    expect(gradeFillInBlank("jakarta", { answer: "jakarta", answers: [] })).toBe(true);
+    expect(gradeFillInBlank("surabaya", { answer: "jakarta", answers: [] })).toBe(false);
+  });
+  test("answers field with whitespace is trimmed", () => {
+    expect(gradeFillInBlank("ibu kota", { answer: "jakarta", answers: ["  ibu kota  "] })).toBe(true);
+  });
 });
 
 const pairs = [
