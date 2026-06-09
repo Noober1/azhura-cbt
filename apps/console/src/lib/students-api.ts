@@ -44,4 +44,18 @@ export const studentsApi = {
   async remove(studentId: string): Promise<void> {
     await api.delete(`/admin/students/${studentId}`);
   },
+
+  /** Collects ALL students matching filters (no pagination) for card printing (#22). */
+  async fetchAll(params: Omit<ListStudentsParams, "page" | "limit">): Promise<StudentSummary[]> {
+    const all: StudentSummary[] = [];
+    let page = 1;
+    const limit = 100;
+    while (true) {
+      const res = await studentsApi.list({ ...params, page, limit });
+      all.push(...res.data);
+      if (res.data.length === 0 || all.length >= res.meta.total) break;
+      page++;
+    }
+    return all;
+  },
 };

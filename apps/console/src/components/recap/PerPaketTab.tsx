@@ -14,13 +14,15 @@ import { getErrorMessage } from "../../lib/errors";
 import { saveBlob } from "../../lib/download";
 import { toast } from "../../stores/toast";
 import { formatDateTime, fromDatetimeLocal } from "../../lib/format";
+import { settingsApi } from "../../lib/settings-api";
+import { buildExamRecapPrintHtml, openPrintWindow } from "../../lib/print-utils";
 import type { ExamRecapResponse, ExamSummary } from "../../types";
 import { Badge } from "../ui/Badge";
 import { Select } from "../ui/Select";
 import { Input } from "../ui/Field";
 import { Button } from "../ui/Button";
 import { Spinner, CenterState } from "../ui/Spinner";
-import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon } from "../ui/icons";
+import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon, PrinterIcon } from "../ui/icons";
 import { RecapStatusBadge, StatCard, ScoreCell, formatScore } from "./RecapShared";
 
 const PAGE_SIZE = 20;
@@ -40,6 +42,7 @@ export function PerPaketTab() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   // Filters shared by the recap query and the Excel export.
   const filters = {
@@ -57,6 +60,22 @@ export function PerPaketTab() {
       toast.error(getErrorMessage(err, "Gagal mengekspor rekap ke Excel."));
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function onPrint() {
+    setPrinting(true);
+    try {
+      const [printData, settings] = await Promise.all([
+        recapApi.examRecapAll(examId, filters),
+        settingsApi.get(),
+      ]);
+      const opened = openPrintWindow(buildExamRecapPrintHtml(printData, settings.schoolName));
+      if (!opened) toast.error("Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal menyiapkan cetak PDF."));
+    } finally {
+      setPrinting(false);
     }
   }
 
@@ -170,7 +189,22 @@ export function PerPaketTab() {
       ) : data ? (
         <>
           {/* Export toolbar */}
-          <div className="mt-6 flex items-center justify-end">
+          <div className="mt-6 flex items-center justify-end gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onPrint}
+              disabled={printing || data.total === 0}
+              leadingIcon={
+                printing ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <PrinterIcon className="size-4" />
+                )
+              }
+            >
+              {printing ? "Menyiapkan…" : "Cetak PDF"}
+            </Button>
             <Button
               variant="secondary"
               size="sm"

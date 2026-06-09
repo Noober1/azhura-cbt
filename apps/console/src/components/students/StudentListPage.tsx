@@ -23,6 +23,7 @@ import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { StudentFormModal } from "./StudentFormModal";
 import { StudentImportModal } from "./StudentImportModal";
+import { StudentCardModal } from "./StudentCardModal";
 import {
   PlusIcon,
   SearchIcon,
@@ -32,6 +33,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   UploadIcon,
+  PrinterIcon,
 } from "../ui/icons";
 
 const PAGE_SIZE = 10;
@@ -53,6 +55,7 @@ export function StudentListPage() {
   const [editing, setEditing] = useState<StudentSummary | null>(null);
   const [deleting, setDeleting] = useState<StudentSummary | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +125,13 @@ export function StudentListPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setCardOpen(true)}
+            leadingIcon={<PrinterIcon className="size-4" />}
+          >
+            Cetak Kartu
+          </Button>
           <Button
             variant="secondary"
             onClick={() => setImportOpen(true)}
@@ -298,6 +308,11 @@ export function StudentListPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onImported={() => { setImportOpen(false); load(); }}
+      />
+
+      <StudentCardModal
+        open={cardOpen}
+        onClose={() => setCardOpen(false)}
       />
 
       <ConfirmDialog
