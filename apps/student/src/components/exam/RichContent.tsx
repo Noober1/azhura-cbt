@@ -1,7 +1,6 @@
+import { useEffect, useRef } from "react";
 import DOMPurify from "dompurify";
 import renderMathInElement from "katex/contrib/auto-render";
-import { useEffect, useRef } from "react";
-import "../editor/editor.css";
 
 const MATH_OPTIONS = {
   delimiters: [
@@ -13,19 +12,21 @@ const MATH_OPTIONS = {
   throwOnError: false,
 };
 
-interface QuestionContentRendererProps {
+interface RichContentProps {
   html: string;
   className?: string;
 }
 
-export function QuestionContentRenderer({ html, className = "" }: QuestionContentRendererProps) {
+export function RichContent({ html, className }: RichContentProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!ref.current) return;
+    // Set innerHTML and render KaTeX in one atomic sequence so React's
+    // reconciler never overwrites KaTeX output between the two steps.
     ref.current.innerHTML = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
     renderMathInElement(ref.current, MATH_OPTIONS);
   }, [html]);
 
-  return <div ref={ref} className={`tiptap-editor ${className}`} />;
+  return <div ref={ref} className={className} />;
 }
