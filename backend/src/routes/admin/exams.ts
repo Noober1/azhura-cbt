@@ -168,6 +168,8 @@ async function getExamDetail(examId: string) {
     .select({
       id: questions.id,
       text: questions.text,
+      type: questions.type,
+      config: questions.config,
       orderIndex: questions.orderIndex,
       correctOptionId: questions.correctOptionId,
     })
@@ -220,6 +222,8 @@ async function getExamDetail(examId: string) {
     questions: questionRows.map((q) => ({
       id: q.id,
       text: q.text,
+      type: q.type,
+      config: q.config,
       orderIndex: q.orderIndex,
       correctOptionId: q.correctOptionId,
       options: optionsByQuestion.get(q.id) ?? [],
