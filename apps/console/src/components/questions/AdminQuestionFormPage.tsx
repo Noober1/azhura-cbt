@@ -1,21 +1,16 @@
 /**
- * Azhura CBT Console — Supervisor Question Form Page (#88).
+ * Azhura CBT Console — Admin Question Form Page.
  *
- * Full-page create/edit form for a multiple-choice question.
- * Detect mode from route params: if `:questionId` is present → edit, else → create.
- *
- * Layout:
- * - Teks Soal → RichTextEditor (full block editor, supports KaTeX + media)
- * - Opsi A/B/C/D → InlineEditor per option (inline formatting + math)
- * - Jawaban Benar → radio (A/B/C/D)
- * - Simpan / Batal
+ * Full-page create/edit form for a multiple-choice question (admin role).
+ * Uses examsApi (admin endpoints) and mediaApi. Supports 2–6 dynamic options.
+ * Mode is detected from route params: :questionId present → edit, else → create.
  */
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import type { AdminQuestion } from "../../types";
-import { supervisorQuestionsApi } from "../../lib/supervisor-questions-api";
-import { supervisorMediaApi } from "../../lib/supervisor-media-api";
+import { examsApi } from "../../lib/exams-api";
+import { mediaApi } from "../../lib/media-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { RichTextEditor } from "../editor/RichTextEditor";
@@ -23,44 +18,41 @@ import { InlineEditor } from "../editor/InlineEditor";
 import { Button } from "../ui/Button";
 import { Spinner } from "../ui/Spinner";
 import { ChevronLeftIcon, EyeIcon, PlusIcon, TrashIcon } from "../ui/icons";
-import { QuestionPreviewModal } from "./QuestionPreviewModal";
+import { QuestionPreviewModal } from "../supervisor/QuestionPreviewModal";
 
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
-const EMPTY_OPTIONS = ["<p></p>", "<p></p>", "<p></p>", "<p></p>"];
+const DEFAULT_OPTIONS = ["<p></p>", "<p></p>", "<p></p>", "<p></p>"];
 
-export function SupervisorQuestionFormPage() {
+export function AdminQuestionFormPage() {
   const { examId, questionId } = useParams<{ examId: string; questionId: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(questionId);
 
   const [loadingQuestion, setLoadingQuestion] = useState(isEdit);
-
-  // Form state
   const [questionText, setQuestionText] = useState("<p></p>");
-  const [options, setOptions] = useState<string[]>(EMPTY_OPTIONS);
+  const [options, setOptions] = useState<string[]>(DEFAULT_OPTIONS);
   const [correctIndex, setCorrectIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Load existing question in edit mode.
   const loadQuestion = useCallback(async () => {
     if (!examId || !questionId) return;
     try {
       setLoadingQuestion(true);
-      const questions = await supervisorQuestionsApi.listQuestions(examId);
-      const q = questions.find((q) => q.id === questionId);
+      const exam = await examsApi.get(examId);
+      const q = exam.questions.find((q) => q.id === questionId);
       if (!q) {
         toast.error("Soal tidak ditemukan.");
-        navigate(`/supervisor/exams/${examId}/questions`, { replace: true });
+        navigate(`/exams/${examId}`, { replace: true });
         return;
       }
       hydrate(q);
     } catch (err) {
       toast.error(getErrorMessage(err));
-      navigate(`/supervisor/exams/${examId}/questions`, { replace: true });
+      navigate(`/exams/${examId}`, { replace: true });
     } finally {
       setLoadingQuestion(false);
     }
@@ -80,28 +72,27 @@ export function SupervisorQuestionFormPage() {
   }
 
   function updateOption(idx: number, val: string) {
-    setOptions((prev: string[]) => prev.map((o: string, i: number) => (i === idx ? val : o)));
+    setOptions((prev) => prev.map((o, i) => (i === idx ? val : o)));
   }
 
   function addOption() {
-    setOptions((prev: string[]) => (prev.length >= MAX_OPTIONS ? prev : [...prev, "<p></p>"]));
+    setOptions((prev) => (prev.length >= MAX_OPTIONS ? prev : [...prev, "<p></p>"]));
   }
 
   function removeOption(idx: number) {
     if (options.length <= MIN_OPTIONS) return;
-    setOptions((prev: string[]) => prev.filter((_: string, i: number) => i !== idx));
-    setCorrectIndex((ci: number) => {
+    setOptions((prev) => prev.filter((_, i) => i !== idx));
+    setCorrectIndex((ci) => {
       if (idx === ci) return 0;
       return idx < ci ? ci - 1 : ci;
     });
   }
 
   function validate(): string | null {
-    const textStripped = questionText.replace(/<[^>]*>/g, "").trim();
-    if (!textStripped) return "Teks soal tidak boleh kosong.";
+    if (!questionText.replace(/<[^>]*>/g, "").trim()) return "Teks soal tidak boleh kosong.";
     for (let i = 0; i < options.length; i++) {
-      const stripped = options[i].replace(/<[^>]*>/g, "").trim();
-      if (!stripped) return `Opsi ${OPTION_LABELS[i]} tidak boleh kosong.`;
+      if (!options[i].replace(/<[^>]*>/g, "").trim())
+        return `Opsi ${OPTION_LABELS[i]} tidak boleh kosong.`;
     }
     return null;
   }
@@ -114,8 +105,8 @@ export function SupervisorQuestionFormPage() {
       setError(validationError);
       return;
     }
-
     if (!examId) return;
+
     const input = {
       text: questionText,
       options: options.map((o) => ({ text: o })),
@@ -125,13 +116,13 @@ export function SupervisorQuestionFormPage() {
     try {
       setBusy(true);
       if (isEdit && questionId) {
-        await supervisorQuestionsApi.updateQuestion(examId, questionId, input);
+        await examsApi.updateQuestion(examId, questionId, input);
         toast.success("Soal berhasil diperbarui.");
       } else {
-        await supervisorQuestionsApi.createQuestion(examId, input);
+        await examsApi.createQuestion(examId, input);
         toast.success("Soal berhasil disimpan.");
       }
-      navigate(`/supervisor/exams/${examId}/questions`);
+      navigate(`/exams/${examId}`);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -152,11 +143,11 @@ export function SupervisorQuestionFormPage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link
-          to={`/supervisor/exams/${examId}/questions`}
+          to={`/exams/${examId}`}
           className="focus-ring inline-flex items-center gap-1 rounded-md text-sm text-faint hover:text-ink"
         >
           <ChevronLeftIcon className="size-4" />
-          Daftar Soal
+          Detail Ujian
         </Link>
         <span className="text-faint">/</span>
         <h1 className="text-lg font-semibold text-ink">
@@ -175,8 +166,8 @@ export function SupervisorQuestionFormPage() {
             onChange={setQuestionText}
             placeholder="Tulis teks soal di sini…"
             disabled={busy}
-            mediaListFn={supervisorMediaApi.list}
-            mediaUploadFn={supervisorMediaApi.upload}
+            mediaListFn={mediaApi.list}
+            mediaUploadFn={mediaApi.upload}
           />
         </section>
 
@@ -188,6 +179,7 @@ export function SupervisorQuestionFormPage() {
             </p>
             <span className="text-xs text-faint">{options.length}/{MAX_OPTIONS}</span>
           </div>
+
           {options.map((opt, idx) => (
             <div key={idx} className="flex items-start gap-3">
               <label className="flex cursor-pointer items-center gap-2 pt-2.5">
@@ -200,18 +192,14 @@ export function SupervisorQuestionFormPage() {
                   disabled={busy}
                   className="accent-accent size-3.5"
                 />
-                <span
-                  className={`text-sm font-semibold ${
-                    correctIndex === idx ? "text-accent" : "text-faint"
-                  }`}
-                >
+                <span className={`text-sm font-semibold ${correctIndex === idx ? "text-accent" : "text-faint"}`}>
                   {OPTION_LABELS[idx]}
                 </span>
               </label>
               <div className="flex-1">
                 <InlineEditor
                   value={opt}
-                  onChange={(val: string) => updateOption(idx, val)}
+                  onChange={(val) => updateOption(idx, val)}
                   placeholder={`Teks opsi ${OPTION_LABELS[idx]}…`}
                   disabled={busy}
                 />
@@ -229,6 +217,7 @@ export function SupervisorQuestionFormPage() {
               )}
             </div>
           ))}
+
           {options.length < MAX_OPTIONS && (
             <button
               type="button"
@@ -240,12 +229,12 @@ export function SupervisorQuestionFormPage() {
               Tambah opsi
             </button>
           )}
+
           <p className="text-xs text-faint">
             Pilih radio button di kiri untuk menandai jawaban yang benar.
           </p>
         </section>
 
-        {/* Validation error */}
         {error && (
           <p className="rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">
             {error}
@@ -270,7 +259,7 @@ export function SupervisorQuestionFormPage() {
             type="button"
             variant="ghost"
             disabled={busy}
-            onClick={() => navigate(`/supervisor/exams/${examId}/questions`)}
+            onClick={() => navigate(`/exams/${examId}`)}
           >
             Batal
           </Button>
