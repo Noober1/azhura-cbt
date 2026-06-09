@@ -10,8 +10,8 @@
     "seed": "bun run src/seed.ts",
     "seed:demo": "bun run src/seed-demo.ts",
     "migrate": "bun run src/migrate.ts",
-    "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
+    "db:generate": "bunx dotenv-cli -e .env.local -- drizzle-kit generate",
+    "db:push": "bunx dotenv-cli -e .env.local -- drizzle-kit push",
     "db:studio": "bunx dotenv-cli -e .env.local -- drizzle-kit studio"
   },
   "dependencies": {
