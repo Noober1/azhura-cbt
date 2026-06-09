@@ -25,6 +25,8 @@
     "@tauri-apps/plugin-store": "^2",
     "@tauri-apps/plugin-stronghold": "^2.3.1",
     "axios": "^1.16.1",
+    "dompurify": "^3.0.0",
+    "katex": "^0.16.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -47,6 +49,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@tauri-apps/cli": "^2.11.2",
+    "@types/dompurify": "^3.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/socket.io-client": "^3.0.0",

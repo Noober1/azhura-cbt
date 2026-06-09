@@ -1,7 +1,9 @@
+import DOMPurify from "dompurify";
 import { Question } from "../../types";
 import { useExamStore } from "../../stores/exam";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Label } from "../ui/label";
+import "../../styles/question-renderer.css";
 
 interface QuestionRendererProps {
   /** The question to display. */
@@ -10,9 +12,14 @@ interface QuestionRendererProps {
   questionNumber: number;
 }
 
+function safeHtml(html: string): string {
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+}
+
 /**
  * Renders a single multiple-choice question with selectable options (A, B, C…).
  * Selecting an option persists the answer via the exam store's `submitAnswer`.
+ * Question text and option text are HTML from the WYSIWYG editor (TipTap + KaTeX).
  */
 export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererProps) => {
   const { answers, submitAnswer } = useExamStore();
@@ -35,9 +42,10 @@ export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererP
       </div>
 
       {/* Question Stem */}
-      <div className="text-lg font-medium text-neutral-900 dark:text-neutral-100 leading-relaxed">
-        {question.text}
-      </div>
+      <div
+        className="question-html text-lg font-medium text-neutral-900 dark:text-neutral-100 leading-relaxed"
+        dangerouslySetInnerHTML={{ __html: safeHtml(question.text) }}
+      />
 
       {/* Options Panel */}
       <RadioGroup
@@ -46,8 +54,7 @@ export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererP
         className="flex flex-col gap-3 mt-2"
       >
         {question.options.map((option, index) => {
-          // Compute option letter (A, B, C, D, E)
-          const optionLetter = String.fromCharCode(65 + index); // 65 is ASCII for 'A'
+          const optionLetter = String.fromCharCode(65 + index);
           const isSelected = currentAnswer === option.id;
 
           return (
@@ -60,19 +67,16 @@ export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererP
                   : "bg-neutral-50/50 border-neutral-100 hover:bg-neutral-50 hover:border-neutral-200 dark:bg-neutral-800/40 dark:border-neutral-800 dark:hover:bg-neutral-800/80 dark:hover:border-neutral-700"
               }`}
             >
-              {/* Custom Radio Button & Label indicator */}
               <RadioGroupItem
                 value={option.id}
                 id={option.id}
-                onClick={(e) => e.stopPropagation()} // Prevent double clicks
+                onClick={(e) => e.stopPropagation()}
               />
-              
               <Label
                 htmlFor={option.id}
                 onClick={(e) => e.stopPropagation()}
                 className="flex-1 flex gap-3 text-base font-medium cursor-pointer leading-normal text-neutral-800 dark:text-neutral-200"
               >
-                {/* Visual Option Prefix (A, B, C...) */}
                 <span
                   className={`flex items-center justify-center w-7 h-7 rounded-lg text-sm font-bold border transition-colors ${
                     isSelected
@@ -82,7 +86,10 @@ export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererP
                 >
                   {optionLetter}
                 </span>
-                <span className="flex-1 pt-0.5">{option.text}</span>
+                <span
+                  className="question-html flex-1 pt-0.5"
+                  dangerouslySetInnerHTML={{ __html: safeHtml(option.text) }}
+                />
               </Label>
             </div>
           );

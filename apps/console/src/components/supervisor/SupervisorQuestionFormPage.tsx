@@ -22,7 +22,8 @@ import { RichTextEditor } from "../editor/RichTextEditor";
 import { InlineEditor } from "../editor/InlineEditor";
 import { Button } from "../ui/Button";
 import { Spinner } from "../ui/Spinner";
-import { ChevronLeftIcon } from "../ui/icons";
+import { ChevronLeftIcon, EyeIcon } from "../ui/icons";
+import { QuestionPreviewModal } from "./QuestionPreviewModal";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 const EMPTY_OPTIONS = ["<p></p>", "<p></p>", "<p></p>", "<p></p>"];
@@ -40,6 +41,7 @@ export function SupervisorQuestionFormPage() {
   const [correctIndex, setCorrectIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Load existing question in edit mode.
   const loadQuestion = useCallback(async () => {
@@ -220,12 +222,29 @@ export function SupervisorQuestionFormPage() {
             type="button"
             variant="secondary"
             disabled={busy}
+            leadingIcon={<EyeIcon className="size-4" />}
+            onClick={() => setPreviewOpen(true)}
+          >
+            Preview
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
             onClick={() => navigate(`/supervisor/exams/${examId}/questions`)}
           >
             Batal
           </Button>
         </div>
       </form>
+
+      <QuestionPreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        questionText={questionText}
+        options={options}
+        correctIndex={correctIndex}
+      />
     </div>
   );
 }
