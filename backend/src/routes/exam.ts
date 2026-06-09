@@ -178,7 +178,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     // Drizzle's relational `with` clause generates a LATERAL JOIN which MariaDB
     // does not support. Two plain queries + an in-memory merge is equivalent.
     const questionRows = await db
-      .select({ id: questions.id, text: questions.text })
+      .select({ id: questions.id, text: questions.text, type: questions.type, config: questions.config })
       .from(questions)
       .where(eq(questions.examId, examId))
       .orderBy(asc(questions.orderIndex));
@@ -187,7 +187,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       throw new NotFoundError("Soal ujian tidak ditemukan.");
     }
 
-    const questionById = new Map(questionRows.map((q) => [q.id, q]));
+    const questionById = new Map(questionRows.map((q) => [q.id, q] as const));
     const canonicalIds = questionRows.map((q) => q.id);
 
     // Reuse the persisted shuffled order from the caller's in-progress session
@@ -228,13 +228,33 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       optionsByQuestion.set(o.questionId, bucket);
     }
 
-    // correctOptionId intentionally excluded from the projection above.
+    // correctOptionId intentionally excluded.
+    // config is sanitized per type: fill_in_blank answer stripped, sorting correctOrder stripped.
     return orderedIds.map((id) => {
+      const q = questionById.get(id)!;
       const opts = optionsByQuestion.get(id) ?? [];
+      const qType = q.type ?? "multiple_choice";
+      const rawConfig = typeof q.config === "string"
+        ? (() => { try { return JSON.parse(q.config as string); } catch { return null; } })()
+        : (q.config ?? null);
+
+      let studentConfig: unknown = null;
+      if (qType === "matching" && rawConfig) {
+        studentConfig = { pairs: rawConfig.pairs ?? [] };
+      } else if (qType === "sorting" && rawConfig) {
+        // Strip correctOrder — only items needed for display; grading stays server-side.
+        studentConfig = { items: rawConfig.items ?? [] };
+      }
+      // fill_in_blank: config not needed by student (just a text input); answer must not be exposed.
+
       return {
         id,
-        text: questionById.get(id)!.text,
-        options: exam?.randomizeAnswer ? shuffle(opts) : opts,
+        text: q.text,
+        type: qType,
+        config: studentConfig,
+        options: qType === "multiple_choice"
+          ? (exam?.randomizeAnswer ? shuffle(opts) : opts)
+          : [],
       };
     });
   })

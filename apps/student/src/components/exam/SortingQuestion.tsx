@@ -57,17 +57,17 @@ function SortableItem({ id, label }: SortableItemProps) {
 
 export function SortingQuestion({ question, questionNumber }: Props) {
   const { answers, submitAnswer } = useExamStore();
-  const config = question.config as SortingConfig;
+  const items = ((question.config as SortingConfig)?.items) ?? [];
 
   // `order` holds the CURRENT order of original indices.
   // e.g. order = [2, 0, 1] means item originally at index 2 is now first, etc.
   const savedOrder = (() => {
     try {
       const v = answers[question.id]?.answerValue;
-      if (!v) return config.items.map((_, i) => i);
+      if (!v) return items.map((_, i) => i);
       return JSON.parse(v) as number[];
     } catch {
-      return config.items.map((_, i) => i);
+      return items.map((_, i) => i);
     }
   })();
 
@@ -118,7 +118,7 @@ export function SortingQuestion({ question, questionNumber }: Props) {
               <SortableItem
                 key={origIdx}
                 id={String(origIdx)}
-                label={config.items[origIdx]}
+                label={items[origIdx] ?? ""}
               />
             ))}
           </div>

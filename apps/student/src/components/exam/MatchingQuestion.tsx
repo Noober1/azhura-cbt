@@ -38,8 +38,7 @@ function shuffleIndices(n: number, seed: string): number[] {
 
 export function MatchingQuestion({ question, questionNumber }: Props) {
   const { answers, submitAnswer } = useExamStore();
-  const config = question.config as MatchingConfig;
-  const pairs = config.pairs;
+  const pairs = ((question.config as MatchingConfig)?.pairs) ?? [];
 
   // pairs[i].left matched to pairs[shuffledRight[j]].right where pairing[i] = j
   // The right column is shown in shuffled order.
