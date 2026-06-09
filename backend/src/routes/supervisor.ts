@@ -174,7 +174,7 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
    */
   .get("/groups", async () => {
     return await db
-      .select({ id: groups.id, name: groups.name })
+      .select({ id: groups.id, name: groups.name, code: groups.code })
       .from(groups)
       .orderBy(asc(groups.name));
   })

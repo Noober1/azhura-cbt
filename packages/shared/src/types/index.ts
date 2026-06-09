@@ -240,6 +240,8 @@ export type BroadcastTarget =
 export interface GroupOption {
   id: string;
   name: string;
+  /** Short unique code (e.g. "7A"). */
+  code: string;
 }
 
 // ── Supervisor–exam assignment (#83) ─────────────────────────────────────────

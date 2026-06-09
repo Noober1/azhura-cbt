@@ -164,6 +164,7 @@ export function GroupListPage() {
             <thead>
               <tr className="border-b border-line text-left text-xs font-medium uppercase tracking-wide text-faint">
                 <th className="px-4 py-3 font-medium">Nama</th>
+                <th className="px-4 py-3 font-medium">Kode</th>
                 <th className="px-4 py-3 font-medium">Anggota</th>
                 <th className="px-4 py-3 text-right font-medium">Aksi</th>
               </tr>
@@ -175,6 +176,11 @@ export function GroupListPage() {
                   className="border-b border-line/70 transition-colors last:border-0 hover:bg-canvas/60"
                 >
                   <td className="px-4 py-3 font-medium text-ink">{group.name}</td>
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs font-semibold tracking-wider text-ink">
+                      {group.code}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <Badge tone={group.memberCount > 0 ? "accent" : "neutral"}>
                       {group.memberCount} siswa

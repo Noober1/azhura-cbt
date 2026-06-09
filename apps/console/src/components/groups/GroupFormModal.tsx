@@ -22,36 +22,48 @@ interface GroupFormModalProps {
 }
 
 const MAX_NAME = 30;
+const MAX_CODE = 6;
 
 export function GroupFormModal({ open, group, onClose, onSaved }: GroupFormModalProps) {
   const isEdit = Boolean(group);
   const [name, setName] = useState(group?.name ?? "");
-  const [error, setError] = useState<string | null>(null);
+  const [code, setCode] = useState(group?.code ?? "");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Reset on each open so a reused (always-mounted) modal never shows stale state.
   useEffect(() => {
     if (!open) return;
     setName(group?.name ?? "");
-    setError(null);
+    setCode(group?.code ?? "");
+    setNameError(null);
+    setCodeError(null);
     setBusy(false);
   }, [open, group?.id]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setError("Nama group wajib diisi.");
-      return;
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim().toUpperCase();
+    let valid = true;
+    if (!trimmedName) {
+      setNameError("Nama group wajib diisi.");
+      valid = false;
     }
+    if (!trimmedCode) {
+      setCodeError("Kode group wajib diisi.");
+      valid = false;
+    }
+    if (!valid) return;
 
     setBusy(true);
     try {
       if (isEdit && group) {
-        await groupsApi.update(group.id, { name: trimmed });
+        await groupsApi.update(group.id, { name: trimmedName, code: trimmedCode });
         toast.success("Group diperbarui.");
       } else {
-        await groupsApi.create({ name: trimmed });
+        await groupsApi.create({ name: trimmedName, code: trimmedCode });
         toast.success("Group dibuat.");
       }
       onSaved();
@@ -79,19 +91,38 @@ export function GroupFormModal({ open, group, onClose, onSaved }: GroupFormModal
         </>
       }
     >
-      <form id="group-form" onSubmit={handleSubmit} noValidate>
-        <Field label="Nama group" required error={error ?? undefined}>
+      <form id="group-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        <Field label="Nama group" required error={nameError ?? undefined}>
           {(id) => (
             <Input
               id={id}
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
-                if (error) setError(null);
+                if (nameError) setNameError(null);
               }}
               placeholder="Kelas 7A"
               maxLength={MAX_NAME}
               autoFocus
+            />
+          )}
+        </Field>
+        <Field
+          label="Kode"
+          required
+          error={codeError ?? undefined}
+          hint="Maks. 6 karakter. Akan disimpan sebagai huruf kapital."
+        >
+          {(id) => (
+            <Input
+              id={id}
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value.toUpperCase());
+                if (codeError) setCodeError(null);
+              }}
+              placeholder="7A"
+              maxLength={MAX_CODE}
             />
           )}
         </Field>
