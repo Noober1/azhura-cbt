@@ -328,3 +328,10 @@ export const AlignRightIcon = svg(
     <line x1="21" y1="18" x2="7" y2="18" />
   </>
 );
+
+export const EyeIcon = svg(
+  <>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </>
+);

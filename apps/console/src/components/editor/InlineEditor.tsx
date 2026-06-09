@@ -60,7 +60,9 @@ export function InlineEditor({ value, onChange, placeholder, disabled }: InlineE
         listItem: false,
       }),
       Underline,
-      Mathematics,
+      Mathematics.configure({
+        regex: /\$([^$]*)\$|\\\((.+?)\\\)|\\\[(.+?)\\\]/gis,
+      }),
     ],
     content: value,
     editable: !disabled,

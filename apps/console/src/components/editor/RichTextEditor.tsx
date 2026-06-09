@@ -95,7 +95,11 @@ export function RichTextEditor({
     extensions: [
       StarterKit,
       Underline,
-      Mathematics,
+      Mathematics.configure({
+        // Match $…$, \(…\), and \[…\] — each in its own capture group so
+        // match.slice(1).find(Boolean) always returns the formula content.
+        regex: /\$([^$]*)\$|\\\((.+?)\\\)|\\\[(.+?)\\\]/gis,
+      }),
       MediaEmbed,
     ],
     content: value,
