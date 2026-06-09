@@ -29,6 +29,8 @@ const ACCEPT = Object.keys(ALLOWED_TYPES).join(",");
 
 interface MediaUploadZoneProps {
   onUploaded: (files: MediaFile[]) => void;
+  /** Override the upload function (e.g. to use supervisor endpoint instead of admin). */
+  uploadFn?: (file: File, onProgress?: (pct: number) => void) => Promise<MediaFile>;
 }
 
 interface FileProgress {
@@ -38,7 +40,7 @@ interface FileProgress {
   error: boolean;
 }
 
-export function MediaUploadZone({ onUploaded }: MediaUploadZoneProps) {
+export function MediaUploadZone({ onUploaded, uploadFn = mediaApi.upload }: MediaUploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -81,7 +83,7 @@ export function MediaUploadZone({ onUploaded }: MediaUploadZoneProps) {
       const file = files[i];
       const key = `${i}:${file.name}`;
       try {
-        const uploaded = await mediaApi.upload(file, (pct) => {
+        const uploaded = await uploadFn(file, (pct) => {
           setProgress((prev) => {
             const next = new Map(prev);
             next.set(key, { name: file.name, pct, done: false, error: false });
