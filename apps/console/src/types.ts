@@ -218,3 +218,20 @@ export type {
   DashboardSnapshot,
   ExamScoreSummary,
 } from "@azhura/shared";
+
+// ── Supervisors (#86) ────────────────────────────────────────────────────────
+
+/** A supervisor user row from `GET /admin/supervisors`. */
+export interface SupervisorUser {
+  id: string;
+  name: string;
+  nis: string;
+}
+
+/** Row from `GET /admin/exams/:examId/supervisors`. */
+export interface ExamSupervisorDetail {
+  examId: string;
+  userId: string;
+  name: string;
+  nis: string;
+}
