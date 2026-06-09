@@ -219,7 +219,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       .select({ id: options.id, questionId: options.questionId, text: options.text })
       .from(options)
       .where(inArray(options.questionId, canonicalIds))
-      .orderBy(asc(options.id));
+      .orderBy(asc(options.orderIndex));
 
     const optionsByQuestion = new Map<string, { id: string; text: string }[]>();
     for (const o of optionRows) {
