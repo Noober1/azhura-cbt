@@ -52,6 +52,8 @@ export const users = mysqlTable("users", {
 export const groups = mysqlTable("groups", {
   id: varchar("id", { length: 36 }).primaryKey(),
   name: varchar("name", { length: 30 }).notNull(),
+  /** Short unique code (e.g. "7A", "8B") used for quick lookup and display. */
+  code: varchar("code", { length: 6 }).notNull().default("").unique(),
 });
 
 /** An exam definition (title + allotted duration). */

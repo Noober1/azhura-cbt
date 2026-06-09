@@ -20,7 +20,7 @@ import { asc, eq, inArray, like, sql } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
-import { NotFoundError } from "../../lib/errors";
+import { ConflictError, NotFoundError } from "../../lib/errors";
 import { notifyDashboardStats } from "./dashboard";
 import { createLogger } from "../../lib/logger";
 
@@ -70,7 +70,7 @@ export const adminGroupRoutes = new Elysia({ prefix: "/admin" })
         .where(where);
 
       const rows = await db
-        .select({ id: groups.id, name: groups.name })
+        .select({ id: groups.id, name: groups.name, code: groups.code })
         .from(groups)
         .where(where)
         .orderBy(asc(groups.name))
@@ -93,6 +93,7 @@ export const adminGroupRoutes = new Elysia({ prefix: "/admin" })
         data: rows.map((r) => ({
           id: r.id,
           name: r.name,
+          code: r.code,
           memberCount: byId.get(r.id) ?? 0,
         })),
         meta: { total: Number(total), page, limit },
@@ -116,6 +117,7 @@ export const adminGroupRoutes = new Elysia({ prefix: "/admin" })
     return {
       id: group.id,
       name: group.name,
+      code: group.code,
       memberCount: await getMemberCount(group.id),
     };
   })
@@ -123,47 +125,75 @@ export const adminGroupRoutes = new Elysia({ prefix: "/admin" })
   /**
    * POST /api/admin/groups
    * Creates a group.
+   * @throws {ConflictError} when `code` is already in use.
    */
   .post(
     "/groups",
     async ({ body, set }) => {
       const id = randomUUID();
       const name = body.name.trim();
-      await db.insert(groups).values({ id, name });
-      log.info("Group created", { id, name });
+      const code = body.code.trim().toUpperCase();
+      try {
+        await db.insert(groups).values({ id, name, code });
+      } catch (err: unknown) {
+        const e = err as { code?: string };
+        if (e?.code === "ER_DUP_ENTRY") {
+          throw new ConflictError("Kode grup sudah digunakan.");
+        }
+        throw err;
+      }
+      log.info("Group created", { id, name, code });
       void notifyDashboardStats().catch(() => {});
       set.status = 201;
-      return { id, name, memberCount: 0 };
+      return { id, name, code, memberCount: 0 };
     },
     {
       body: t.Object({
         name: t.String({ minLength: 1, maxLength: 30 }),
+        code: t.String({ minLength: 1, maxLength: 6 }),
       }),
     }
   )
 
   /**
    * PATCH /api/admin/groups/:groupId
-   * Renames a group.
+   * Updates name and/or code of a group.
    * @throws {NotFoundError} when the group does not exist.
+   * @throws {ConflictError} when `code` is already in use by another group.
    */
   .patch(
     "/groups/:groupId",
     async ({ params, body }) => {
       const { groupId } = params;
-      await getGroupOrThrow(groupId);
-      const name = body.name.trim();
-      await db.update(groups).set({ name }).where(eq(groups.id, groupId));
-      log.info("Group updated", { id: groupId, name });
+      const existing = await getGroupOrThrow(groupId);
+      const updates: { name?: string; code?: string } = {};
+      if (body.name !== undefined) updates.name = body.name.trim();
+      if (body.code !== undefined) updates.code = body.code.trim().toUpperCase();
+      if (Object.keys(updates).length > 0) {
+        try {
+          await db.update(groups).set(updates).where(eq(groups.id, groupId));
+        } catch (err: unknown) {
+          const e = err as { code?: string };
+          if (e?.code === "ER_DUP_ENTRY") {
+            throw new ConflictError("Kode grup sudah digunakan.");
+          }
+          throw err;
+        }
+      }
+      const name = updates.name ?? existing.name;
+      const code = updates.code ?? existing.code;
+      log.info("Group updated", { id: groupId, name, code });
       return {
         id: groupId,
         name,
+        code,
         memberCount: await getMemberCount(groupId),
       };
     },
     {
       body: t.Object({
-        name: t.String({ minLength: 1, maxLength: 30 }),
+        name: t.Optional(t.String({ minLength: 1, maxLength: 30 })),
+        code: t.Optional(t.String({ minLength: 1, maxLength: 6 })),
       }),
     }
   )
