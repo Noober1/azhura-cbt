@@ -26,6 +26,15 @@ import { deriveSessionStatus } from "../../lib/exam-scoring";
 import { supervisorActions } from "../../socket";
 import { notifyDashboardStats } from "./dashboard";
 import { createLogger } from "../../lib/logger";
+import {
+  parseSpreadsheet,
+  generateTemplateXlsx,
+  generateTemplateCsv,
+  XLSX_CONTENT_TYPE,
+  CSV_CONTENT_TYPE,
+} from "../../lib/spreadsheet";
+import { examImportSessions } from "../../lib/import-session";
+import type { ExamImportRow } from "../../lib/import-session";
 
 const { exams, examGroups, examBatches, groups, questions, options, examSessions, users } =
   schema;
@@ -325,6 +334,255 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
         limit: t.Optional(t.Number({ minimum: 1, maximum: 100 })),
       }),
     }
+  )
+
+  /**
+   * GET /api/admin/exams/template?format=xlsx|csv
+   * Downloads an empty import template with example data.
+   */
+  .get(
+    "/exams/template",
+    async ({ query }) => {
+      const format = query.format === "csv" ? "csv" : "xlsx";
+      const headers = ["judul", "durasi_menit", "passing_grade", "token", "expired_at"];
+      const example = {
+        judul: "Ujian Matematika Semester 1",
+        durasi_menit: "60",
+        passing_grade: "70",
+        token: "MTK01",
+        expired_at: "2025-12-31 08:00",
+      };
+
+      if (format === "csv") {
+        const csv = generateTemplateCsv(headers, example);
+        return new Response(csv, {
+          headers: {
+            "Content-Type": CSV_CONTENT_TYPE,
+            "Content-Disposition": 'attachment; filename="template-ujian.csv"',
+          },
+        });
+      }
+
+      const buf = await generateTemplateXlsx(headers, example);
+      return new Response(new Uint8Array(buf), {
+        headers: {
+          "Content-Type": XLSX_CONTENT_TYPE,
+          "Content-Disposition": 'attachment; filename="template-ujian.xlsx"',
+        },
+      });
+    },
+    { query: t.Object({ format: t.Optional(t.String()) }) }
+  )
+
+  /**
+   * POST /api/admin/exams/import
+   * Accepts a multipart upload (.xlsx or .csv), parses and validates all rows,
+   * performs a dry-run (no DB writes), and returns a preview with a session token.
+   *
+   * Mode: Add-only — existing exam titles are skipped (not an error). Duplicate
+   * titles within the file → first occurrence processed, rest skipped.
+   * Batch cap: 500 rows.
+   *
+   * @throws {BadRequestError} when the file format is wrong or too many rows.
+   */
+  .post(
+    "/exams/import",
+    async ({ body }) => {
+      const MAX_ROWS = 500;
+      const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+      if (body.file.size > MAX_FILE_BYTES) {
+        throw new BadRequestError("Ukuran file melebihi batas 10 MB.");
+      }
+      const allowedMimes = [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/csv",
+        "application/csv",
+        "text/plain",
+      ];
+      if (body.file.type && !allowedMimes.includes(body.file.type)) {
+        throw new BadRequestError("Tipe file tidak didukung. Gunakan .xlsx atau .csv.");
+      }
+
+      const { rows: rawRows, error: parseError } = await parseSpreadsheet(body.file);
+      if (parseError) throw new BadRequestError(parseError);
+      if (rawRows.length > MAX_ROWS) {
+        throw new BadRequestError(
+          `File melebihi batas ${MAX_ROWS} baris. File Anda memiliki ${rawRows.length} baris.`
+        );
+      }
+
+      // Resolve which titles already exist in the DB (skip, not error).
+      const rawTitles = rawRows
+        .map((r) => (r["judul"] ?? "").trim())
+        .filter((t) => t.length > 0);
+      const existingTitles: Set<string> =
+        rawTitles.length > 0
+          ? new Set(
+              (
+                await db
+                  .select({ title: exams.title })
+                  .from(exams)
+                  .where(inArray(exams.title, rawTitles))
+              ).map((e) => e.title)
+            )
+          : new Set();
+
+      const seenTitles = new Map<string, number>(); // title → first row number
+      const now = new Date();
+
+      const rows: ExamImportRow[] = rawRows.map((raw, i) => {
+        const rowNum = i + 1;
+
+        const judul = (raw["judul"] ?? "").trim();
+        const durasiRaw = (raw["durasi_menit"] ?? "").trim();
+        const pgRaw = (raw["passing_grade"] ?? "").trim();
+        const tokenRaw = (raw["token"] ?? "").trim();
+        const expiredAtRaw = (raw["expired_at"] ?? "").trim();
+
+        // Validate judul
+        if (!judul) {
+          return { row: rowNum, judul, status: "error" as const, reason: "Kolom 'judul' wajib diisi." };
+        }
+        if (judul.length > 200) {
+          return { row: rowNum, judul, status: "error" as const, reason: "Judul melebihi 200 karakter." };
+        }
+
+        // Duplicate title within file → skip (first occurrence is processed)
+        const prevRow = seenTitles.get(judul);
+        if (prevRow !== undefined) {
+          return { row: rowNum, judul, status: "skip" as const, reason: `Judul duplikat dengan baris ${prevRow} dalam file ini.` };
+        }
+        seenTitles.set(judul, rowNum);
+
+        // Title already in DB → skip
+        if (existingTitles.has(judul)) {
+          return { row: rowNum, judul, status: "skip" as const, reason: "Judul sudah ada di database (dilewati)." };
+        }
+
+        // Validate durasi_menit
+        const durasi = parseInt(durasiRaw, 10);
+        if (!durasiRaw || isNaN(durasi) || durasi < 1 || durasi > 480) {
+          return { row: rowNum, judul, status: "error" as const, reason: "Kolom 'durasi_menit' wajib diisi dan harus integer 1–480." };
+        }
+
+        // Validate passing_grade
+        const pg = parseInt(pgRaw, 10);
+        if (!pgRaw || isNaN(pg) || pg < 0 || pg > 100) {
+          return { row: rowNum, judul, durasi_menit: durasi, status: "error" as const, reason: "Kolom 'passing_grade' wajib diisi dan harus integer 0–100." };
+        }
+
+        // Validate token (optional, max 5 chars alphanumeric)
+        const tokenVal = tokenRaw || undefined;
+        if (tokenVal !== undefined && !/^[A-Za-z0-9]{1,5}$/.test(tokenVal)) {
+          return { row: rowNum, judul, durasi_menit: durasi, passing_grade: pg, status: "error" as const, reason: "Token harus 1–5 karakter alfanumerik (jika diisi)." };
+        }
+
+        // Validate expired_at (format YYYY-MM-DD HH:mm, must be in future)
+        if (!expiredAtRaw) {
+          return { row: rowNum, judul, durasi_menit: durasi, passing_grade: pg, token: tokenVal, status: "error" as const, reason: "Kolom 'expired_at' wajib diisi." };
+        }
+        // Accept both "YYYY-MM-DD HH:mm" and "YYYY-MM-DD HH:mm:ss" (Excel may append seconds)
+        const parsedDate = new Date(expiredAtRaw.replace(" ", "T"));
+        if (isNaN(parsedDate.getTime())) {
+          return { row: rowNum, judul, durasi_menit: durasi, passing_grade: pg, token: tokenVal, expired_at: expiredAtRaw, status: "error" as const, reason: "Format 'expired_at' tidak valid. Gunakan format YYYY-MM-DD HH:mm." };
+        }
+        if (parsedDate <= now) {
+          return { row: rowNum, judul, durasi_menit: durasi, passing_grade: pg, token: tokenVal, expired_at: expiredAtRaw, status: "error" as const, reason: "Tanggal 'expired_at' harus di masa depan." };
+        }
+
+        return {
+          row: rowNum,
+          judul,
+          durasi_menit: durasi,
+          passing_grade: pg,
+          token: tokenVal,
+          expired_at: expiredAtRaw,
+          status: "ready" as const,
+          newId: randomUUID(),
+        };
+      });
+
+      const readyCount = rows.filter((r) => r.status === "ready").length;
+      const skipCount = rows.filter((r) => r.status === "skip").length;
+      const errorCount = rows.filter((r) => r.status === "error").length;
+
+      const sessionToken = examImportSessions.create({ rows });
+
+      log.info("Exam import dry-run", {
+        total: rows.length,
+        ready: readyCount,
+        skip: skipCount,
+        error: errorCount,
+      });
+
+      return {
+        sessionToken,
+        summary: { ready: readyCount, skip: skipCount, error: errorCount },
+        rows: rows.map(({ newId: _, ...rest }) => rest),
+      };
+    },
+    {
+      body: t.Object({ file: t.File() }),
+    }
+  )
+
+  /**
+   * POST /api/admin/exams/import/confirm
+   * Executes the bulk insert from a dry-run session.
+   * @throws {BadRequestError} when the session is missing or expired.
+   */
+  .post(
+    "/exams/import/confirm",
+    async ({ body }) => {
+      const session = examImportSessions.get(body.sessionToken);
+      if (!session) {
+        throw new BadRequestError(
+          "Sesi import tidak ditemukan atau sudah kedaluwarsa. Ulangi upload file."
+        );
+      }
+      examImportSessions.delete(body.sessionToken);
+
+      const readyRows = session.rows.filter((r) => r.status === "ready");
+
+      let inserted = 0;
+      let skipped = 0;
+
+      if (readyRows.length > 0) {
+        // Re-check for titles that may have been inserted since the dry-run.
+        const titles = readyRows.map((r) => r.judul);
+        const existing = await db
+          .select({ title: exams.title })
+          .from(exams)
+          .where(inArray(exams.title, titles));
+        const existingSet = new Set(existing.map((e) => e.title));
+
+        const toInsert = readyRows.filter((r) => !existingSet.has(r.judul));
+        skipped = readyRows.length - toInsert.length;
+
+        if (toInsert.length > 0) {
+          await db.insert(exams).values(
+            toInsert.map((r) => ({
+              id: r.newId!,
+              title: r.judul,
+              durationMinutes: r.durasi_menit!,
+              passingGrade: r.passing_grade!,
+              token: r.token ? r.token.toUpperCase() : null,
+              expiredAt: new Date(r.expired_at!.replace(" ", "T")),
+              isActive: 0 as const,
+              randomizeQuestion: 1 as const,
+              randomizeAnswer: 1 as const,
+            }))
+          );
+          inserted = toInsert.length;
+        }
+      }
+
+      log.info("Exam import confirmed", { inserted, skipped });
+      void notifyDashboardStats().catch(() => {});
+      return { inserted, skipped };
+    },
+    { body: t.Object({ sessionToken: t.String() }) }
   )
 
   /**

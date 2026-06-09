@@ -107,8 +107,26 @@ export function markDryRun(userId: string): void {
   lastDryRunByUser.set(userId, Date.now());
 }
 
+export interface ExamImportRow {
+  row: number;
+  judul: string;
+  durasi_menit?: number;
+  passing_grade?: number;
+  token?: string;
+  expired_at?: string;
+  status: "ready" | "skip" | "error";
+  reason?: string;
+  /** UUID pre-assigned for the new exam row. */
+  newId?: string;
+}
+
+export interface ExamImportSession {
+  rows: ExamImportRow[];
+}
+
 // ---- Module-level singletons ----
 
 export const groupImportSessions = new ImportSessionStore<GroupImportSession>();
 export const studentImportSessions =
   new ImportSessionStore<StudentImportSession>();
+export const examImportSessions = new ImportSessionStore<ExamImportSession>();

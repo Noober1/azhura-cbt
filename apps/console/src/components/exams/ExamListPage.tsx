@@ -21,6 +21,7 @@ import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { IconButton } from "../ui/IconButton";
 import { ExamFormModal } from "./ExamFormModal";
+import { ExamImportModal } from "./ExamImportModal";
 import {
   PlusIcon,
   SearchIcon,
@@ -31,6 +32,7 @@ import {
   ChevronRightIcon,
   KeyIcon,
   UsersIcon,
+  UploadIcon,
 } from "../ui/icons";
 
 const PAGE_SIZE = 10;
@@ -50,6 +52,7 @@ export function ExamListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExamSummary | null>(null);
   const [deleting, setDeleting] = useState<ExamSummary | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,9 +125,18 @@ export function ExamListPage() {
               : "Belum ada paket ujian"}
           </p>
         </div>
-        <Button onClick={openCreate} leadingIcon={<PlusIcon className="size-4" />}>
-          Buat ujian
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setImportOpen(true)}
+            leadingIcon={<UploadIcon className="size-4" />}
+          >
+            Import dari Spreadsheet
+          </Button>
+          <Button onClick={openCreate} leadingIcon={<PlusIcon className="size-4" />}>
+            Buat ujian
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -316,6 +328,14 @@ export function ExamListPage() {
         confirmLabel="Hapus ujian"
         onConfirm={confirmDelete}
         onClose={() => setDeleting(null)}
+      />
+
+      <ExamImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          load();
+        }}
       />
     </div>
   );
