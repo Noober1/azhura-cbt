@@ -25,13 +25,12 @@ export function MediaCard({ item, onClick }: MediaCardProps) {
     return (
       <button
         onClick={onClick}
-        className="focus-ring group relative aspect-square overflow-hidden rounded-lg border border-line bg-canvas transition-shadow hover:shadow-md hover:shadow-ink/8"
+        className="focus-ring group relative block w-full aspect-square overflow-hidden rounded-lg border border-line bg-canvas transition-shadow hover:shadow-md hover:shadow-ink/8"
       >
         <img
           src={resolveMediaUrl(item.url)}
           alt={item.originalName}
           className="size-full object-cover transition-transform group-hover:scale-105"
-          loading="lazy"
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/60 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
           <p className="truncate text-[0.6875rem] text-white">{item.originalName}</p>
