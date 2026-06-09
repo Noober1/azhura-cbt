@@ -1,6 +1,6 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/core";
-import { AlignLeftIcon, AlignCenterIcon, AlignRightIcon } from "../ui/icons";
+import { AlignLeftIcon, AlignCenterIcon, AlignRightIcon, TrashIcon } from "../ui/icons";
 
 interface MediaAttrs {
   src: string;
@@ -24,7 +24,7 @@ const WIDTH_PRESETS: { label: string; value: string | null }[] = [
   { label: "100%", value: "100%" },
 ];
 
-export function MediaEmbedView({ node, updateAttributes, selected }: NodeViewProps) {
+export function MediaEmbedView({ node, updateAttributes, deleteNode, selected }: NodeViewProps) {
   const { src, mediaType, alt, width, align } = node.attrs as MediaAttrs;
 
   const containerStyle: React.CSSProperties = {
@@ -97,6 +97,18 @@ export function MediaEmbedView({ node, updateAttributes, selected }: NodeViewPro
                 {preset.label}
               </button>
             ))}
+
+            <span className="mx-1 h-4 w-px bg-line" />
+
+            {/* Delete */}
+            <button
+              type="button"
+              title="Hapus media"
+              onClick={() => deleteNode()}
+              className="focus-ring inline-flex size-6 items-center justify-center rounded text-faint transition-colors hover:bg-danger/10 hover:text-danger"
+            >
+              <TrashIcon className="size-3.5" />
+            </button>
           </div>
         </div>
       )}
