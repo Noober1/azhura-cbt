@@ -2,7 +2,7 @@
   "version": "5",
   "dialect": "mysql",
   "id": "a626ee4f-0008-4087-9ccc-5717db8a42b0",
-  "prevId": "bac20afb-76b4-4fb5-9173-45fe9537ea73",
+  "prevId": "a042d81f-c64e-4f8b-a175-a9b5918c93eb",
   "tables": {
     "answers": {
       "name": "answers",

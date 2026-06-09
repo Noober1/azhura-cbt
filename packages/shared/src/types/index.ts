@@ -629,3 +629,20 @@ export interface StudentRecapResponse {
   page: number;
   limit: number;
 }
+
+// ── Media Library (#84) ──────────────────────────────────────────────────────
+
+export type MediaType = "image" | "audio" | "video";
+
+/** A media file record as returned by `GET /admin/media` and `POST /admin/media`. */
+export interface MediaFile {
+  id: string;
+  filename: string;
+  originalName: string;
+  type: MediaType;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  uploadedBy: string | null;
+  createdAt: number;
+}
