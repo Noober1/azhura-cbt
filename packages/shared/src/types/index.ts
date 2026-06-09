@@ -630,7 +630,6 @@ export interface StudentRecapResponse {
   limit: number;
 }
 
-// ── Media Library (#84) ──────────────────────────────────────────────────────
 
 export type MediaType = "image" | "audio" | "video";
 

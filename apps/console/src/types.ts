@@ -162,6 +162,30 @@ export type { SystemSettings } from "@azhura/shared";
 /** Body for `PATCH /admin/settings` — all fields are optional. */
 export type SystemSettingsInput = Partial<import("@azhura/shared").SystemSettings>;
 
+// ── Supervisor assignment (#86) ──────────────────────────────────────────────
+
+export interface SupervisorUser {
+  id: string;
+  name: string;
+  nis: string;
+}
+
+export interface ExamSupervisorDetail {
+  examId: string;
+  userId: string;
+  name: string;
+  nis: string;
+}
+
+// ── Media (#84) ─────────────────────────────────────────────────────────────
+
+export type { MediaFile, MediaType } from "@azhura/shared";
+
+export interface MediaListResponse {
+  data: import("@azhura/shared").MediaFile[];
+  meta: { total: number; page: number; limit: number };
+}
+
 // ── Sessions (#45) ──────────────────────────────────────────────────────────
 
 export type SessionStatus = "in_progress" | "completed" | "expired";
