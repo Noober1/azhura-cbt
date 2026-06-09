@@ -106,9 +106,11 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
     const errorRows = preview.rows.filter((r) => r.status === "error");
     if (errorRows.length === 0) return;
     const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const lines = ["baris,nis,nama,grup,error"];
+    const lines = ["baris,nis,nama,grup,batch,error"];
     errorRows.forEach((r) =>
-      lines.push(`${r.row},${cell(r.nis)},${cell(r.nama)},${cell(r.grup)},${cell(r.error ?? "")}`)
+      lines.push(
+        `${r.row},${cell(r.nis)},${cell(r.nama)},${cell(r.grup)},${cell(String(r.batch ?? ""))},${cell(r.error ?? "")}`
+      )
     );
     saveBlob(new Blob([lines.join("\n")], { type: "text/csv" }), "siswa-import-errors.csv");
   }
@@ -128,7 +130,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
     <Modal
       open={open}
       title="Import Siswa dari Spreadsheet"
-      description="Upload file .xlsx atau .csv dengan kolom: nis, nama, grup (kode grup)"
+      description="Upload file .xlsx atau .csv dengan kolom: nis, nama, grup (kode grup), batch (opsional, 1–10, default 1)"
       onClose={handleClose}
       size="lg"
       footer={
@@ -361,13 +363,14 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
                   <th className="px-3 py-2">NIS</th>
                   <th className="px-3 py-2">Nama</th>
                   <th className="px-3 py-2">Grup</th>
+                  <th className="px-3 py-2">Batch</th>
                   <th className="px-3 py-2">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-3 py-6 text-center text-faint">
+                    <td colSpan={6} className="px-3 py-6 text-center text-faint">
                       Tidak ada baris dengan filter ini.
                     </td>
                   </tr>
@@ -383,6 +386,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
                       <td className="px-3 py-2 font-mono">{r.nis || "—"}</td>
                       <td className="px-3 py-2">{r.nama || "—"}</td>
                       <td className="px-3 py-2 font-mono font-semibold">{r.grup || "—"}</td>
+                      <td className="px-3 py-2 tabular-nums">{r.batch ?? "—"}</td>
                       <td className="px-3 py-2">
                         {r.status === "valid" ? (
                           <Badge tone={r.isUpdate ? "neutral" : "positive"}>

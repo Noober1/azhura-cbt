@@ -286,6 +286,8 @@ export interface StudentImportRowResult {
   nis: string;
   nama: string;
   grup: string;
+  /** Exam batch (1–10). Defaults to 1 when the import cell is empty. */
+  batch?: number;
   /** True when this NIS already exists (update path). */
   isUpdate?: boolean;
   status: "valid" | "error";
