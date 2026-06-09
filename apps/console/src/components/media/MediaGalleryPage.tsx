@@ -17,7 +17,8 @@ import { Spinner, CenterState } from "../ui/Spinner";
 import { MediaCard } from "./MediaCard";
 import { MediaUploadZone } from "./MediaUploadZone";
 import { MediaPreviewModal } from "./MediaPreviewModal";
-import { UploadIcon, SearchIcon, ImageIcon, AudioIcon, VideoIcon, ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
+import { UploadIcon, SearchIcon, ImageIcon, AudioIcon, VideoIcon } from "../ui/icons";
+import { Pagination } from "../ui/Pagination";
 
 type TabType = "all" | MediaType;
 
@@ -104,10 +105,13 @@ export function MediaGalleryPage() {
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  const useGrid = tab === "image";
+  // Images always render as a square grid; audio/video as a list.
+  const images = items.filter((f) => f.type === "image");
+  const nonImages = items.filter((f) => f.type !== "image");
+  const useGrid = tab === "image" || tab === "all";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-ink">Media</h1>
@@ -177,10 +181,21 @@ export function MediaGalleryPage() {
           )}
         </CenterState>
       ) : useGrid ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {items.map((item) => (
-            <MediaCard key={item.id} item={item} onClick={() => setPreview(item)} />
-          ))}
+        <div className="space-y-4">
+          {images.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {images.map((item) => (
+                <MediaCard key={item.id} item={item} onClick={() => setPreview(item)} />
+              ))}
+            </div>
+          )}
+          {nonImages.length > 0 && (
+            <div className="space-y-2">
+              {nonImages.map((item) => (
+                <MediaCard key={item.id} item={item} onClick={() => setPreview(item)} />
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -191,27 +206,7 @@ export function MediaGalleryPage() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-line pt-4 text-sm text-faint">
-          <span>Halaman {page} dari {totalPages}</span>
-          <div className="flex gap-1">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              aria-label="Halaman sebelumnya"
-              className="focus-ring rounded-md p-1.5 disabled:opacity-40 hover:bg-canvas hover:text-ink"
-            >
-              <ChevronLeftIcon className="size-4" />
-            </button>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              aria-label="Halaman berikutnya"
-              className="focus-ring rounded-md p-1.5 disabled:opacity-40 hover:bg-canvas hover:text-ink"
-            >
-              <ChevronRightIcon className="size-4" />
-            </button>
-          </div>
-        </div>
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       )}
 
       <MediaPreviewModal
