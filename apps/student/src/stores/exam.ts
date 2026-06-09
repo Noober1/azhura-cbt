@@ -184,6 +184,15 @@ export const useExamStore = create<ExamState>((set, get) => {
   submitError: null,
 
   setExamSession: async (session) => {
+    // If the incoming session differs from what's locally stored, the saved
+    // answers belong to a different participant (or a previous exam on this
+    // machine). Purge them before loading so cross-participant contamination
+    // cannot occur.
+    const storedSessionId = isBrowser ? localStorage.getItem("cbt_exam_session_id") : null;
+    if (storedSessionId !== session.id) {
+      await clearLocalDbAnswers();
+    }
+
     // Capture clock skew from the server's clock at session creation so the
     // countdown stays aligned even if the local clock is wrong (#8).
     const offset = session.serverTime !== undefined ? session.serverTime - Date.now() : 0;
