@@ -6,7 +6,7 @@
  * and provides a delete helper. Called by `routes/admin/media.ts`.
  */
 
-import { mkdirSync, existsSync, unlinkSync } from "fs";
+import { mkdirSync, existsSync, readdirSync, unlinkSync } from "fs";
 import { randomUUID } from "crypto";
 import { fileTypeFromBuffer } from "file-type";
 import { BadRequestError } from "./errors";
@@ -108,6 +108,19 @@ export async function deleteUploadFile(filename: string, type: MediaType): Promi
   } catch (err) {
     // File may already be missing (e.g. manual cleanup) — log and continue.
     log.warn("Could not delete file", { filename, err });
+  }
+}
+
+/** Deletes every file in all upload subdirectories. Used by the "Hapus semua gallery" action. */
+export function deleteAllUploads(): void {
+  for (const dir of Object.values(TYPE_DIR)) {
+    const dirPath = `${UPLOAD_DIR}/${dir}`;
+    if (!existsSync(dirPath)) continue;
+    for (const file of readdirSync(dirPath)) {
+      try { unlinkSync(`${dirPath}/${file}`); } catch (err) {
+        log.warn("Could not delete file during bulk wipe", { file, err });
+      }
+    }
   }
 }
 

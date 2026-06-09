@@ -62,6 +62,10 @@ export const connectSocket = (token: string): void => {
     // heartbeat — flush any answers queued while disconnected (#10). This also
     // covers server-down-while-network-up, which `navigator.onLine` misses.
     void useConnectivityStore.getState().syncAnswers();
+    // Re-validate the JWT against the DB on every (re)connect. If the account
+    // was deleted while this client was offline, validateToken() gets a 401,
+    // clears auth state, and the protected route redirects to /login.
+    void useAuthStore.getState().validateToken();
   });
 
   socket.on("disconnect", (reason) => {

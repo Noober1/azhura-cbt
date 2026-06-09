@@ -12,13 +12,16 @@
  */
 
 import { Elysia } from "elysia";
-import { sql } from "drizzle-orm";
+import { sql, eq, and, gt } from "drizzle-orm";
 import { db } from "../../db";
+import { examSessions } from "../../db/schema";
 import { io } from "../../socket";
 import { redis } from "../../lib/redis";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { createLogger } from "../../lib/logger";
+import { deleteAllUploads } from "../../lib/upload";
+import { ConflictError } from "../../lib/errors";
 
 const log = createLogger("AdminSystem");
 
@@ -47,6 +50,84 @@ async function wipeAll(): Promise<void> {
     await tx.execute(sql`DELETE FROM users`);
     await tx.execute(sql`DELETE FROM \`groups\``);
     await tx.execute(sql`DELETE FROM app_logs`);
+  });
+}
+
+/** Deletes all media rows + physical files from disk. */
+async function wipeMedia(): Promise<void> {
+  await db.execute(sql`DELETE FROM media`);
+  deleteAllUploads();
+}
+
+/**
+ * Deletes all exam-related data in FK-safe order.
+ * Throws if any session is currently in progress.
+ * Does NOT touch users, groups, or media.
+ */
+async function countActiveSessions(): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(examSessions)
+    .where(and(eq(examSessions.submitted, 0), gt(examSessions.endTime, Date.now())));
+  return Number(rows[0]?.count ?? 0);
+}
+
+async function wipeExams(): Promise<void> {
+  const active = await countActiveSessions();
+  if (active > 0) {
+    throw new ConflictError(`Masih ada ${active} peserta yang sedang mengerjakan ujian. Selesaikan atau hentikan sesi terlebih dahulu.`);
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`DELETE FROM cheat_logs`);
+    await tx.execute(sql`DELETE FROM answers`);
+    await tx.execute(sql`DELETE FROM session_questions`);
+    await tx.execute(sql`DELETE FROM exam_sessions`);
+    await tx.execute(sql`DELETE FROM exam_supervisors`);
+    await tx.execute(sql`DELETE FROM exam_groups`);
+    await tx.execute(sql`DELETE FROM options`);
+    await tx.execute(sql`DELETE FROM questions`);
+    await tx.execute(sql`DELETE FROM exams`);
+  });
+}
+
+/**
+ * Deletes all student accounts and their associated data.
+ * Throws 409 if any session is currently in progress.
+ * Force-disconnects all connected student sockets after wiping.
+ * Does NOT touch admin/supervisor accounts, exams, questions, or media.
+ */
+async function wipeStudents(): Promise<void> {
+  const active = await countActiveSessions();
+  if (active > 0) {
+    throw new ConflictError(`Masih ada ${active} peserta yang sedang mengerjakan ujian. Selesaikan atau hentikan sesi terlebih dahulu.`);
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`
+      DELETE FROM cheat_logs WHERE session_id IN (
+        SELECT id FROM exam_sessions WHERE user_id IN (
+          SELECT id FROM users WHERE role = 'student'
+        )
+      )
+    `);
+    await tx.execute(sql`
+      DELETE FROM answers WHERE session_id IN (
+        SELECT id FROM exam_sessions WHERE user_id IN (
+          SELECT id FROM users WHERE role = 'student'
+        )
+      )
+    `);
+    await tx.execute(sql`
+      DELETE FROM session_questions WHERE session_id IN (
+        SELECT id FROM exam_sessions WHERE user_id IN (
+          SELECT id FROM users WHERE role = 'student'
+        )
+      )
+    `);
+    await tx.execute(sql`DELETE FROM exam_sessions WHERE user_id IN (SELECT id FROM users WHERE role = 'student')`);
+    await tx.execute(sql`DELETE FROM chat_messages WHERE user_id IN (SELECT id FROM users WHERE role = 'student')`);
+    await tx.execute(sql`DELETE FROM users WHERE role = 'student'`);
   });
 }
 
@@ -90,5 +171,57 @@ export const adminSystemRoutes = new Elysia({ prefix: "/admin" })
     }
 
     log.warn("System reset complete.", { adminId: user.userId });
+    return { ok: true };
+  })
+
+  /** DELETE /api/admin/system/media — wipe all media rows + files from disk. */
+  .delete("/system/media", async ({ user }) => {
+    log.warn("Wiping all media", { adminId: user.userId });
+    await wipeMedia();
+    log.info("All media wiped.");
+    return { ok: true };
+  })
+
+  /** DELETE /api/admin/system/exams — wipe all exams, questions, sessions, answers. */
+  .delete("/system/exams", async ({ user }) => {
+    log.warn("Wiping all exams", { adminId: user.userId });
+    await wipeExams();
+    log.info("All exams wiped.");
+    try {
+      io.emit("exam-list-updated");
+    } catch (err) {
+      log.error("Failed to broadcast exam-list-updated", err);
+    }
+    return { ok: true };
+  })
+
+  /** DELETE /api/admin/system/students — wipe all student accounts + their data. */
+  .delete("/system/students", async ({ user }) => {
+    log.warn("Wiping all students", { adminId: user.userId });
+    await wipeStudents();
+
+    // Flush Redis so stale student sessions don't linger.
+    try {
+      await redis.flushdb();
+    } catch (err) {
+      log.error("Failed to flush Redis during student wipe", err);
+    }
+
+    // Force-logout all student sockets currently connected (dashboard or idle).
+    // Offline clients are handled on reconnect: validateToken() → 401 → logout.
+    try {
+      const sockets = await io.fetchSockets();
+      for (const s of sockets) {
+        if ((s.data as { role?: string }).role === "student") {
+          s.emit("kick", { reason: "Akun Anda telah dihapus oleh admin." });
+          s.disconnect(true);
+        }
+      }
+      log.info("All student sockets force-disconnected.");
+    } catch (err) {
+      log.error("Failed to disconnect student sockets", err);
+    }
+
+    log.info("All students wiped.");
     return { ok: true };
   });

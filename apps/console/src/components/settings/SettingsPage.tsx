@@ -17,6 +17,7 @@ import { Button } from "../ui/Button";
 import { Field, Input, Checkbox } from "../ui/Field";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { Modal } from "../ui/Modal";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { SettingsIcon } from "../ui/icons";
 
 /** A settings section card with a title and consistent padding. */
@@ -52,6 +53,13 @@ export function SettingsPage() {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetInput, setResetInput] = useState("");
   const [resetting, setResetting] = useState(false);
+
+  const [wipingMedia, setWipingMedia] = useState(false);
+  const [wipingExams, setWipingExams] = useState(false);
+  const [wipingStudents, setWipingStudents] = useState(false);
+  const [confirmMedia, setConfirmMedia] = useState(false);
+  const [confirmExams, setConfirmExams] = useState(false);
+  const [confirmStudents, setConfirmStudents] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,6 +115,45 @@ export function SettingsPage() {
       toast.error(getErrorMessage(err, "Gagal menyimpan pengaturan."));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleWipeMedia() {
+    setWipingMedia(true);
+    try {
+      await api.delete("/admin/system/media");
+      toast.success("Semua media berhasil dihapus.");
+      setConfirmMedia(false);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal menghapus media."));
+    } finally {
+      setWipingMedia(false);
+    }
+  }
+
+  async function handleWipeExams() {
+    setWipingExams(true);
+    try {
+      await api.delete("/admin/system/exams");
+      toast.success("Semua ujian berhasil dihapus.");
+      setConfirmExams(false);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal menghapus ujian."));
+    } finally {
+      setWipingExams(false);
+    }
+  }
+
+  async function handleWipeStudents() {
+    setWipingStudents(true);
+    try {
+      await api.delete("/admin/system/students");
+      toast.success("Semua akun siswa berhasil dihapus.");
+      setConfirmStudents(false);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal menghapus akun siswa."));
+    } finally {
+      setWipingStudents(false);
     }
   }
 
@@ -270,17 +317,57 @@ export function SettingsPage() {
               Tindakan di bawah ini bersifat permanen dan tidak dapat dibatalkan.
             </p>
           </div>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-ink">Reset Sistem</p>
-              <p className="mt-0.5 text-sm text-faint">
-                Hapus seluruh data termasuk semua akun pengguna. Setelah reset,
-                wizard setup awal akan muncul kembali untuk membuat akun admin baru.
-              </p>
+          <div className="flex flex-col divide-y divide-danger/10">
+            <div className="flex items-center justify-between gap-4 pb-4">
+              <div>
+                <p className="text-sm font-medium text-ink">Hapus semua gallery</p>
+                <p className="mt-0.5 text-sm text-faint">
+                  Hapus semua file media (gambar, audio, video) beserta file fisiknya dari disk.
+                  Soal yang mereferensikan media ini akan kehilangan lampiran.
+                </p>
+              </div>
+              <Button variant="danger" size="sm" onClick={() => setConfirmMedia(true)}>
+                Hapus Gallery
+              </Button>
             </div>
-            <Button variant="danger" size="sm" onClick={openReset}>
-              Reset Sistem
-            </Button>
+
+            <div className="flex items-center justify-between gap-4 py-4">
+              <div>
+                <p className="text-sm font-medium text-ink">Hapus semua ujian</p>
+                <p className="mt-0.5 text-sm text-faint">
+                  Hapus seluruh ujian, soal, sesi, dan jawaban. Akun siswa dan media tidak terpengaruh.
+                </p>
+              </div>
+              <Button variant="danger" size="sm" onClick={() => setConfirmExams(true)}>
+                Hapus Ujian
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 py-4">
+              <div>
+                <p className="text-sm font-medium text-ink">Hapus semua siswa</p>
+                <p className="mt-0.5 text-sm text-faint">
+                  Hapus seluruh akun siswa beserta sesi ujian dan riwayat chat mereka.
+                  Ujian, soal, dan media tidak terpengaruh.
+                </p>
+              </div>
+              <Button variant="danger" size="sm" onClick={() => setConfirmStudents(true)}>
+                Hapus Siswa
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 pt-4">
+              <div>
+                <p className="text-sm font-medium text-ink">Reset Sistem</p>
+                <p className="mt-0.5 text-sm text-faint">
+                  Hapus seluruh data termasuk semua akun pengguna. Setelah reset,
+                  wizard setup awal akan muncul kembali untuk membuat akun admin baru.
+                </p>
+              </div>
+              <Button variant="danger" size="sm" onClick={openReset}>
+                Reset Sistem
+              </Button>
+            </div>
           </div>
         </section>
       </div>
@@ -299,6 +386,36 @@ export function SettingsPage() {
           Simpan Perubahan
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmMedia}
+        title="Hapus semua gallery?"
+        message="Semua file media (gambar, audio, video) beserta file fisiknya akan dihapus permanen. Soal yang mereferensikan media ini akan kehilangan lampiran."
+        confirmLabel={wipingMedia ? "Menghapus…" : "Hapus semua media"}
+        tone="danger"
+        onConfirm={() => void handleWipeMedia()}
+        onClose={() => setConfirmMedia(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmExams}
+        title="Hapus semua ujian?"
+        message="Seluruh ujian, soal, pilihan jawaban, sesi, dan jawaban siswa akan dihapus permanen. Akun siswa dan media tidak terpengaruh."
+        confirmLabel={wipingExams ? "Menghapus…" : "Hapus semua ujian"}
+        tone="danger"
+        onConfirm={() => void handleWipeExams()}
+        onClose={() => setConfirmExams(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmStudents}
+        title="Hapus semua siswa?"
+        message="Seluruh akun siswa beserta sesi ujian dan riwayat chat mereka akan dihapus permanen. Ujian, soal, dan media tidak terpengaruh."
+        confirmLabel={wipingStudents ? "Menghapus…" : "Hapus semua siswa"}
+        tone="danger"
+        onConfirm={() => void handleWipeStudents()}
+        onClose={() => setConfirmStudents(false)}
+      />
 
       {/* Reset confirmation modal */}
       <Modal
