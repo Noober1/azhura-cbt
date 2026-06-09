@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "7e59367e-0070-49d6-b5a6-dade56a394f1",
-  "prevId": "e14e6e30-30c6-4b77-a922-2e8554f45133",
+  "id": "4d0b2450-cd34-4bd0-81ab-26f4fccec7f1",
+  "prevId": "7e59367e-0070-49d6-b5a6-dade56a394f1",
   "tables": {
     "answers": {
       "name": "answers",
@@ -351,6 +351,52 @@
           "name": "cheat_logs_id",
           "columns": [
             "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "exam_batches": {
+      "name": "exam_batches",
+      "columns": {
+        "exam_id": {
+          "name": "exam_id",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "batch": {
+          "name": "batch",
+          "type": "tinyint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "exam_batches_exam_id_exams_id_fk": {
+          "name": "exam_batches_exam_id_exams_id_fk",
+          "tableFrom": "exam_batches",
+          "tableTo": "exams",
+          "columnsFrom": [
+            "exam_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "exam_batches_exam_id_batch_pk": {
+          "name": "exam_batches_exam_id_batch_pk",
+          "columns": [
+            "exam_id",
+            "batch"
           ]
         }
       },
@@ -1125,6 +1171,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "batch": {
+          "name": "batch",
+          "type": "tinyint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
         },
         "created_at": {
           "name": "created_at",

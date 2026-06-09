@@ -50,18 +50,18 @@ const seedUsers: {
 ];
 
 // ── Groups ───────────────────────────────────────────────────────────────────
-const seedGroups: { id: string; name: string }[] = [
-  { id: "grp_7a", name: "Kelas 7A" },
-  { id: "grp_7b", name: "Kelas 7B" },
-  { id: "grp_8a", name: "Kelas 8A" },
+const seedGroups: { id: string; name: string; code: string }[] = [
+  { id: "grp_7a", name: "Kelas 7A", code: "7A" },
+  { id: "grp_7b", name: "Kelas 7B", code: "7B" },
+  { id: "grp_8a", name: "Kelas 8A", code: "8A" },
 ];
 
 for (const g of seedGroups) {
   await db
     .insert(groups)
-    .values({ id: g.id, name: g.name })
-    .onDuplicateKeyUpdate({ set: { name: g.name } });
-  log.info(`Group upserted: ${g.name} (${g.id})`);
+    .values({ id: g.id, name: g.name, code: g.code })
+    .onDuplicateKeyUpdate({ set: { name: g.name, code: g.code } });
+  log.info(`Group upserted: ${g.name} (${g.id}) [${g.code}]`);
 }
 
 // Users are inserted after groups so the `group_id` foreign key resolves.

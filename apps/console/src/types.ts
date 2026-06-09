@@ -114,6 +114,8 @@ export interface QuestionUpdateInput {
 export interface GroupSummary {
   id: string;
   name: string;
+  /** Short unique code (e.g. "7A"). */
+  code: string;
   memberCount: number;
 }
 
@@ -124,9 +126,11 @@ export interface GroupListResponse {
 
 export interface GroupCreateInput {
   name: string;
+  /** Short unique code (1–6 chars, stored uppercase). */
+  code: string;
 }
 
-export type GroupUpdateInput = { name: string };
+export type GroupUpdateInput = { name?: string; code?: string };
 
 // ── Students (#15) ──────────────────────────────────────────────────────────
 
