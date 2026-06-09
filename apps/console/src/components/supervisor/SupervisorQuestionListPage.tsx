@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import type { AdminQuestion } from "../../types";
-import type { QuestionType, FillInBlankConfig } from "@azhura/shared";
+import type { QuestionType, FillInBlankConfig, MatchingConfig, SortingConfig } from "@azhura/shared";
 import { supervisorQuestionsApi } from "../../lib/supervisor-questions-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
@@ -18,6 +18,12 @@ import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { PencilIcon, TrashIcon, PlusIcon, ChevronLeftIcon } from "../ui/icons";
 import { QuestionContentRenderer } from "./QuestionContentRenderer";
+
+function parseConfig<T>(raw: unknown): T | null {
+  if (!raw) return null;
+  if (typeof raw === "string") { try { return JSON.parse(raw) as T; } catch { return null; } }
+  return raw as T;
+}
 
 const QUESTION_TYPE_LABELS: Record<QuestionType, { label: string; className: string }> = {
   multiple_choice: { label: "Pilihan Ganda", className: "bg-blue-50 text-blue-700 border-blue-200" },
@@ -149,14 +155,38 @@ export function SupervisorQuestionListPage() {
                       </p>
                     )}
 
-                    {/* Correct answer for fill_in_blank */}
-                    {qType === "fill_in_blank" && q.config && (
+                    {qType === "fill_in_blank" && (
                       <p className="mt-2 text-xs text-faint">
                         Jawaban benar:{" "}
                         <span className="font-semibold text-positive">
-                          {(q.config as FillInBlankConfig).answer}
+                          {parseConfig<FillInBlankConfig>(q.config)?.answer ?? "—"}
                         </span>
                       </p>
+                    )}
+
+                    {qType === "matching" && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-medium text-faint">Pasangan benar:</p>
+                        {(parseConfig<MatchingConfig>(q.config)?.pairs ?? []).map((pair, pi) => (
+                          <div key={pi} className="flex items-center gap-2 text-xs text-ink-soft">
+                            <span className="rounded bg-canvas px-1.5 py-0.5 font-medium">{pair.left || "—"}</span>
+                            <span className="text-faint">→</span>
+                            <span className="rounded bg-canvas px-1.5 py-0.5 font-medium">{pair.right || "—"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {qType === "sorting" && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-medium text-faint">Urutan benar:</p>
+                        {(parseConfig<SortingConfig>(q.config)?.items ?? []).map((item, si) => (
+                          <div key={si} className="flex items-center gap-2 text-xs text-ink-soft">
+                            <span className="w-4 shrink-0 font-semibold text-faint">{si + 1}.</span>
+                            <span>{item || "—"}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
 
