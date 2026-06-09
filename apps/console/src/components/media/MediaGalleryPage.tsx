@@ -88,11 +88,13 @@ export function MediaGalleryPage() {
 
   function handleUploaded(uploaded: MediaFile[]) {
     if (uploaded.length === 0) return;
-    // Re-fetch from page 1 so the new files appear at the top of the grid
-    // rather than corrupting the current page slice.
-    setPage(1);
     setUploadOpen(false);
-    // setPage triggers load via useCallback deps; no extra call needed.
+    if (page === 1) {
+      // Already on page 1 — setPage(1) would be a no-op, so trigger manually.
+      loadRef.current?.();
+    } else {
+      setPage(1); // state change triggers load via useEffect deps
+    }
   }
 
   function handleDeleted(id: string) {
