@@ -105,10 +105,6 @@ export function MediaGalleryPage() {
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  // Images always render as a square grid; audio/video as a list.
-  const images = items.filter((f) => f.type === "image");
-  const nonImages = items.filter((f) => f.type !== "image");
-  const useGrid = tab === "image" || tab === "all";
 
   return (
     <div className="space-y-6 pb-24">
@@ -180,25 +176,8 @@ export function MediaGalleryPage() {
             <Button size="sm" onClick={() => setUploadOpen(true)}>Upload sekarang</Button>
           )}
         </CenterState>
-      ) : useGrid ? (
-        <div className="space-y-4">
-          {images.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {images.map((item) => (
-                <MediaCard key={item.id} item={item} onClick={() => setPreview(item)} />
-              ))}
-            </div>
-          )}
-          {nonImages.length > 0 && (
-            <div className="space-y-2">
-              {nonImages.map((item) => (
-                <MediaCard key={item.id} item={item} onClick={() => setPreview(item)} />
-              ))}
-            </div>
-          )}
-        </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {items.map((item) => (
             <MediaCard key={item.id} item={item} onClick={() => setPreview(item)} />
           ))}
