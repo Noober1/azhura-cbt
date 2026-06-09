@@ -27,12 +27,17 @@ interface StudentFormModalProps {
 const NIS_MIN = 5;
 const NIS_MAX = 20;
 const PASSWORD_MIN = 6;
+const BATCH_MIN = 1;
+const BATCH_MAX = 10;
+const BATCH_DEFAULT = 1;
+const BATCH_OPTIONS = Array.from({ length: BATCH_MAX }, (_, i) => i + BATCH_MIN);
 
 interface FormState {
   nis: string;
   name: string;
   password: string;
   groupId: string; // "" = no group
+  batch: number;
   isActive: boolean;
 }
 
@@ -42,6 +47,7 @@ function initialState(student?: StudentSummary | null): FormState {
     name: student?.name ?? "",
     password: "",
     groupId: student?.groupId ?? "",
+    batch: student?.batch ?? BATCH_DEFAULT,
     isActive: student?.isActive ?? true,
   };
 }
@@ -100,6 +106,7 @@ export function StudentFormModal({ open, student, onClose, onSaved }: StudentFor
           nis: form.nis.trim(),
           name: form.name.trim(),
           groupId,
+          batch: form.batch,
           isActive: form.isActive,
         };
         if (form.password) payload.password = form.password;
@@ -111,6 +118,7 @@ export function StudentFormModal({ open, student, onClose, onSaved }: StudentFor
           name: form.name.trim(),
           password: form.password,
           groupId,
+          batch: form.batch,
           isActive: form.isActive,
         };
         await studentsApi.create(payload);
@@ -168,6 +176,22 @@ export function StudentFormModal({ open, student, onClose, onSaved }: StudentFor
                 {groups.map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+
+          <Field label="Batch" required>
+            {(id) => (
+              <Select
+                id={id}
+                value={String(form.batch)}
+                onChange={(e) => set("batch", Number(e.target.value))}
+              >
+                {BATCH_OPTIONS.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
                   </option>
                 ))}
               </Select>

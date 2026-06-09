@@ -141,6 +141,7 @@ export interface StudentSummary {
   name: string;
   groupId: string | null;
   groupName: string | null;
+  batch: number;
   isActive: boolean;
   createdAt: number;
 }
@@ -155,6 +156,7 @@ export interface StudentCreateInput {
   name: string;
   password: string;
   groupId?: string | null;
+  batch?: number;
   isActive?: boolean;
 }
 
@@ -164,6 +166,7 @@ export interface StudentUpdateInput {
   name?: string;
   password?: string;
   groupId?: string | null;
+  batch?: number;
   isActive?: boolean;
 }
 
