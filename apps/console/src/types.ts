@@ -32,6 +32,11 @@ export interface ExamSummary {
   createdAt: number;
   totalQuestions: number;
   totalGroups: number;
+  /**
+   * Batch numbers (1–10) allowed to access this exam. Empty means open to all
+   * batches. Mirrors the `exam_batches` restriction (#76).
+   */
+  batches: number[];
 }
 
 export interface ExamListResponse {
@@ -67,6 +72,11 @@ export interface ExamDetail {
   passingGrade: number;
   createdAt: number;
   allowedGroups: AdminGroupRef[];
+  /**
+   * Batch numbers (1–10) allowed to access this exam. Empty means open to all
+   * batches (#76).
+   */
+  batches: number[];
   questions: AdminQuestion[];
 }
 
@@ -81,6 +91,11 @@ export interface ExamCreateInput {
   randomizeAnswer?: boolean;
   passingGrade?: number;
   allowedGroups?: string[];
+  /**
+   * Batch numbers (1–10) allowed to access this exam. Omit or pass an empty
+   * array to allow all batches (#76).
+   */
+  batches?: number[];
 }
 
 /** Body for `PATCH /admin/exams/:examId` (all optional). */

@@ -223,6 +223,11 @@ export function ExamDetailPage() {
               ? exam.allowedGroups.map((g) => g.name).join(", ")
               : "—"}
           </span>
+          <span className="rounded-md bg-canvas px-2 py-1">
+            Batch: {exam.batches.length > 0
+              ? exam.batches.join(", ")
+              : "Semua batch"}
+          </span>
         </div>
       </section>
 
