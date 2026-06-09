@@ -6,7 +6,7 @@
  */
 
 import type { MediaFile, MediaType } from "../../types";
-import { formatBytes } from "../../lib/format";
+import { formatBytes, resolveMediaUrl } from "../../lib/format";
 import { ImageIcon, AudioIcon, VideoIcon } from "../ui/icons";
 
 interface MediaCardProps {
@@ -28,7 +28,7 @@ export function MediaCard({ item, onClick }: MediaCardProps) {
         className="focus-ring group relative aspect-square overflow-hidden rounded-lg border border-line bg-canvas transition-shadow hover:shadow-md hover:shadow-ink/8"
       >
         <img
-          src={item.url}
+          src={resolveMediaUrl(item.url)}
           alt={item.originalName}
           className="size-full object-cover transition-transform group-hover:scale-105"
           loading="lazy"

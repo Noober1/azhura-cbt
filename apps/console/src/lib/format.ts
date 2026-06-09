@@ -57,3 +57,17 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/**
+ * Resolves a media URL returned by the backend (e.g. `/uploads/images/uuid.jpg`)
+ * to an absolute URL rooted at the backend origin.
+ *
+ * The console runs on a different port than the backend, so relative paths must
+ * be prefixed with the backend origin derived from `VITE_API_BASE_URL`.
+ */
+export function resolveMediaUrl(url: string): string {
+  if (url.startsWith("http")) return url;
+  const backendOrigin = (import.meta.env.VITE_API_BASE_URL as string || "/api")
+    .replace(/\/api\/?$/, "");
+  return `${backendOrigin}${url}`;
+}

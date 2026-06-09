@@ -10,7 +10,7 @@ import type { MediaFile } from "../../types";
 import { mediaApi } from "../../lib/media-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
-import { formatDateTime, formatBytes } from "../../lib/format";
+import { formatDateTime, formatBytes, resolveMediaUrl } from "../../lib/format";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -42,10 +42,7 @@ export function MediaPreviewModal({ item, onClose, onDeleted }: MediaPreviewModa
 
   async function copyUrl() {
     if (!item) return;
-    // Treat relative URLs (like /uploads/…) as same-origin; pass absolute URLs unchanged.
-    const full = item.url.startsWith("http")
-      ? item.url
-      : new URL(item.url, window.location.origin).href;
+    const full = resolveMediaUrl(item.url);
     try {
       await navigator.clipboard.writeText(full);
       toast.success("URL disalin.");
@@ -79,20 +76,20 @@ export function MediaPreviewModal({ item, onClose, onDeleted }: MediaPreviewModa
           <div className="space-y-4">
             {item.type === "image" && (
               <img
-                src={item.url}
+                src={resolveMediaUrl(item.url)}
                 alt={item.originalName}
                 className="max-h-80 w-full rounded-lg object-contain"
               />
             )}
             {item.type === "audio" && (
               // eslint-disable-next-line jsx-a11y/media-has-caption
-              <audio controls className="w-full" src={item.url}>
+              <audio controls className="w-full" src={resolveMediaUrl(item.url)}>
                 Browser Anda tidak mendukung pemutaran audio.
               </audio>
             )}
             {item.type === "video" && (
               // eslint-disable-next-line jsx-a11y/media-has-caption
-              <video controls className="max-h-72 w-full rounded-lg" src={item.url}>
+              <video controls className="max-h-72 w-full rounded-lg" src={resolveMediaUrl(item.url)}>
                 Browser Anda tidak mendukung pemutaran video.
               </video>
             )}
