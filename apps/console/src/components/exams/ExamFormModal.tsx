@@ -39,6 +39,10 @@ const TOKEN_REGEX = /^[A-Za-z0-9]{1,5}$/;
 // Default new-exam expiry: 7 days out, keeps the picker non-empty and sensible.
 const DEFAULT_EXPIRY_OFFSET_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Selectable exam batches (#76). The backend accepts integers 1–10; an empty
+// selection means "open to all batches".
+const BATCH_NUMBERS = Array.from({ length: 10 }, (_, i) => i + 1);
+
 interface FormState {
   title: string;
   durationMinutes: string;
@@ -103,6 +107,8 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
   const { settings } = useSettings(open && !isEdit);
   const [form, setForm] = useState<FormState>(() => initialState(exam));
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  // Allowed batch numbers (#76). Empty = open to all batches.
+  const [selectedBatches, setSelectedBatches] = useState<number[]>([]);
   // groupId -> active participant count, for groups locked because students are
   // mid-exam (#29). Such groups can't be unchecked/removed.
   const [lockedGroups, setLockedGroups] = useState<Record<string, number>>({});
@@ -137,6 +143,10 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
       setLockedGroups(locks);
     };
 
+    // `batches` is present on both summary and detail shapes, so prefill it
+    // synchronously without waiting for the detail fetch.
+    setSelectedBatches(exam?.batches ?? []);
+
     let cancelled = false;
     if (!exam) {
       setSelectedGroupIds([]);
@@ -170,6 +180,14 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
     if (lockedGroups[id] !== undefined) return; // locked: cannot be removed (#29)
     setSelectedGroupIds((ids) =>
       ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+    );
+  }
+
+  function toggleBatch(n: number) {
+    setSelectedBatches((batches) =>
+      batches.includes(n)
+        ? batches.filter((x) => x !== n)
+        : [...batches, n].sort((a, b) => a - b)
     );
   }
 
@@ -213,6 +231,7 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
       randomizeAnswer: form.randomizeAnswer,
       passingGrade: Number(form.passingGrade),
       allowedGroups: selectedGroupIds,
+      batches: selectedBatches,
     };
 
     setBusy(true);
@@ -426,6 +445,50 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
               dapat dikeluarkan sampai mereka selesai.
             </p>
           )}
+        </div>
+
+        {/* Batch restriction (#76) */}
+        <div className="flex flex-col gap-2 pt-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[0.8125rem] font-medium text-ink">
+              Batch yang diizinkan
+            </span>
+            {selectedBatches.length > 0 && (
+              <span className="text-xs tabular text-faint">
+                {selectedBatches.length} dipilih
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-5 gap-2">
+            {BATCH_NUMBERS.map((n) => {
+              const checked = selectedBatches.includes(n);
+              return (
+                <label
+                  key={n}
+                  className={`flex cursor-pointer items-center gap-2 rounded-[var(--radius-field)] border px-2.5 py-2 transition-colors ${
+                    checked
+                      ? "border-accent/40 bg-accent-wash"
+                      : "border-line bg-surface hover:border-faint"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleBatch(n)}
+                    className="focus-ring size-4 accent-[var(--color-accent)]"
+                  />
+                  <span className="text-sm text-ink">Batch {n}</span>
+                </label>
+              );
+            })}
+          </div>
+
+          <p className="text-xs text-faint">
+            {selectedBatches.length === 0
+              ? "Semua batch dapat mengikuti ujian ini."
+              : "Hanya siswa pada batch terpilih yang dapat mengikuti ujian ini."}
+          </p>
         </div>
 
         <div className="flex flex-col gap-2.5 pt-1">

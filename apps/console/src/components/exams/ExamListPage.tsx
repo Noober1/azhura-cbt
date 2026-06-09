@@ -206,6 +206,11 @@ export function ExamListPage() {
                           {exam.totalGroups} group
                         </span>
                       )}
+                      <span className="text-xs text-faint">
+                        {exam.batches.length > 0
+                          ? `Batch ${exam.batches.join(", ")}`
+                          : "Semua batch"}
+                      </span>
                     </div>
                   </td>
                   <td className="px-4 py-3">
