@@ -85,6 +85,8 @@ async function getQuestionDetail(examId: string, questionId: string) {
     id: question.id,
     examId: question.examId,
     text: question.text,
+    type: question.type ?? "multiple_choice",
+    config: question.config ?? null,
     orderIndex: question.orderIndex,
     correctOptionId: question.correctOptionId,
     options: optionRows,
@@ -179,45 +181,47 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
       const { examId } = params;
       await assertAssigned(examId, user.userId);
 
-      if (body.correctOptionIndex >= body.options.length) {
-        throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
-      }
-
+      const qType = body.type ?? "multiple_choice";
       const questionId = randomUUID();
-      const optionRows = body.options.map((o, index) => ({
-        id: randomUUID(),
-        questionId,
-        text: o.text,
-        orderIndex: index,
-      }));
-      const correctOptionId = optionRows[body.correctOptionIndex].id;
 
       await db.transaction(async (tx) => {
         const [active] = await tx
           .select({ id: examSessions.id })
           .from(examSessions)
-          .where(
-            and(
-              eq(examSessions.examId, examId),
-              eq(examSessions.submitted, 0),
-              gt(examSessions.endTime, Date.now())
-            )
-          )
+          .where(and(eq(examSessions.examId, examId), eq(examSessions.submitted, 0), gt(examSessions.endTime, Date.now())))
           .limit(1);
         if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
 
-        await tx.insert(questions).values({
-          id: questionId,
-          examId,
-          text: body.text,
-          correctOptionId,
-          orderIndex: body.orderIndex ?? 0,
-        });
-        await tx.insert(options).values(optionRows);
+        if (qType === "multiple_choice") {
+          if (!body.options || body.correctOptionIndex === undefined) {
+            throw new BadRequestError("options dan correctOptionIndex wajib untuk soal pilihan ganda.");
+          }
+          if (body.options.length < 2) {
+            throw new BadRequestError("Soal pilihan ganda harus memiliki minimal 2 opsi.");
+          }
+          if (body.correctOptionIndex >= body.options.length) {
+            throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
+          }
+          const optionRows = body.options.map((o, index) => ({
+            id: randomUUID(), questionId, text: o.text, orderIndex: index,
+          }));
+          const correctOptionId = optionRows[body.correctOptionIndex].id;
+          await tx.insert(questions).values({
+            id: questionId, examId, text: body.text, type: "multiple_choice",
+            correctOptionId, orderIndex: body.orderIndex ?? 0,
+          });
+          await tx.insert(options).values(optionRows);
+        } else {
+          if (!body.config) throw new BadRequestError("config wajib untuk tipe soal ini.");
+          await tx.insert(questions).values({
+            id: questionId, examId, text: body.text, type: qType,
+            config: body.config, orderIndex: body.orderIndex ?? 0,
+          });
+        }
       });
 
       notifyExamListChanged(await getExamGroupIds(examId));
-      log.info("Question created by supervisor", { examId, questionId, supervisorId: user.userId });
+      log.info("Question created by supervisor", { examId, questionId, type: qType, supervisorId: user.userId });
       set.status = 201;
       return getQuestionDetail(examId, questionId);
     },
@@ -225,8 +229,15 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
       body: t.Object({
         text: t.String({ minLength: 1 }),
         orderIndex: t.Optional(t.Integer({ minimum: 0 })),
-        options: t.Array(t.Object({ text: t.String({ minLength: 1 }) }), { minItems: 2 }),
-        correctOptionIndex: t.Integer({ minimum: 0 }),
+        type: t.Optional(t.Union([
+          t.Literal("multiple_choice"),
+          t.Literal("fill_in_blank"),
+          t.Literal("matching"),
+          t.Literal("sorting"),
+        ])),
+        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }))),
+        correctOptionIndex: t.Optional(t.Integer({ minimum: 0 })),
+        config: t.Optional(t.Record(t.String(), t.Unknown())),
       }),
     }
   )
@@ -244,43 +255,46 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
       await assertAssigned(examId, user.userId);
 
       const existing = await db.query.questions.findFirst({
-        columns: { id: true },
+        columns: { id: true, type: true },
         where: and(eq(questions.id, questionId), eq(questions.examId, examId)),
       });
       if (!existing) throw new NotFoundError("Soal tidak ditemukan.");
 
-      if (body.correctOptionIndex >= body.options.length) {
-        throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
-      }
-
-      const newOptionRows = body.options.map((o, index) => ({
-        id: randomUUID(),
-        questionId,
-        text: o.text,
-        orderIndex: index,
-      }));
-      const correctOptionId = newOptionRows[body.correctOptionIndex].id;
+      const qType = existing.type ?? "multiple_choice";
 
       await db.transaction(async (tx) => {
         const [active] = await tx
           .select({ id: examSessions.id })
           .from(examSessions)
-          .where(
-            and(
-              eq(examSessions.examId, examId),
-              eq(examSessions.submitted, 0),
-              gt(examSessions.endTime, Date.now())
-            )
-          )
+          .where(and(eq(examSessions.examId, examId), eq(examSessions.submitted, 0), gt(examSessions.endTime, Date.now())))
           .limit(1);
         if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
 
-        await tx
-          .update(questions)
-          .set({ text: body.text, correctOptionId, orderIndex: body.orderIndex ?? 0 })
-          .where(eq(questions.id, questionId));
-        await tx.delete(options).where(eq(options.questionId, questionId));
-        await tx.insert(options).values(newOptionRows);
+        if (qType === "multiple_choice") {
+          if (!body.options || body.correctOptionIndex === undefined) {
+            throw new BadRequestError("options dan correctOptionIndex wajib untuk soal pilihan ganda.");
+          }
+          if (body.options.length < 2) {
+            throw new BadRequestError("Soal pilihan ganda harus memiliki minimal 2 opsi.");
+          }
+          if (body.correctOptionIndex >= body.options.length) {
+            throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
+          }
+          const newOptionRows = body.options.map((o, index) => ({
+            id: randomUUID(), questionId, text: o.text, orderIndex: index,
+          }));
+          const correctOptionId = newOptionRows[body.correctOptionIndex].id;
+          await tx.update(questions)
+            .set({ text: body.text, correctOptionId, orderIndex: body.orderIndex ?? 0 })
+            .where(eq(questions.id, questionId));
+          await tx.delete(options).where(eq(options.questionId, questionId));
+          await tx.insert(options).values(newOptionRows);
+        } else {
+          if (!body.config) throw new BadRequestError("config wajib untuk tipe soal ini.");
+          await tx.update(questions)
+            .set({ text: body.text, config: body.config, orderIndex: body.orderIndex ?? 0 })
+            .where(eq(questions.id, questionId));
+        }
       });
 
       log.info("Question updated by supervisor", { examId, questionId, supervisorId: user.userId });
@@ -290,8 +304,9 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
       body: t.Object({
         text: t.String({ minLength: 1 }),
         orderIndex: t.Optional(t.Integer({ minimum: 0 })),
-        options: t.Array(t.Object({ text: t.String({ minLength: 1 }) }), { minItems: 2 }),
-        correctOptionIndex: t.Integer({ minimum: 0 }),
+        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }))),
+        correctOptionIndex: t.Optional(t.Integer({ minimum: 0 })),
+        config: t.Optional(t.Record(t.String(), t.Unknown())),
       }),
     }
   )

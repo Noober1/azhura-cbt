@@ -167,6 +167,9 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           if (body.options === undefined || body.correctOptionIndex === undefined) {
             throw new BadRequestError("options dan correctOptionIndex wajib untuk soal pilihan ganda.");
           }
+          if (body.options.length < 2) {
+            throw new BadRequestError("Soal pilihan ganda harus memiliki minimal 2 opsi.");
+          }
           if (body.correctOptionIndex >= body.options.length) {
             throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
           }
@@ -214,9 +217,11 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           t.Literal("matching"),
           t.Literal("sorting"),
         ])),
-        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }), { minItems: 2 })),
+        // minItems omitted here; runtime handler validates count per type.
+        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }))),
         correctOptionIndex: t.Optional(t.Integer({ minimum: 0 })),
-        config: t.Optional(t.Any()),
+        // Use Record to accept any plain object (avoids exact-mirror coercion issues with t.Any).
+        config: t.Optional(t.Record(t.String(), t.Unknown())),
       }),
     }
   )
@@ -300,8 +305,8 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           t.Literal("matching"),
           t.Literal("sorting"),
         ])),
-        config: t.Optional(t.Any()),
-        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }), { minItems: 2 })),
+        config: t.Optional(t.Record(t.String(), t.Unknown())),
+        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }))),
         correctOptionIndex: t.Optional(t.Integer({ minimum: 0 })),
       }),
     }
