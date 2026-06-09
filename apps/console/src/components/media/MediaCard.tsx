@@ -1,10 +1,13 @@
 import type { MediaFile, MediaType } from "../../types";
 import { formatBytes, resolveMediaUrl } from "../../lib/format";
-import { AudioIcon, VideoIcon } from "../ui/icons";
+import { AudioIcon, VideoIcon, CheckIcon } from "../ui/icons";
 
 interface MediaCardProps {
   item: MediaFile;
   onClick: () => void;
+  selected?: boolean;
+  selectionMode?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 const TYPE_STYLES: Record<MediaType, { bg: string; icon: React.ReactNode }> = {
@@ -13,13 +16,39 @@ const TYPE_STYLES: Record<MediaType, { bg: string; icon: React.ReactNode }> = {
   video: { bg: "bg-purple-500/10", icon: <VideoIcon className="size-10 text-purple-400" /> },
 };
 
-export function MediaCard({ item, onClick }: MediaCardProps) {
+function Checkbox({ selected, selectionMode, onToggle }: { selected: boolean; selectionMode: boolean; onToggle: (e: React.MouseEvent) => void }) {
+  return (
+    <span
+      onClick={onToggle}
+      className={`absolute left-2 top-2 z-10 flex size-5 items-center justify-center rounded-full border-2 transition-all ${
+        selected
+          ? "border-accent bg-accent"
+          : "border-white/80 bg-ink/20 opacity-0 group-hover:opacity-100"
+      } ${selectionMode ? "opacity-100" : ""}`}
+    >
+      {selected && <CheckIcon className="size-3 text-white" />}
+    </span>
+  );
+}
+
+export function MediaCard({ item, onClick, selected = false, selectionMode = false, onToggleSelect }: MediaCardProps) {
+  function handleClick() {
+    if (selectionMode) onToggleSelect?.(item.id);
+    else onClick();
+  }
+
+  function handleCheckbox(e: React.MouseEvent) {
+    e.stopPropagation();
+    onToggleSelect?.(item.id);
+  }
+
   if (item.type === "image") {
     return (
       <button
-        onClick={onClick}
-        className="focus-ring group relative block w-full aspect-square overflow-hidden rounded-lg border border-line bg-canvas transition-shadow hover:shadow-md hover:shadow-ink/8"
+        onClick={handleClick}
+        className={`focus-ring group relative block w-full aspect-square overflow-hidden rounded-lg border transition-shadow hover:shadow-md hover:shadow-ink/8 ${selected ? "border-accent ring-2 ring-accent/40" : "border-line bg-canvas"}`}
       >
+        <Checkbox selected={selected} selectionMode={selectionMode} onToggle={handleCheckbox} />
         <img
           src={resolveMediaUrl(item.url)}
           alt={item.originalName}
@@ -35,9 +64,10 @@ export function MediaCard({ item, onClick }: MediaCardProps) {
   const { bg, icon } = TYPE_STYLES[item.type];
   return (
     <button
-      onClick={onClick}
-      className={`focus-ring group relative flex w-full aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-line transition-shadow hover:shadow-md hover:shadow-ink/8 ${bg}`}
+      onClick={handleClick}
+      className={`focus-ring group relative flex w-full aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border transition-shadow hover:shadow-md hover:shadow-ink/8 ${selected ? "border-accent ring-2 ring-accent/40" : `border-line ${bg}`}`}
     >
+      <Checkbox selected={selected} selectionMode={selectionMode} onToggle={handleCheckbox} />
       {icon}
       <div className="absolute inset-x-0 bottom-0 px-2 py-1.5">
         <p className="truncate text-center text-[0.6875rem] text-ink-soft">{item.originalName}</p>

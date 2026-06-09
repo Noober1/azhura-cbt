@@ -1,24 +1,18 @@
-/**
- * Azhura CBT Console — Media Gallery (#87).
- *
- * Browse, upload, and delete media files. Tabs filter by type (all/image/audio/video),
- * debounced search by filename, and pagination. Images render as a square grid;
- * audio/video render as a list so file names are readable.
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MediaFile, MediaType } from "../../types";
 import { mediaApi } from "../../lib/media-api";
 import { getErrorMessage } from "../../lib/errors";
 import { useDebounce } from "../../hooks/useDebounce";
+import { toast } from "../../stores/toast";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Field";
 import { Spinner, CenterState } from "../ui/Spinner";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { MediaCard } from "./MediaCard";
 import { MediaUploadZone } from "./MediaUploadZone";
 import { MediaPreviewModal } from "./MediaPreviewModal";
-import { UploadIcon, SearchIcon, ImageIcon, AudioIcon, VideoIcon } from "../ui/icons";
 import { Pagination } from "../ui/Pagination";
+import { UploadIcon, SearchIcon, ImageIcon, AudioIcon, VideoIcon, TrashIcon, XIcon } from "../ui/icons";
 
 type TabType = "all" | MediaType;
 
@@ -51,8 +45,12 @@ export function MediaGalleryPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [preview, setPreview] = useState<MediaFile | null>(null);
 
-  // Keep a stable reference to the current load params so post-action refreshes
-  // can trigger the same load without capturing stale closures.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const selectionMode = selected.size > 0;
+
   const loadRef = useRef<(() => Promise<void>) | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -74,7 +72,6 @@ export function MediaGalleryPage() {
     }
   }, [tab, debouncedSearch, page]);
 
-  // Store latest load so callbacks can trigger a refresh.
   useEffect(() => { loadRef.current = () => load(); }, [load]);
 
   useEffect(() => {
@@ -83,26 +80,52 @@ export function MediaGalleryPage() {
     return () => controller.abort();
   }, [load]);
 
-  // Reset to page 1 when filters change so stale page offsets don't carry over.
-  useEffect(() => { setPage(1); }, [tab, debouncedSearch]);
+  // Reset page and clear selection when filters change.
+  useEffect(() => { setPage(1); setSelected(new Set()); }, [tab, debouncedSearch]);
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelected(new Set(items.map((f) => f.id)));
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
 
   function handleUploaded(uploaded: MediaFile[]) {
     if (uploaded.length === 0) return;
     setUploadOpen(false);
-    if (page === 1) {
-      // Already on page 1 — setPage(1) would be a no-op, so trigger manually.
-      loadRef.current?.();
-    } else {
-      setPage(1); // state change triggers load via useEffect deps
-    }
+    if (page === 1) loadRef.current?.();
+    else setPage(1);
   }
 
   function handleDeleted(id: string) {
     setPreview(null);
-    // Re-fetch to keep pagination consistent. Remove the item optimistically
-    // first so the modal can close without a visible flash.
+    setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
     setItems((prev) => prev.filter((f) => f.id !== id));
     setTotal((prev) => Math.max(0, prev - 1));
+    loadRef.current?.();
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleting(true);
+    const ids = [...selected];
+    const results = await Promise.allSettled(ids.map((id) => mediaApi.remove(id)));
+    const failed = results.filter((r) => r.status === "rejected").length;
+    const succeeded = ids.length - failed;
+    setBulkDeleting(false);
+    setConfirmBulkOpen(false);
+    setSelected(new Set());
+    if (failed === 0) toast.success(`${succeeded} file dihapus.`);
+    else toast.error(`${succeeded} berhasil, ${failed} gagal dihapus.`);
     loadRef.current?.();
   }
 
@@ -138,9 +161,7 @@ export function MediaGalleryPage() {
               onClick={() => setTab(t.key)}
               aria-pressed={tab === t.key}
               className={`focus-ring flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === t.key
-                  ? "bg-surface text-ink shadow-sm"
-                  : "text-faint hover:text-ink"
+                tab === t.key ? "bg-surface text-ink shadow-sm" : "text-faint hover:text-ink"
               }`}
             >
               {t.icon}
@@ -181,7 +202,14 @@ export function MediaGalleryPage() {
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {items.map((item) => (
-            <MediaCard key={item.id} item={item} onClick={() => setPreview(item)} />
+            <MediaCard
+              key={item.id}
+              item={item}
+              onClick={() => setPreview(item)}
+              selected={selected.has(item.id)}
+              selectionMode={selectionMode}
+              onToggleSelect={toggleSelect}
+            />
           ))}
         </div>
       )}
@@ -190,10 +218,49 @@ export function MediaGalleryPage() {
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       )}
 
+      {/* Bulk action bar — floats above the chat FAB */}
+      {selectionMode && (
+        <div className="fixed bottom-20 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 shadow-lg shadow-ink/10">
+          <span className="text-sm font-medium text-ink">{selected.size} dipilih</span>
+          <span className="text-line">·</span>
+          <button
+            onClick={selectAll}
+            className="text-sm text-accent hover:underline"
+          >
+            Pilih semua halaman ini
+          </button>
+          <span className="text-line">·</span>
+          <button
+            onClick={clearSelection}
+            className="focus-ring rounded-md p-1 text-faint hover:text-ink"
+            aria-label="Batalkan pilihan"
+          >
+            <XIcon className="size-4" />
+          </button>
+          <button
+            onClick={() => setConfirmBulkOpen(true)}
+            className="focus-ring ml-1 flex items-center gap-1.5 rounded-full bg-danger px-3 py-1 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <TrashIcon className="size-3.5" />
+            Hapus
+          </button>
+        </div>
+      )}
+
       <MediaPreviewModal
         item={preview}
         onClose={() => setPreview(null)}
         onDeleted={handleDeleted}
+      />
+
+      <ConfirmDialog
+        open={confirmBulkOpen}
+        title={`Hapus ${selected.size} file?`}
+        message="File yang dipilih akan dihapus permanen. Soal yang mereferensikan URL file ini akan kehilangan medianya."
+        confirmLabel={bulkDeleting ? "Menghapus…" : "Hapus semua"}
+        tone="danger"
+        onConfirm={handleBulkDelete}
+        onClose={() => setConfirmBulkOpen(false)}
       />
     </div>
   );
