@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MediaFile, MediaType } from "../../types";
 import { mediaApi } from "../../lib/media-api";
+import { supervisorMediaApi } from "../../lib/supervisor-media-api";
+import { useAuthStore } from "../../stores/auth";
 import { getErrorMessage } from "../../lib/errors";
 import { useDebounce } from "../../hooks/useDebounce";
 import { toast } from "../../stores/toast";
@@ -32,6 +34,9 @@ const TABS: Tab[] = [
 const PAGE_SIZE = 20;
 
 export function MediaGalleryPage() {
+  const role = useAuthStore((s) => s.role);
+  const isAdmin = role === "admin";
+
   const [tab, setTab] = useState<TabType>("all");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 350);
@@ -57,7 +62,8 @@ export function MediaGalleryPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await mediaApi.list(
+      const listFn = isAdmin ? mediaApi.list : supervisorMediaApi.list;
+      const res = await listFn(
         { type: tab !== "all" ? tab : undefined, q: debouncedSearch.trim() || undefined, page, limit: PAGE_SIZE },
         signal
       );
@@ -70,7 +76,7 @@ export function MediaGalleryPage() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [tab, debouncedSearch, page]);
+  }, [tab, debouncedSearch, page, isAdmin]);
 
   useEffect(() => { loadRef.current = () => load(); }, [load]);
 
@@ -149,7 +155,10 @@ export function MediaGalleryPage() {
 
       {uploadOpen && (
         <div className="rounded-xl border border-line bg-surface p-4">
-          <MediaUploadZone onUploaded={handleUploaded} />
+          <MediaUploadZone
+            onUploaded={handleUploaded}
+            uploadFn={isAdmin ? undefined : supervisorMediaApi.upload}
+          />
         </div>
       )}
 
@@ -237,6 +246,7 @@ export function MediaGalleryPage() {
           >
             <XIcon className="size-4" />
           </button>
+          {isAdmin && (
           <button
             onClick={() => setConfirmBulkOpen(true)}
             className="focus-ring ml-1 flex items-center gap-1.5 rounded-full bg-danger px-3 py-1 text-sm font-medium text-white transition-opacity hover:opacity-90"
@@ -244,6 +254,7 @@ export function MediaGalleryPage() {
             <TrashIcon className="size-3.5" />
             Hapus
           </button>
+        )}
         </div>
       )}
 
@@ -253,7 +264,7 @@ export function MediaGalleryPage() {
         onDeleted={handleDeleted}
       />
 
-      <ConfirmDialog
+      {isAdmin && <ConfirmDialog
         open={confirmBulkOpen}
         title={`Hapus ${selected.size} file?`}
         message="File yang dipilih akan dihapus permanen. Soal yang mereferensikan URL file ini akan kehilangan medianya."
@@ -261,7 +272,7 @@ export function MediaGalleryPage() {
         tone="danger"
         onConfirm={handleBulkDelete}
         onClose={() => setConfirmBulkOpen(false)}
-      />
+      />}
     </div>
   );
 }

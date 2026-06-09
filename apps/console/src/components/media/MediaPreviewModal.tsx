@@ -8,6 +8,7 @@
 import { useState } from "react";
 import type { MediaFile } from "../../types";
 import { mediaApi } from "../../lib/media-api";
+import { useAuthStore } from "../../stores/auth";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { formatDateTime, formatBytes, resolveMediaUrl } from "../../lib/format";
@@ -25,6 +26,7 @@ interface MediaPreviewModalProps {
 const TYPE_LABELS: Record<string, string> = { image: "Gambar", audio: "Audio", video: "Video" };
 
 export function MediaPreviewModal({ item, onClose, onDeleted }: MediaPreviewModalProps) {
+  const isAdmin = useAuthStore((s) => s.role === "admin");
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   async function handleDelete() {
@@ -60,9 +62,11 @@ export function MediaPreviewModal({ item, onClose, onDeleted }: MediaPreviewModa
         size="lg"
         footer={
           <>
-            <Button variant="ghost" size="sm" leadingIcon={<TrashIcon className="size-4" />} onClick={() => setConfirmOpen(true)}>
-              Hapus
-            </Button>
+            {isAdmin && (
+              <Button variant="ghost" size="sm" leadingIcon={<TrashIcon className="size-4" />} onClick={() => setConfirmOpen(true)}>
+                Hapus
+              </Button>
+            )}
             <Button variant="secondary" size="sm" leadingIcon={<CopyIcon className="size-4" />} onClick={copyUrl}>
               Salin URL
             </Button>
