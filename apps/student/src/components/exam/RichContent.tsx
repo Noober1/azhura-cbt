@@ -19,17 +19,14 @@ interface RichContentProps {
 
 export function RichContent({ html, className }: RichContentProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
 
   useEffect(() => {
-    if (ref.current) renderMathInElement(ref.current, MATH_OPTIONS);
-  }, [clean]);
+    if (!ref.current) return;
+    // Set innerHTML and render KaTeX in one atomic sequence so React's
+    // reconciler never overwrites KaTeX output between the two steps.
+    ref.current.innerHTML = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    renderMathInElement(ref.current, MATH_OPTIONS);
+  }, [html]);
 
-  return (
-    <div
-      ref={ref}
-      className={className}
-      dangerouslySetInnerHTML={{ __html: clean }}
-    />
-  );
+  return <div ref={ref} className={className} />;
 }
