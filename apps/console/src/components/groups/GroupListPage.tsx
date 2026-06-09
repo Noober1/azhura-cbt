@@ -18,6 +18,7 @@ import { Input } from "../ui/Field";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { GroupFormModal } from "./GroupFormModal";
+import { GroupImportModal } from "./GroupImportModal";
 import {
   PlusIcon,
   SearchIcon,
@@ -26,6 +27,7 @@ import {
   LayersIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  UploadIcon,
 } from "../ui/icons";
 
 const PAGE_SIZE = 10;
@@ -43,6 +45,7 @@ export function GroupListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<GroupSummary | null>(null);
   const [deleting, setDeleting] = useState<GroupSummary | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,9 +117,18 @@ export function GroupListPage() {
             {total > 0 ? `${total} group` : "Belum ada group"}
           </p>
         </div>
-        <Button onClick={openCreate} leadingIcon={<PlusIcon className="size-4" />}>
-          Buat group
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setImportOpen(true)}
+            leadingIcon={<UploadIcon className="size-4" />}
+          >
+            Import
+          </Button>
+          <Button onClick={openCreate} leadingIcon={<PlusIcon className="size-4" />}>
+            Buat group
+          </Button>
+        </div>
       </div>
 
       <div className="relative mt-6 max-w-sm">
@@ -247,6 +259,12 @@ export function GroupListPage() {
           setEditing(null);
         }}
         onSaved={handleSaved}
+      />
+
+      <GroupImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => { setImportOpen(false); load(); }}
       />
 
       <ConfirmDialog

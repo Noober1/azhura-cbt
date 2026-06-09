@@ -22,6 +22,7 @@ import { Select } from "../ui/Select";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { StudentFormModal } from "./StudentFormModal";
+import { StudentImportModal } from "./StudentImportModal";
 import {
   PlusIcon,
   SearchIcon,
@@ -30,6 +31,7 @@ import {
   UsersIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  UploadIcon,
 } from "../ui/icons";
 
 const PAGE_SIZE = 10;
@@ -50,6 +52,7 @@ export function StudentListPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<StudentSummary | null>(null);
   const [deleting, setDeleting] = useState<StudentSummary | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,9 +121,18 @@ export function StudentListPage() {
             {total > 0 ? `${total} siswa` : "Belum ada siswa"}
           </p>
         </div>
-        <Button onClick={openCreate} leadingIcon={<PlusIcon className="size-4" />}>
-          Tambah siswa
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setImportOpen(true)}
+            leadingIcon={<UploadIcon className="size-4" />}
+          >
+            Import
+          </Button>
+          <Button onClick={openCreate} leadingIcon={<PlusIcon className="size-4" />}>
+            Tambah siswa
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -278,6 +290,12 @@ export function StudentListPage() {
           setEditing(null);
         }}
         onSaved={handleSaved}
+      />
+
+      <StudentImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => { setImportOpen(false); load(); }}
       />
 
       <ConfirmDialog
