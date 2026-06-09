@@ -117,7 +117,7 @@ export function MediaPickerModal({
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex gap-1">
           {TABS.map((t) => (
-            <button
+            <button type="button"
               key={t.key}
               onClick={() => handleTabChange(t.key)}
               className={`focus-ring rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
@@ -137,7 +137,7 @@ export function MediaPickerModal({
           onChange={handleSearch}
           className="focus-ring h-7 flex-1 rounded-md border border-line bg-canvas px-2.5 text-xs placeholder:text-faint"
         />
-        <button
+        <button type="button"
           onClick={() => setShowUpload((v) => !v)}
           className="focus-ring rounded-md border border-line bg-canvas px-2.5 py-1 text-xs font-medium text-ink-soft hover:text-ink"
         >
@@ -176,7 +176,7 @@ export function MediaPickerModal({
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-center gap-2">
-          <button
+          <button type="button"
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
             className="focus-ring rounded border border-line px-2 py-0.5 text-xs disabled:opacity-40"
@@ -186,7 +186,7 @@ export function MediaPickerModal({
           <span className="text-xs text-faint">
             {page} / {totalPages}
           </span>
-          <button
+          <button type="button"
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
             className="focus-ring rounded border border-line px-2 py-0.5 text-xs disabled:opacity-40"
