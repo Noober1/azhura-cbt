@@ -1,8 +1,8 @@
-import DOMPurify from "dompurify";
 import { Question } from "../../types";
 import { useExamStore } from "../../stores/exam";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Label } from "../ui/label";
+import { RichContent } from "./RichContent";
 import "../../styles/question-renderer.css";
 
 interface QuestionRendererProps {
@@ -10,10 +10,6 @@ interface QuestionRendererProps {
   question: Question;
   /** 1-based position of this question, shown as "Nomor N dari M". */
   questionNumber: number;
-}
-
-function safeHtml(html: string): string {
-  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
 }
 
 /**
@@ -42,9 +38,9 @@ export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererP
       </div>
 
       {/* Question Stem */}
-      <div
+      <RichContent
+        html={question.text}
         className="question-html text-lg font-medium text-neutral-900 dark:text-neutral-100 leading-relaxed"
-        dangerouslySetInnerHTML={{ __html: safeHtml(question.text) }}
       />
 
       {/* Options Panel */}
@@ -86,9 +82,9 @@ export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererP
                 >
                   {optionLetter}
                 </span>
-                <span
+                <RichContent
+                  html={option.text}
                   className="question-html flex-1 pt-0.5"
-                  dangerouslySetInnerHTML={{ __html: safeHtml(option.text) }}
                 />
               </Label>
             </div>
