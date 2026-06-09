@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal } from "../ui/Modal";
 import { QuestionContentRenderer } from "./QuestionContentRenderer";
 
-const OPTION_LABELS = ["A", "B", "C", "D"];
+const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
 
 interface QuestionPreviewModalProps {
   open: boolean;
