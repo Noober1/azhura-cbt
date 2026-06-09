@@ -11,7 +11,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/Button";
-import { FileTextIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon, BarChartIcon, LayoutDashboardIcon, ImageIcon } from "../ui/icons";
+import { FileTextIcon, PenLineIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon, BarChartIcon, LayoutDashboardIcon, ImageIcon } from "../ui/icons";
 import { ChatLauncher } from "../chat/ChatLauncher";
 
 interface NavItem {
@@ -21,6 +21,7 @@ interface NavItem {
   disabled?: boolean;
   hint?: string;
   adminOnly?: boolean;
+  supervisorOnly?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -29,6 +30,7 @@ const NAV: NavItem[] = [
   { to: "/students", label: "Peserta", icon: <UsersIcon className="size-[18px]" />, adminOnly: true },
   { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" />, adminOnly: true },
   { to: "/media", label: "Media", icon: <ImageIcon className="size-[18px]" /> },
+  { to: "/supervisor/exams", label: "Soal Ujian", icon: <PenLineIcon className="size-[18px]" />, supervisorOnly: true },
   { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon className="size-[18px]" /> },
   { to: "/recap", label: "Rekap Nilai", icon: <BarChartIcon className="size-[18px]" />, adminOnly: true },
   { to: "/logs", label: "Log", icon: <ScrollTextIcon className="size-[18px]" />, adminOnly: true },
@@ -70,7 +72,10 @@ export function AppShell() {
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 px-2.5 py-3 lg:px-3">
-          {NAV.filter((item) => !item.adminOnly || role === "admin").map((item) =>
+          {NAV.filter((item) =>
+            (!item.adminOnly || role === "admin") &&
+            (!item.supervisorOnly || role === "supervisor")
+          ).map((item) =>
             item.disabled ? (
               <span
                 key={item.to}
