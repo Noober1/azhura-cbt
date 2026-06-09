@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import type { AdminQuestion } from "../../types";
+import type { QuestionType, FillInBlankConfig } from "@azhura/shared";
 import { supervisorQuestionsApi } from "../../lib/supervisor-questions-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
@@ -17,6 +18,13 @@ import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { PencilIcon, TrashIcon, PlusIcon, ChevronLeftIcon } from "../ui/icons";
 import { QuestionContentRenderer } from "./QuestionContentRenderer";
+
+const QUESTION_TYPE_LABELS: Record<QuestionType, { label: string; className: string }> = {
+  multiple_choice: { label: "Pilihan Ganda", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  fill_in_blank:   { label: "Isi Jawaban",   className: "bg-violet-50 text-violet-700 border-violet-200" },
+  matching:        { label: "Pasangkan",      className: "bg-amber-50 text-amber-700 border-amber-200" },
+  sorting:         { label: "Urutkan",        className: "bg-teal-50 text-teal-700 border-teal-200" },
+};
 
 export function SupervisorQuestionListPage() {
   const { examId } = useParams<{ examId: string }>();
@@ -89,6 +97,8 @@ export function SupervisorQuestionListPage() {
         <div className="space-y-3">
           {questions.map((q, idx) => {
             const correctOption = q.options.find((o) => o.id === q.correctOptionId);
+            const qType = (q.type ?? "multiple_choice") as QuestionType;
+            const typeMeta = QUESTION_TYPE_LABELS[qType];
             return (
               <div
                 key={q.id}
@@ -99,11 +109,16 @@ export function SupervisorQuestionListPage() {
                     {idx + 1}.
                   </span>
                   <div className="min-w-0 flex-1">
+                    {/* Question type indicator */}
+                    <span className={`mb-1.5 inline-block rounded border px-2 py-0.5 text-xs font-medium ${typeMeta.className}`}>
+                      {typeMeta.label}
+                    </span>
+
                     {/* Question text (HTML rendered) */}
                     <QuestionContentRenderer html={q.text} className="prose-sm text-sm text-ink" />
 
-                    {/* Options */}
-                    {q.options.length > 0 && (
+                    {/* Options for multiple_choice */}
+                    {qType === "multiple_choice" && q.options.length > 0 && (
                       <ul className="mt-2 space-y-1">
                         {q.options.map((opt, oi) => (
                           <li
@@ -123,13 +138,23 @@ export function SupervisorQuestionListPage() {
                       </ul>
                     )}
 
-                    {correctOption && (
+                    {qType === "multiple_choice" && correctOption && (
                       <p className="mt-2 text-xs text-faint">
                         Jawaban benar:{" "}
                         <span className="font-medium text-positive">
                           {String.fromCharCode(
                             65 + q.options.findIndex((o) => o.id === q.correctOptionId)
                           )}
+                        </span>
+                      </p>
+                    )}
+
+                    {/* Correct answer for fill_in_blank */}
+                    {qType === "fill_in_blank" && q.config && (
+                      <p className="mt-2 text-xs text-faint">
+                        Jawaban benar:{" "}
+                        <span className="font-semibold text-positive">
+                          {(q.config as FillInBlankConfig).answer}
                         </span>
                       </p>
                     )}
