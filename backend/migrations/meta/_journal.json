@@ -92,6 +92,13 @@
       "when": 1780997886356,
       "tag": "0012_great_green_goblin",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1780999883785,
+      "tag": "0013_solid_susan_delgado",
+      "breakpoints": true
     }
   ]
 }

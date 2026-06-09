@@ -40,12 +40,13 @@ const seedUsers: {
   name: string;
   role: SeedRole;
   groupId: string | null;
+  batch: number;
 }[] = [
-  { id: "usr_1001", nis: "12345", name: "Ahmad Faisal",   role: "student",    groupId: "grp_7a" },
-  { id: "usr_1002", nis: "67890", name: "Budi Santoso",   role: "student",    groupId: "grp_7b" },
-  { id: "usr_1003", nis: "99999", name: "Citra Lestari",  role: "student",    groupId: "grp_8a" },
-  { id: "usr_9001", nis: "00001", name: "Pengawas Utama", role: "supervisor", groupId: null },
-  { id: "usr_8001", nis: "88888", name: "Administrator",  role: "admin",      groupId: null },
+  { id: "usr_1001", nis: "12345", name: "Ahmad Faisal",   role: "student",    groupId: "grp_7a", batch: 1 },
+  { id: "usr_1002", nis: "67890", name: "Budi Santoso",   role: "student",    groupId: "grp_7b", batch: 1 },
+  { id: "usr_1003", nis: "99999", name: "Citra Lestari",  role: "student",    groupId: "grp_8a", batch: 1 },
+  { id: "usr_9001", nis: "00001", name: "Pengawas Utama", role: "supervisor", groupId: null,      batch: 1 },
+  { id: "usr_8001", nis: "88888", name: "Administrator",  role: "admin",      groupId: null,      batch: 1 },
 ];
 
 // ── Groups ───────────────────────────────────────────────────────────────────
@@ -75,8 +76,9 @@ for (const u of seedUsers) {
       name: u.name,
       role: u.role,
       groupId: u.groupId,
+      batch: u.batch,
     })
-    .onDuplicateKeyUpdate({ set: { name: u.name, groupId: u.groupId } });
+    .onDuplicateKeyUpdate({ set: { name: u.name, groupId: u.groupId, batch: u.batch } });
   log.info(`User upserted: ${u.name} (${u.nis})`);
 }
 

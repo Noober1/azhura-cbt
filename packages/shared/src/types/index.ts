@@ -17,6 +17,11 @@ export interface User {
    * this field existed — render a fallback when missing.
    */
   groupName?: string | null;
+  /**
+   * Sub-batch within the student's group for staggered exam access (1–10).
+   * Absent for non-student users. Default 1.
+   */
+  batch?: number;
 }
 
 export interface QuestionOption {
@@ -103,6 +108,11 @@ export interface AvailableExam {
   requiresToken: boolean;
   /** Minimum passing score (0–100). 0 means no passing grade (all pass). */
   passingGrade: number;
+  /**
+   * Batch numbers allowed to access this exam (admin-facing). Empty or absent
+   * means the exam is open to all batches in the allowed groups.
+   */
+  batches?: number[];
 }
 
 export interface ExamResult {

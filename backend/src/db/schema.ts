@@ -45,6 +45,8 @@ export const users = mysqlTable("users", {
   groupId: varchar("group_id", { length: 36 }).references(() => groups.id, {
     onDelete: "set null",
   }),
+  /** Sub-batch within the group for staggered exam access (1–10). Default 1. */
+  batch: tinyint("batch").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -89,6 +91,26 @@ export const examGroups = mysqlTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.examId, table.groupId] }),
+  })
+);
+
+/**
+ * Batch restriction table for staggered exam access. When rows exist for an
+ * exam, only students whose `users.batch` value is listed here may start a
+ * session. When no rows exist, the exam is open to all batches within the
+ * allowed groups. The `(exam_id, batch)` pair is the primary key; the FK
+ * cascades so rows clean up when an exam is deleted.
+ */
+export const examBatches = mysqlTable(
+  "exam_batches",
+  {
+    examId: varchar("exam_id", { length: 36 })
+      .notNull()
+      .references(() => exams.id, { onDelete: "cascade" }),
+    batch: tinyint("batch").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.examId, table.batch] }),
   })
 );
 
@@ -251,11 +273,16 @@ export const examsRelations = relations(exams, ({ many }) => ({
   sessions: many(examSessions),
   examGroups: many(examGroups),
   supervisors: many(examSupervisors),
+  examBatches: many(examBatches),
 }));
 
 export const examGroupsRelations = relations(examGroups, ({ one }) => ({
   exam: one(exams, { fields: [examGroups.examId], references: [exams.id] }),
   group: one(groups, { fields: [examGroups.groupId], references: [groups.id] }),
+}));
+
+export const examBatchesRelations = relations(examBatches, ({ one }) => ({
+  exam: one(exams, { fields: [examBatches.examId], references: [exams.id] }),
 }));
 
 export const examSupervisorsRelations = relations(examSupervisors, ({ one }) => ({
@@ -426,6 +453,7 @@ export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type Exam = typeof exams.$inferSelect;
 export type ExamGroup = typeof examGroups.$inferSelect;
+export type ExamBatch = typeof examBatches.$inferSelect;
 export type ExamSupervisor = typeof examSupervisors.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type Option = typeof options.$inferSelect;

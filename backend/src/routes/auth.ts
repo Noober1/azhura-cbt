@@ -50,6 +50,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
           password: true,
           role: true,
           groupId: true,
+          batch: true,
           isActive: true,
         },
         where: eq(users.nis, nis),
@@ -116,6 +117,8 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         // `groupId` is null for supervisors/admins. JSON.stringify drops null
         // in the JWT lib, so coerce to "" to keep the claim present.
         groupId: record.groupId ?? "",
+        // Sub-batch for staggered exam access. Defaults to 1 for non-students.
+        batch: record.batch ?? 1,
         // Session id (jti) bound to the active-session registry; "" for roles
         // not subject to single-session enforcement.
         sessionId,
