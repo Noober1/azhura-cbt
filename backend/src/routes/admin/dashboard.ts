@@ -71,9 +71,10 @@ async function computeStats(adminName: string): Promise<DashboardSnapshot> {
     // Online students: live Socket.io socket count (no Redis lag)
     Promise.resolve(getOnlineStudentCount()),
 
-    // Completed + in-progress session counts
+    // Completed + in-progress: distinct students (a student who took 2 exams
+    // counts as one completed, not two).
     db
-      .select({ submitted: examSessions.submitted, count: sql<number>`count(*)` })
+      .select({ submitted: examSessions.submitted, count: sql<number>`count(distinct ${examSessions.userId})` })
       .from(examSessions)
       .where(
         or(
