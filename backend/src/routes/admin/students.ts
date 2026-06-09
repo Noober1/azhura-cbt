@@ -94,6 +94,7 @@ async function getStudentDetail(studentId: string) {
       id: users.id,
       nis: users.nis,
       name: users.name,
+      initialPassword: users.initialPassword,
       groupId: users.groupId,
       groupName: groups.name,
       batch: users.batch,
@@ -111,6 +112,7 @@ async function getStudentDetail(studentId: string) {
     id: row.id,
     nis: row.nis,
     name: row.name,
+    initialPassword: row.initialPassword ?? null,
     groupId: row.groupId,
     groupName: row.groupName,
     batch: row.batch,
@@ -167,6 +169,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
           id: users.id,
           nis: users.nis,
           name: users.name,
+          initialPassword: users.initialPassword,
           groupId: users.groupId,
           groupName: groups.name,
           batch: users.batch,
@@ -185,6 +188,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
           id: r.id,
           nis: r.nis,
           name: r.name,
+          initialPassword: r.initialPassword ?? null,
           groupId: r.groupId,
           groupName: r.groupName,
           batch: r.batch,
@@ -345,7 +349,8 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
         row.isUpdate = existingByNis.has(row.nis);
         if (!row.isUpdate) {
           row.newId = randomUUID();
-          row.hashedPassword = await bcrypt.hash(generatePassword(), IMPORT_BCRYPT_ROUNDS);
+          row.plainPassword = generatePassword();
+          row.hashedPassword = await bcrypt.hash(row.plainPassword, IMPORT_BCRYPT_ROUNDS);
         }
       }
 
@@ -460,6 +465,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
               nis: r.nis,
               name: r.nama,
               password: r.hashedPassword!,
+              initialPassword: r.plainPassword ?? null,
               role: STUDENT_ROLE,
               groupId: r.groupId ?? null,
               batch: r.batch,
@@ -523,13 +529,15 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
       await assertGroupExists(groupId);
 
       const id = randomUUID();
-      const password = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
+      const plainPassword = body.password;
+      const password = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
 
       await db.insert(users).values({
         id,
         nis,
         name: body.name.trim(),
         password,
+        initialPassword: plainPassword,
         role: STUDENT_ROLE,
         groupId,
         batch: body.batch ?? 1,
@@ -579,6 +587,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
       if (body.isActive !== undefined) patch.isActive = boolToTiny(body.isActive);
       if (body.password !== undefined) {
         patch.password = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
+        patch.initialPassword = body.password;
       }
 
       if (Object.keys(patch).length > 0) {

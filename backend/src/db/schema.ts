@@ -35,6 +35,10 @@ export const users = mysqlTable("users", {
   nis: varchar("nis", { length: 20 }).notNull().unique(),
   /** bcrypt hash — never the plaintext password. */
   password: varchar("password", { length: 255 }).notNull(),
+  /** Plaintext password stored by admin for card-printing / credential distribution.
+   *  Populated on create and on password-change via admin routes.
+   *  Null for accounts created before this column was added. */
+  initialPassword: varchar("initial_password", { length: 72 }),
   name: varchar("name", { length: 100 }).notNull(),
   role: mysqlEnum("role", ["student", "supervisor", "admin"])
     .notNull()
