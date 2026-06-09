@@ -23,7 +23,8 @@ export const ExamSidebar = () => {
   let flaggedCount = 0;
 
   questions.forEach((q) => {
-    if (answers[q.id]?.selectedOptionId) answeredCount++;
+    const a = answers[q.id];
+    if (a?.selectedOptionId || a?.answerValue) answeredCount++;
     if (flaggedQuestions[q.id]) flaggedCount++;
   });
 
@@ -58,7 +59,7 @@ export const ExamSidebar = () => {
         <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-5 gap-2 max-h-88 overflow-y-auto pr-1">
           {questions.map((q, index) => {
             const isSelected = index === currentQuestionIndex;
-            const isAnswered = !!answers[q.id]?.selectedOptionId;
+            const isAnswered = !!(answers[q.id]?.selectedOptionId || answers[q.id]?.answerValue);
             const isFlagged = !!flaggedQuestions[q.id];
 
             // Determine background & borders based on status
