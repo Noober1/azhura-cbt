@@ -91,8 +91,6 @@ export interface ActiveSession {
   totalQuestions: number;
   startTime: number;
   endTime: number;
-  /** Set (ms epoch) while the timer is paused due to a disconnect; null when running. */
-  pausedAt: number | null;
 }
 
 /**
@@ -110,7 +108,6 @@ export const findActiveSession = async (
       passingGrade: exams.passingGrade,
       startTime: examSessions.startTime,
       endTime: examSessions.endTime,
-      pausedAt: examSessions.pausedAt,
     })
     .from(examSessions)
     .innerJoin(exams, eq(exams.id, examSessions.examId))
@@ -126,7 +123,7 @@ export const findActiveSession = async (
     .from(questions)
     .where(eq(questions.examId, row.examId));
 
-  return { ...row, pausedAt: row.pausedAt ?? null, totalQuestions: key.length };
+  return { ...row, totalQuestions: key.length };
 };
 
 /**

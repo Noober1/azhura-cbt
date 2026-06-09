@@ -367,9 +367,11 @@ export function initSocket(httpServer: HttpServer): SocketServer {
           return;
         }
 
-        // Resume a paused exam timer if the student reconnected mid-exam.
-        // This handles both same-session reconnects (within grace period) and
-        // full re-logins after a crash — whichever brings the socket back first.
+        // Clear the offline indicator and re-sync the client clock. The server
+        // clock keeps running while the student is disconnected (endTime is never
+        // extended), so we send the original endTime as the authoritative value.
+        // If it has already passed, the client's finalizeExam loop will submit;
+        // if not, the countdown resumes from the correct remaining position.
         try {
           const pausedSession = await db.query.examSessions.findFirst({
             columns: { id: true, endTime: true, pausedAt: true },
@@ -380,23 +382,20 @@ export function initSocket(httpServer: HttpServer): SocketServer {
             orderBy: (s, { desc }) => [desc(s.createdAt)],
           });
           if (pausedSession?.pausedAt) {
-            const remaining = Math.max(0, pausedSession.endTime - pausedSession.pausedAt);
-            const newEndTime = Date.now() + remaining;
             await db
               .update(schema.examSessions)
-              .set({ endTime: newEndTime, pausedAt: null })
+              .set({ pausedAt: null })
               .where(eq(schema.examSessions.id, pausedSession.id));
             if (!disconnected) {
-              socket.emit("time-change", { endTime: newEndTime, serverTime: Date.now() });
-              log.info("Exam timer resumed on reconnect", {
+              socket.emit("time-change", { endTime: pausedSession.endTime, serverTime: Date.now() });
+              log.info("Exam offline indicator cleared on reconnect", {
                 nis,
                 sessionId: pausedSession.id,
-                remainingMs: remaining,
               });
             }
           }
         } catch (error) {
-          log.warn("Failed to resume paused exam timer on connect", {
+          log.warn("Failed to clear offline indicator on connect", {
             nis,
             reason: error instanceof Error ? error.message : String(error),
           });
@@ -471,8 +470,9 @@ export function initSocket(httpServer: HttpServer): SocketServer {
                 : { type: "remove", userId }
             );
             if (inExam) {
-              // Pause the exam timer so time doesn't drain while the student is
-              // disconnected. The timer resumes automatically on the next connect.
+              // Record the offline timestamp for the supervisor ⏸ indicator.
+              // endTime is intentionally left unchanged — the server clock keeps
+              // running. The indicator is cleared when the student reconnects.
               void db
                 .update(schema.examSessions)
                 .set({ pausedAt: Date.now() })
@@ -483,7 +483,7 @@ export function initSocket(httpServer: HttpServer): SocketServer {
                   )
                 )
                 .catch((error) => {
-                  log.warn("Failed to pause exam timer on disconnect", {
+                  log.warn("Failed to set offline indicator on disconnect", {
                     nis,
                     reason: error instanceof Error ? error.message : String(error),
                   });
