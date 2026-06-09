@@ -45,10 +45,11 @@ export function MediaCard({ item, onClick, selected = false, selectionMode = fal
   if (item.type === "image") {
     return (
       <button
+        type="button"
         onClick={handleClick}
         className={`focus-ring group relative block w-full aspect-square overflow-hidden rounded-lg border transition-shadow hover:shadow-md hover:shadow-ink/8 ${selected ? "border-accent ring-2 ring-accent/40" : "border-line bg-canvas"}`}
       >
-        <Checkbox selected={selected} selectionMode={selectionMode} onToggle={handleCheckbox} />
+        {onToggleSelect && <Checkbox selected={selected} selectionMode={selectionMode} onToggle={handleCheckbox} />}
         <img
           src={resolveMediaUrl(item.url)}
           alt={item.originalName}
@@ -64,10 +65,11 @@ export function MediaCard({ item, onClick, selected = false, selectionMode = fal
   const { bg, icon } = TYPE_STYLES[item.type];
   return (
     <button
+      type="button"
       onClick={handleClick}
       className={`focus-ring group relative flex w-full aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border transition-shadow hover:shadow-md hover:shadow-ink/8 ${selected ? "border-accent ring-2 ring-accent/40" : `border-line ${bg}`}`}
     >
-      <Checkbox selected={selected} selectionMode={selectionMode} onToggle={handleCheckbox} />
+      {onToggleSelect && <Checkbox selected={selected} selectionMode={selectionMode} onToggle={handleCheckbox} />}
       {icon}
       <div className="absolute inset-x-0 bottom-0 px-2 py-1.5">
         <p className="truncate text-center text-[0.6875rem] text-ink-soft">{item.originalName}</p>

@@ -53,10 +53,15 @@
   display: block;
 }
 
-.tiptap-editor .ProseMirror audio[data-tiptap-media],
+.tiptap-editor .ProseMirror audio[data-tiptap-media] {
+  width: 100%;
+  border-radius: 0.375rem;
+  display: block;
+}
+
 .tiptap-editor .ProseMirror video[data-tiptap-media] {
   width: 100%;
-  max-height: 16rem;
+  aspect-ratio: 16 / 9;
   border-radius: 0.375rem;
   display: block;
 }
@@ -86,6 +91,16 @@ video[data-tiptap-media] {
   display: block;
   max-width: 100%;
   margin-left: auto;
+  margin-right: auto;
+}
+
+video[data-tiptap-media] {
+  aspect-ratio: 16 / 9;
+}
+
+audio[data-tiptap-media] {
+  display: block;
+  margin-left: 0;
   margin-right: auto;
 }
 
