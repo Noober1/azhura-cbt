@@ -241,3 +241,57 @@ export type {
   ExamScoreSummary,
 } from "@azhura/shared";
 
+// ── Spreadsheet Import (#70, #72) ─────────────────────────────────────────────
+
+export interface GroupImportRowResult {
+  row: number;
+  code: string;
+  name: string;
+  status: "valid" | "error";
+  error?: string;
+}
+
+export interface GroupImportPreview {
+  sessionId: string;
+  total: number;
+  validCount: number;
+  rows: GroupImportRowResult[];
+}
+
+export interface GroupImportConfirmResult {
+  inserted: number;
+  updated: number;
+}
+
+export interface StudentImportRowResult {
+  row: number;
+  nis: string;
+  nama: string;
+  grup: string;
+  /** True when this NIS already exists (update path). */
+  isUpdate?: boolean;
+  status: "valid" | "error";
+  error?: string;
+}
+
+export interface StudentImportPreview {
+  sessionId: string;
+  mode: "import" | "sync";
+  total: number;
+  validCount: number;
+  insertCount: number;
+  updateCount: number;
+  /** Mode Sync only — number of students that will be deleted. */
+  toDelete?: number;
+  /** Mode Sync only — students skipped from deletion (have exam history). */
+  skippedDelete?: number;
+  rows: StudentImportRowResult[];
+}
+
+export interface StudentImportConfirmResult {
+  inserted: number;
+  updated: number;
+  deleted: number;
+  skipped: number;
+}
+

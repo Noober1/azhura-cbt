@@ -5,34 +5,55 @@
  * {@link requireAdmin}. Scoped to `role = 'student'` rows only — supervisor/admin
  * provisioning is a separate concern (seed-managed for now). Endpoints (under
  * `/api/admin`):
- * - `GET    /admin/students`            — paginated; search by NIS/name; group filter.
- * - `GET    /admin/students/:studentId` — single student (+ group name).
- * - `POST   /admin/students`            — create (password hashed, NIS unique).
- * - `PATCH  /admin/students/:studentId` — partial update (optional password change).
- * - `DELETE /admin/students/:studentId` — delete; blocked if the student has exam
- *                                         history (deactivate instead).
+ * - `GET    /admin/students`                  — paginated; search by NIS/name; group filter.
+ * - `GET    /admin/students/template`         — download empty import template (.xlsx or .csv).
+ * - `GET    /admin/students/:studentId`       — single student (+ group name).
+ * - `POST   /admin/students`                  — create (password hashed, NIS unique).
+ * - `POST   /admin/students/import`           — dry-run: parse & validate file, return preview.
+ * - `POST   /admin/students/import/confirm`   — execute upsert (+ sync deletes) from session.
+ * - `PATCH  /admin/students/:studentId`       — partial update (optional password change).
+ * - `DELETE /admin/students/:studentId`       — delete; blocked if the student has exam history.
  *
  * Passwords are always bcrypt-hashed and never returned. NIS uniqueness is
  * enforced before write (the column is also UNIQUE as a backstop).
+ * Import-generated passwords use 8 rounds (auto-generated, temporary by design).
  */
 
 import { Elysia, t } from "elysia";
-import { randomUUID } from "crypto";
+import { randomUUID, webcrypto } from "crypto";
 import bcrypt from "bcryptjs";
-import { and, asc, eq, like, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, like, notInArray, or, sql } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors";
 import { notifyDashboardStats } from "./dashboard";
 import { createLogger } from "../../lib/logger";
+import {
+  parseSpreadsheet,
+  generateTemplateXlsx,
+  generateTemplateCsv,
+  XLSX_CONTENT_TYPE,
+  CSV_CONTENT_TYPE,
+} from "../../lib/spreadsheet";
+import { studentImportSessions, canDryRun, markDryRun } from "../../lib/import-session";
+import type { StudentImportRow } from "../../lib/import-session";
 
 const { users, groups, examSessions } = schema;
 
 const log = createLogger("AdminStudent");
 
 const BCRYPT_ROUNDS = 10;
+/** Reduced rounds for auto-generated import passwords (temporary by design). */
+const IMPORT_BCRYPT_ROUNDS = 8;
 const STUDENT_ROLE = "student" as const;
+
+/** Generates a random 8-character alphanumeric password (avoids O/0/I/1/l). Uses CSPRNG. */
+function generatePassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = webcrypto.getRandomValues(new Uint8Array(8));
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
 
 const tinyToBool = (v: number): boolean => v === 1;
 const boolToTiny = (v: boolean): number => (v ? 1 : 0);
@@ -181,6 +202,295 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
         limit: t.Optional(t.Number({ minimum: 1, maximum: 100 })),
       }),
     }
+  )
+
+  /**
+   * GET /api/admin/students/template?format=xlsx|csv
+   * Downloads an empty import template with example data.
+   */
+  .get(
+    "/students/template",
+    async ({ query }) => {
+      const format = query.format === "csv" ? "csv" : "xlsx";
+      const headers = ["nis", "nama", "grup"];
+      const example = { nis: "12345", nama: "Ahmad Faisal", grup: "7A" };
+
+      if (format === "csv") {
+        const csv = generateTemplateCsv(headers, example);
+        return new Response(csv, {
+          headers: {
+            "Content-Type": CSV_CONTENT_TYPE,
+            "Content-Disposition": 'attachment; filename="template-siswa.csv"',
+          },
+        });
+      }
+
+      const buf = await generateTemplateXlsx(headers, example);
+      return new Response(new Uint8Array(buf), {
+        headers: {
+          "Content-Type": XLSX_CONTENT_TYPE,
+          "Content-Disposition": 'attachment; filename="template-siswa.xlsx"',
+        },
+      });
+    },
+    { query: t.Object({ format: t.Optional(t.String()) }) }
+  )
+
+  /**
+   * POST /api/admin/students/import
+   * Accepts a multipart upload (.xlsx or .csv), parses and validates all rows,
+   * performs a dry-run (no DB writes), and returns a preview with a session token.
+   *
+   * For Mode Sync, also identifies students in DB that are absent from the file
+   * and splits them into "will delete" vs "skipped (has exam history)".
+   *
+   * Passwords for new students are pre-hashed here so the confirm step is fast.
+   *
+   * @throws {BadRequestError} when the file format is wrong or too many rows.
+   */
+  .post(
+    "/students/import",
+    async ({ body, user }) => {
+      const MAX_ROWS = 1000;
+      const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+      const mode = body.mode === "sync" ? "sync" : "import";
+
+      if (!canDryRun(user.userId)) {
+        throw new BadRequestError("Terlalu cepat. Tunggu 10 detik sebelum upload ulang.");
+      }
+      markDryRun(user.userId);
+
+      if (body.file.size > MAX_FILE_BYTES) {
+        throw new BadRequestError("Ukuran file melebihi batas 10 MB.");
+      }
+      const allowedMimes = [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/csv",
+        "application/csv",
+        "text/plain",
+      ];
+      if (body.file.type && !allowedMimes.includes(body.file.type)) {
+        throw new BadRequestError("Tipe file tidak didukung. Gunakan .xlsx atau .csv.");
+      }
+
+      const { rows: rawRows, error: parseError } = await parseSpreadsheet(body.file);
+      if (parseError) throw new BadRequestError(parseError);
+      if (rawRows.length > MAX_ROWS) {
+        throw new BadRequestError(
+          `File melebihi batas ${MAX_ROWS} baris. File Anda memiliki ${rawRows.length} baris.`
+        );
+      }
+
+      // Build group code → ID lookup map (single query for all groups).
+      const allGroups = await db.select({ id: groups.id, code: groups.code }).from(groups);
+      const groupByCode = new Map(allGroups.map((g) => [g.code.toUpperCase(), g.id]));
+
+      // Validate rows and resolve group IDs. Track duplicate NIS within the file.
+      const seenNis = new Map<string, number>(); // nis → first row number
+      const rows: StudentImportRow[] = rawRows.map((raw, i) => {
+        const rowNum = i + 1;
+        const nis = (raw["nis"] ?? "").trim();
+        const nama = (raw["nama"] ?? "").trim();
+        const grupCode = (raw["grup"] ?? "").trim().toUpperCase();
+
+        if (!nis) {
+          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "Kolom 'nis' wajib diisi." };
+        }
+        if (nis.length < 5 || nis.length > 20) {
+          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "NIS harus 5–20 karakter." };
+        }
+        const dupRow = seenNis.get(nis);
+        if (dupRow !== undefined) {
+          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: `NIS '${nis}' duplikat dengan baris ${dupRow}.` };
+        }
+        seenNis.set(nis, rowNum);
+        if (!nama) {
+          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "Kolom 'nama' wajib diisi." };
+        }
+        if (nama.length > 100) {
+          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "Nama melebihi 100 karakter." };
+        }
+        if (!grupCode) {
+          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: "Kolom 'grup' wajib diisi." };
+        }
+        const groupId = groupByCode.get(grupCode);
+        if (!groupId) {
+          return { row: rowNum, nis, nama, grup: grupCode, status: "error", error: `Grup '${grupCode}' tidak ditemukan.` };
+        }
+        return { row: rowNum, nis, nama, grup: grupCode, groupId, status: "valid" } as StudentImportRow;
+      });
+
+      const validRows = rows.filter((r) => r.status === "valid");
+
+      // Determine which valid NIS already exist in the DB (insert vs update).
+      const validNis = validRows.map((r) => r.nis);
+      const existingUsers =
+        validNis.length > 0
+          ? await db
+              .select({ id: users.id, nis: users.nis })
+              .from(users)
+              .where(and(inArray(users.nis, validNis), eq(users.role, STUDENT_ROLE)))
+          : [];
+      const existingByNis = new Map(existingUsers.map((u) => [u.nis, u.id]));
+
+      // Pre-hash passwords for new students (avoid doing this in the confirm step).
+      for (const row of validRows) {
+        row.isUpdate = existingByNis.has(row.nis);
+        if (!row.isUpdate) {
+          row.newId = randomUUID();
+          row.hashedPassword = await bcrypt.hash(generatePassword(), IMPORT_BCRYPT_ROUNDS);
+        }
+      }
+
+      // Mode Sync: find students in DB that are absent from the file.
+      let toDeleteIds: string[] = [];
+      let skippedDeleteCount = 0;
+      if (mode === "sync") {
+        const fileNisSet = new Set(
+          rows.filter((r) => r.nis).map((r) => r.nis)
+        );
+
+        const absentStudents =
+          fileNisSet.size > 0
+            ? await db
+                .select({ id: users.id, nis: users.nis })
+                .from(users)
+                .where(
+                  and(
+                    eq(users.role, STUDENT_ROLE),
+                    notInArray(users.nis, [...fileNisSet])
+                  )
+                )
+            : await db
+                .select({ id: users.id, nis: users.nis })
+                .from(users)
+                .where(eq(users.role, STUDENT_ROLE));
+
+        if (absentStudents.length > 0) {
+          const absentIds = absentStudents.map((s) => s.id);
+          // Check which absent students have exam history (cannot delete).
+          const withSessions = await db
+            .select({ userId: examSessions.userId })
+            .from(examSessions)
+            .where(inArray(examSessions.userId, absentIds));
+          const withSessionIds = new Set(withSessions.map((s) => s.userId));
+
+          toDeleteIds = absentIds.filter((id) => !withSessionIds.has(id));
+          skippedDeleteCount = absentIds.filter((id) => withSessionIds.has(id)).length;
+        }
+      }
+
+      const insertCount = validRows.filter((r) => !r.isUpdate).length;
+      const updateCount = validRows.filter((r) => r.isUpdate).length;
+
+      const sessionId = studentImportSessions.create({
+        mode,
+        rows,
+        toDeleteIds,
+        skippedDeleteCount,
+      });
+
+      log.info("Student import dry-run", {
+        total: rows.length,
+        valid: validRows.length,
+        inserts: insertCount,
+        updates: updateCount,
+        toDelete: toDeleteIds.length,
+        skipped: skippedDeleteCount,
+        mode,
+      });
+
+      return {
+        sessionId,
+        mode,
+        total: rows.length,
+        validCount: validRows.length,
+        insertCount,
+        updateCount,
+        ...(mode === "sync"
+          ? { toDelete: toDeleteIds.length, skippedDelete: skippedDeleteCount }
+          : {}),
+        rows: rows.map(({ hashedPassword: _, newId: __, groupId: ___, ...rest }) => rest),
+      };
+    },
+    {
+      body: t.Object({
+        file: t.File(),
+        mode: t.Optional(t.Union([t.Literal("import"), t.Literal("sync")])),
+      }),
+    }
+  )
+
+  /**
+   * POST /api/admin/students/import/confirm
+   * Executes the upsert (and optional sync deletes) from a dry-run session.
+   * @throws {BadRequestError} when the session is missing or expired.
+   */
+  .post(
+    "/students/import/confirm",
+    async ({ body }) => {
+      const session = studentImportSessions.get(body.sessionId);
+      if (!session) {
+        throw new BadRequestError(
+          "Sesi import tidak ditemukan atau sudah kedaluwarsa. Ulangi upload file."
+        );
+      }
+      studentImportSessions.delete(body.sessionId);
+
+      const validRows = session.rows.filter((r) => r.status === "valid");
+      const toInsert = validRows.filter((r) => !r.isUpdate);
+      const toUpdate = validRows.filter((r) => r.isUpdate);
+
+      let inserted = 0;
+      let updated = 0;
+      let deleted = 0;
+
+      await db.transaction(async (tx) => {
+        if (toInsert.length > 0) {
+          await tx.insert(users).values(
+            toInsert.map((r) => ({
+              id: r.newId!,
+              nis: r.nis,
+              name: r.nama,
+              password: r.hashedPassword!,
+              role: STUDENT_ROLE,
+              groupId: r.groupId ?? null,
+              batch: 1,
+              isActive: 1,
+            }))
+          );
+          inserted = toInsert.length;
+        }
+
+        for (const r of toUpdate) {
+          await tx
+            .update(users)
+            .set({ name: r.nama, groupId: r.groupId ?? null })
+            .where(and(eq(users.nis, r.nis), eq(users.role, STUDENT_ROLE)));
+        }
+        updated = toUpdate.length;
+
+        if (session.mode === "sync" && session.toDeleteIds.length > 0) {
+          // Re-verify no exam sessions before deleting (guard against race condition).
+          const withSessions = await tx
+            .select({ userId: examSessions.userId })
+            .from(examSessions)
+            .where(inArray(examSessions.userId, session.toDeleteIds));
+          const withSessionIds = new Set(withSessions.map((s) => s.userId));
+          const safeToDelete = session.toDeleteIds.filter((id) => !withSessionIds.has(id));
+
+          if (safeToDelete.length > 0) {
+            await tx.delete(users).where(inArray(users.id, safeToDelete));
+            deleted = safeToDelete.length;
+          }
+        }
+      });
+
+      log.info("Student import confirmed", { inserted, updated, deleted, mode: session.mode });
+      void notifyDashboardStats().catch(() => {});
+      return { inserted, updated, deleted, skipped: session.skippedDeleteCount };
+    },
+    { body: t.Object({ sessionId: t.String() }) }
   )
 
   /**
