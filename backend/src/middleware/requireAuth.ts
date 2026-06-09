@@ -19,6 +19,8 @@ export interface JwtPayload {
   role: string;
   /** The student's group; "" for supervisors/admins (no group). */
   groupId: string;
+  /** Sub-batch within the group for staggered exam access (1–10). Default 1. */
+  batch: number;
   /** Active-session id (jti) for single-session enforcement (#5); "" if unbound. */
   sessionId?: string;
 }

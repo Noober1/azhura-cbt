@@ -85,6 +85,13 @@
       "when": 1780989048078,
       "tag": "0011_natural_thor_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1780998530886,
+      "tag": "0012_next_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

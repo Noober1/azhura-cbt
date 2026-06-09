@@ -27,7 +27,7 @@ import { supervisorActions } from "../../socket";
 import { notifyDashboardStats } from "./dashboard";
 import { createLogger } from "../../lib/logger";
 
-const { exams, examGroups, groups, questions, options, examSessions, users } =
+const { exams, examGroups, examBatches, groups, questions, options, examSessions, users } =
   schema;
 
 const log = createLogger("AdminExam");
@@ -142,6 +142,12 @@ async function getExamDetail(examId: string) {
     .where(eq(examGroups.examId, examId))
     .orderBy(asc(groups.name));
 
+  const batchRows = await db
+    .select({ batch: examBatches.batch })
+    .from(examBatches)
+    .where(eq(examBatches.examId, examId))
+    .orderBy(asc(examBatches.batch));
+
   // Active-participant counts let the admin UI lock groups that can't be removed
   // while students are mid-exam (#29).
   const activeByGroup = await getActiveParticipantsByGroup(
@@ -195,6 +201,8 @@ async function getExamDetail(examId: string) {
     randomizeAnswer: tinyToBool(exam.randomizeAnswer),
     passingGrade: exam.passingGrade,
     createdAt: exam.createdAt.getTime(),
+    /** Batch numbers allowed to access this exam. Empty means open to all batches. */
+    batches: batchRows.map((b) => Number(b.batch)),
     allowedGroups: groupRows.map((g) => ({
       id: g.id,
       name: g.name,
@@ -275,9 +283,21 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
             .where(inArray(examGroups.examId, ids))
             .groupBy(examGroups.examId)
         : [];
+      const batchListRows = ids.length
+        ? await db
+            .select({ examId: examBatches.examId, batch: examBatches.batch })
+            .from(examBatches)
+            .where(inArray(examBatches.examId, ids))
+            .orderBy(asc(examBatches.batch))
+        : [];
 
       const qById = new Map(questionCounts.map((r) => [r.examId, Number(r.count)]));
       const gById = new Map(groupCounts.map((r) => [r.examId, Number(r.count)]));
+      const batchesById = new Map<string, number[]>();
+      for (const r of batchListRows) {
+        if (!batchesById.has(r.examId)) batchesById.set(r.examId, []);
+        batchesById.get(r.examId)!.push(Number(r.batch));
+      }
 
       return {
         data: rows.map((r) => ({
@@ -293,6 +313,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
           createdAt: r.createdAt.getTime(),
           totalQuestions: qById.get(r.id) ?? 0,
           totalGroups: gById.get(r.id) ?? 0,
+          batches: batchesById.get(r.id) ?? [],
         })),
         meta: { total: Number(total), page, limit },
       };
@@ -322,6 +343,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
     async ({ body, set }) => {
       const token = normalizeToken(body.token);
       const allowedGroups = body.allowedGroups ?? [];
+      const batches = body.batches ?? [];
       await assertGroupsExist(allowedGroups);
 
       // A brand-new exam has no questions yet, so it cannot be created active.
@@ -349,6 +371,11 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
             .insert(examGroups)
             .values(allowedGroups.map((groupId) => ({ examId: id, groupId })));
         }
+        if (batches.length > 0) {
+          await tx
+            .insert(examBatches)
+            .values(batches.map((batch) => ({ examId: id, batch })));
+        }
       });
 
       notifyExamListChanged(allowedGroups);
@@ -368,6 +395,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
         randomizeAnswer: t.Optional(t.Boolean()),
         passingGrade: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
         allowedGroups: t.Optional(t.Array(t.String())),
+        batches: t.Optional(t.Array(t.Integer({ minimum: 1, maximum: 10 }), { maxItems: 10 })),
       }),
     }
   )
@@ -453,6 +481,15 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
               .values(body.allowedGroups.map((groupId) => ({ examId: id, groupId })));
           }
         }
+        if (body.batches !== undefined) {
+          // Replace strategy: delete all existing batch restrictions and re-insert.
+          await tx.delete(examBatches).where(eq(examBatches.examId, id));
+          if (body.batches.length > 0) {
+            await tx
+              .insert(examBatches)
+              .values(body.batches.map((batch) => ({ examId: id, batch })));
+          }
+        }
       });
 
       // Notify the union of groups touched (old ∪ new) so both gainers and
@@ -474,6 +511,7 @@ export const adminExamRoutes = new Elysia({ prefix: "/admin" })
         randomizeAnswer: t.Optional(t.Boolean()),
         passingGrade: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
         allowedGroups: t.Optional(t.Array(t.String())),
+        batches: t.Optional(t.Array(t.Integer({ minimum: 1, maximum: 10 }), { maxItems: 10 })),
       }),
     }
   )

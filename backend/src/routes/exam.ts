@@ -33,7 +33,7 @@ import { shuffle, applyQuestionOrder } from "../lib/question-order";
 import { dedupeAnswersByQuestion } from "../lib/answer-batch";
 import { notifyDashboardStats } from "./admin/dashboard";
 
-const { exams, questions, options, examSessions, answers, examGroups, sessionQuestions } =
+const { exams, questions, options, examSessions, answers, examGroups, examBatches, sessionQuestions } =
   schema;
 
 const log = createLogger("Exam");
@@ -44,6 +44,19 @@ const log = createLogger("Exam");
  * legitimate use.
  */
 const MAX_BATCH_ANSWERS = 500;
+
+/**
+ * Returns the list of batch numbers that are allowed to access an exam, or
+ * `null` when the exam has no batch restrictions (open to all batches within
+ * the allowed groups).
+ */
+async function getRestrictedBatches(examId: string): Promise<number[] | null> {
+  const rows = await db
+    .select({ batch: examBatches.batch })
+    .from(examBatches)
+    .where(eq(examBatches.examId, examId));
+  return rows.length > 0 ? rows.map((r) => Number(r.batch)) : null;
+}
 
 export const examRoutes = new Elysia({ prefix: "/exams" })
   .use(authPlugin)
@@ -95,12 +108,33 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
         )
       : base;
 
-    const rows = await scoped
+    const rawExams = await scoped
       .where(eq(exams.isActive, 1))
       .groupBy(exams.id, exams.title, exams.durationMinutes, exams.passingGrade)
       .orderBy(asc(exams.createdAt));
 
-    return rows.map((row) => ({
+    // Batch filtering for students: exams with batch restrictions only appear
+    // for students whose `batch` value is listed in `exam_batches`. Exams with
+    // no rows in `exam_batches` are available to all batches in the group.
+    let filteredExams = rawExams;
+    if (user.role === "student" && rawExams.length > 0) {
+      const examIds = rawExams.map((e) => e.id);
+      const batchRows = await db
+        .select({ examId: examBatches.examId, batch: examBatches.batch })
+        .from(examBatches)
+        .where(inArray(examBatches.examId, examIds));
+      const batchMap = new Map<string, number[]>();
+      for (const row of batchRows) {
+        if (!batchMap.has(row.examId)) batchMap.set(row.examId, []);
+        batchMap.get(row.examId)!.push(Number(row.batch));
+      }
+      filteredExams = rawExams.filter((e) => {
+        const allowed = batchMap.get(e.id);
+        return !allowed || allowed.includes(user.batch ?? 1);
+      });
+    }
+
+    return filteredExams.map((row) => ({
       id: row.id,
       title: row.title,
       totalQuestions: Number(row.totalQuestions),
@@ -634,6 +668,19 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
           groupId,
         });
         throw new ForbiddenError("Ujian ini tidak tersedia untuk kelas Anda.");
+      }
+
+      // Batch gate (#74): when `exam_batches` has rows for this exam, only
+      // students whose `batch` value appears there may start a session.
+      const allowedBatches = await getRestrictedBatches(examId);
+      if (allowedBatches !== null && !allowedBatches.includes(user.batch ?? 1)) {
+        log.warn("Blocked session: exam not allowed for student's batch", {
+          examId,
+          userId: user.userId,
+          studentBatch: user.batch,
+          allowedBatches,
+        });
+        throw new ForbiddenError("Ujian ini tidak tersedia untuk batch Anda.");
       }
     }
 

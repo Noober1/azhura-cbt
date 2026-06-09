@@ -75,6 +75,7 @@ async function getStudentDetail(studentId: string) {
       name: users.name,
       groupId: users.groupId,
       groupName: groups.name,
+      batch: users.batch,
       isActive: users.isActive,
       createdAt: users.createdAt,
     })
@@ -91,6 +92,7 @@ async function getStudentDetail(studentId: string) {
     name: row.name,
     groupId: row.groupId,
     groupName: row.groupName,
+    batch: row.batch,
     isActive: tinyToBool(row.isActive),
     createdAt: row.createdAt.getTime(),
   };
@@ -146,6 +148,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
           name: users.name,
           groupId: users.groupId,
           groupName: groups.name,
+          batch: users.batch,
           isActive: users.isActive,
           createdAt: users.createdAt,
         })
@@ -163,6 +166,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
           name: r.name,
           groupId: r.groupId,
           groupName: r.groupName,
+          batch: r.batch,
           isActive: tinyToBool(r.isActive),
           createdAt: r.createdAt.getTime(),
         })),
@@ -211,6 +215,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
         password,
         role: STUDENT_ROLE,
         groupId,
+        batch: body.batch ?? 1,
         isActive: boolToTiny(body.isActive ?? true),
       });
 
@@ -226,6 +231,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
         // bcrypt only hashes the first 72 bytes — cap to avoid silent truncation.
         password: t.String({ minLength: 6, maxLength: 72 }),
         groupId: t.Optional(t.Nullable(t.String())),
+        batch: t.Optional(t.Integer({ minimum: 1, maximum: 10 })),
         isActive: t.Optional(t.Boolean()),
       }),
     }
@@ -252,6 +258,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
       if (body.nis !== undefined) patch.nis = body.nis.trim();
       if (body.name !== undefined) patch.name = body.name.trim();
       if (body.groupId !== undefined) patch.groupId = body.groupId;
+      if (body.batch !== undefined) patch.batch = body.batch;
       if (body.isActive !== undefined) patch.isActive = boolToTiny(body.isActive);
       if (body.password !== undefined) {
         patch.password = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
@@ -270,6 +277,7 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
         name: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
         password: t.Optional(t.String({ minLength: 6, maxLength: 72 })),
         groupId: t.Optional(t.Nullable(t.String())),
+        batch: t.Optional(t.Integer({ minimum: 1, maximum: 10 })),
         isActive: t.Optional(t.Boolean()),
       }),
     }
