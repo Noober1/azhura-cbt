@@ -88,8 +88,10 @@ export function SupervisorQuestionFormPage() {
   }
 
   function removeOption(idx: number) {
-    if (options.length <= MIN_OPTIONS) return;
-    setOptions((prev: string[]) => prev.filter((_: string, i: number) => i !== idx));
+    setOptions((prev: string[]) => {
+      if (prev.length <= MIN_OPTIONS) return prev;
+      return prev.filter((_: string, i: number) => i !== idx);
+    });
     setCorrectIndex((ci: number) => {
       if (idx === ci) return 0;
       return idx < ci ? ci - 1 : ci;
@@ -189,7 +191,7 @@ export function SupervisorQuestionFormPage() {
             <span className="text-xs text-faint">{options.length}/{MAX_OPTIONS}</span>
           </div>
           {options.map((opt, idx) => (
-            <div key={idx} className="flex items-start gap-3">
+            <div key={OPTION_LABELS[idx]} className="flex items-start gap-3">
               <label className="flex cursor-pointer items-center gap-2 pt-2.5">
                 <input
                   type="radio"

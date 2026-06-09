@@ -80,8 +80,10 @@ export function AdminQuestionFormPage() {
   }
 
   function removeOption(idx: number) {
-    if (options.length <= MIN_OPTIONS) return;
-    setOptions((prev) => prev.filter((_, i) => i !== idx));
+    setOptions((prev) => {
+      if (prev.length <= MIN_OPTIONS) return prev;
+      return prev.filter((_, i) => i !== idx);
+    });
     setCorrectIndex((ci) => {
       if (idx === ci) return 0;
       return idx < ci ? ci - 1 : ci;
@@ -181,7 +183,7 @@ export function AdminQuestionFormPage() {
           </div>
 
           {options.map((opt, idx) => (
-            <div key={idx} className="flex items-start gap-3">
+            <div key={OPTION_LABELS[idx]} className="flex items-start gap-3">
               <label className="flex cursor-pointer items-center gap-2 pt-2.5">
                 <input
                   type="radio"
