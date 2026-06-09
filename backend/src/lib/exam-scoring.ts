@@ -10,8 +10,60 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "../db";
 import { createLogger } from "./logger";
+import { gradeFillInBlank, gradeMatching, gradeSorting } from "./grading";
+import type { FillInBlankConfig, MatchingConfig, SortingConfig } from "@azhura/shared";
 
 const { exams, questions, examSessions, answers } = schema;
+
+/**
+ * Grade a single question by type. Returns true if correct, false otherwise.
+ * Handles MC, fill_in_blank, matching, and sorting.
+ */
+export function gradeQuestion(
+  type: string,
+  correctOptionId: string | null,
+  config: unknown,
+  selectedOptionId: string | null,
+  answerValue: string | null
+): boolean {
+  // MariaDB returns JSON columns as raw strings — parse before use.
+  let cfg: unknown = config;
+  if (typeof config === "string") {
+    try {
+      cfg = JSON.parse(config);
+    } catch {
+      log.warn("Failed to parse question config JSON during grading", { type, config });
+      cfg = null;
+    }
+  }
+
+  switch (type) {
+    case "multiple_choice":
+      return !!correctOptionId && selectedOptionId === correctOptionId;
+    case "fill_in_blank": {
+      if (!answerValue || !cfg) return false;
+      return gradeFillInBlank(answerValue, cfg as FillInBlankConfig);
+    }
+    case "matching": {
+      if (!answerValue || !cfg) return false;
+      try {
+        return gradeMatching(JSON.parse(answerValue) as [number, number][], cfg as MatchingConfig);
+      } catch {
+        return false;
+      }
+    }
+    case "sorting": {
+      if (!answerValue || !cfg) return false;
+      try {
+        return gradeSorting(JSON.parse(answerValue) as number[], cfg as SortingConfig);
+      } catch {
+        return false;
+      }
+    }
+    default:
+      return false;
+  }
+}
 
 const log = createLogger("ExamScoring");
 
@@ -135,26 +187,56 @@ export const finalizeSession = async (session: {
   id: string;
   examId: string;
 }): Promise<ExamScore> => {
-  const rawKey = await db
-    .select({ id: questions.id, correctOptionId: questions.correctOptionId })
+  const allQuestions = await db
+    .select({
+      id: questions.id,
+      type: questions.type,
+      correctOptionId: questions.correctOptionId,
+      config: questions.config,
+    })
     .from(questions)
     .where(eq(questions.examId, session.examId));
-  // Non-MC questions have null correctOptionId; they are scored by #91 grading logic.
-  const key = rawKey.filter((q): q is AnswerKeyEntry => q.correctOptionId !== null);
 
   const stored = await db
     .select({
       questionId: answers.questionId,
       selectedOptionId: answers.selectedOptionId,
+      answerValue: answers.answerValue,
     })
     .from(answers)
     .where(eq(answers.sessionId, session.id));
 
-  const selectedByQuestion = new Map<string, string | null>(
-    stored.map((a) => [a.questionId, a.selectedOptionId])
-  );
+  const answerMap = new Map(stored.map((a) => [a.questionId, a]));
 
-  const result = gradeAgainstKey(key, selectedByQuestion);
+  let totalCorrect = 0;
+  let totalWrong = 0;
+  let totalEmpty = 0;
+
+  for (const q of allQuestions) {
+    const stored = answerMap.get(q.id);
+    const isEmpty =
+      !stored || (!stored.selectedOptionId && !stored.answerValue);
+    if (isEmpty) {
+      totalEmpty++;
+    } else if (
+      gradeQuestion(
+        q.type ?? "multiple_choice",
+        q.correctOptionId,
+        q.config,
+        stored?.selectedOptionId ?? null,
+        stored?.answerValue ?? null
+      )
+    ) {
+      totalCorrect++;
+    } else {
+      totalWrong++;
+    }
+  }
+
+  const totalQuestions = allQuestions.length;
+  const score =
+    totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+  const result: ExamScore = { score, totalCorrect, totalWrong, totalEmpty };
 
   await db
     .update(examSessions)

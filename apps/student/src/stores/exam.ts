@@ -72,7 +72,7 @@ interface ExamState {
   applyFinalizedResult: (result: ExamResult, examTitle: string) => void;
   setQuestions: (questions: Question[]) => void;
   setCurrentQuestionIndex: (index: number) => void;
-  submitAnswer: (questionId: string, selectedOptionId: string | null) => Promise<void>;
+  submitAnswer: (questionId: string, selectedOptionId: string | null, answerValue?: string | null) => Promise<void>;
   toggleFlagQuestion: (questionId: string) => Promise<void>;
   setTimeRemaining: (time: number | ((prev: number) => number)) => void;
   submitExam: () => Promise<ExamResult | null>;
@@ -146,6 +146,7 @@ export const useExamStore = create<ExamState>((set, get) => {
           sessionId: examSessionId,
           questionId,
           selectedOptionId: answer.selectedOptionId ?? null,
+          answerValue: answer.answerValue ?? null,
           timestamp: answer.timestamp,
         });
       } catch (error) {
@@ -183,6 +184,15 @@ export const useExamStore = create<ExamState>((set, get) => {
   submitError: null,
 
   setExamSession: async (session) => {
+    // If the incoming session differs from what's locally stored, the saved
+    // answers belong to a different participant (or a previous exam on this
+    // machine). Purge them before loading so cross-participant contamination
+    // cannot occur.
+    const storedSessionId = isBrowser ? localStorage.getItem("cbt_exam_session_id") : null;
+    if (storedSessionId !== session.id) {
+      await clearLocalDbAnswers();
+    }
+
     // Capture clock skew from the server's clock at session creation so the
     // countdown stays aligned even if the local clock is wrong (#8).
     const offset = session.serverTime !== undefined ? session.serverTime - Date.now() : 0;
@@ -232,11 +242,12 @@ export const useExamStore = create<ExamState>((set, get) => {
     }
   },
 
-  submitAnswer: async (questionId, selectedOptionId) => {
+  submitAnswer: async (questionId, selectedOptionId, answerValue) => {
     const timestamp = Date.now();
     const newAnswer: ExamAnswer = {
       questionId,
       selectedOptionId,
+      answerValue: answerValue ?? null,
       timestamp,
       isFlagged: !!get().flaggedQuestions[questionId],
     };

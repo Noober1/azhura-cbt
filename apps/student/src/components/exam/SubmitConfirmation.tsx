@@ -39,7 +39,8 @@ export const SubmitConfirmation = ({
   let flaggedCount = 0;
 
   questions.forEach((q) => {
-    if (answers[q.id]?.selectedOptionId) answeredCount++;
+    const a = answers[q.id];
+    if (a?.selectedOptionId || a?.answerValue) answeredCount++;
     if (flaggedQuestions[q.id]) flaggedCount++;
   });
 

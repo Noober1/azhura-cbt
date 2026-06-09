@@ -25,7 +25,7 @@ import {
 } from "../lib/errors";
 import { createLogger } from "../lib/logger";
 import { writeEventLog } from "../lib/log-files";
-import { gradeAgainstKey, findActiveSession, finalizeSession } from "../lib/exam-scoring";
+import { findActiveSession, finalizeSession, gradeQuestion } from "../lib/exam-scoring";
 import { checkExamToken } from "../lib/exam-token";
 import { notifyRosterPatch } from "../lib/roster-events";
 import { buildRosterParticipant } from "../lib/roster";
@@ -178,7 +178,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     // Drizzle's relational `with` clause generates a LATERAL JOIN which MariaDB
     // does not support. Two plain queries + an in-memory merge is equivalent.
     const questionRows = await db
-      .select({ id: questions.id, text: questions.text })
+      .select({ id: questions.id, text: questions.text, type: questions.type, config: questions.config })
       .from(questions)
       .where(eq(questions.examId, examId))
       .orderBy(asc(questions.orderIndex));
@@ -187,7 +187,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       throw new NotFoundError("Soal ujian tidak ditemukan.");
     }
 
-    const questionById = new Map(questionRows.map((q) => [q.id, q]));
+    const questionById = new Map(questionRows.map((q) => [q.id, q] as const));
     const canonicalIds = questionRows.map((q) => q.id);
 
     // Reuse the persisted shuffled order from the caller's in-progress session
@@ -228,13 +228,33 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       optionsByQuestion.set(o.questionId, bucket);
     }
 
-    // correctOptionId intentionally excluded from the projection above.
+    // correctOptionId intentionally excluded.
+    // config is sanitized per type: fill_in_blank answer stripped, sorting correctOrder stripped.
     return orderedIds.map((id) => {
+      const q = questionById.get(id)!;
       const opts = optionsByQuestion.get(id) ?? [];
+      const qType = q.type ?? "multiple_choice";
+      const rawConfig = typeof q.config === "string"
+        ? (() => { try { return JSON.parse(q.config as string); } catch { return null; } })()
+        : (q.config ?? null);
+
+      let studentConfig: unknown = null;
+      if (qType === "matching" && rawConfig) {
+        studentConfig = { pairs: rawConfig.pairs ?? [] };
+      } else if (qType === "sorting" && rawConfig) {
+        // Strip correctOrder — only items needed for display; grading stays server-side.
+        studentConfig = { items: rawConfig.items ?? [] };
+      }
+      // fill_in_blank: config not needed by student (just a text input); answer must not be exposed.
+
       return {
         id,
-        text: questionById.get(id)!.text,
-        options: exam?.randomizeAnswer ? shuffle(opts) : opts,
+        text: q.text,
+        type: qType,
+        config: studentConfig,
+        options: qType === "multiple_choice"
+          ? (exam?.randomizeAnswer ? shuffle(opts) : opts)
+          : [],
       };
     });
   })
@@ -250,7 +270,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     "/:examId/answer",
     async ({ params, body, user }) => {
       const { examId } = params;
-      const { questionId, selectedOptionId, timestamp, sessionId } = body;
+      const { questionId, selectedOptionId, answerValue, timestamp, sessionId } = body;
 
       // Verify the session belongs to this user and is still open.
       const session = await db.query.examSessions.findFirst({
@@ -275,12 +295,14 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
           sessionId,
           questionId,
           selectedOptionId: selectedOptionId ?? null,
+          answerValue: answerValue ?? null,
           timestamp,
           isFlagged: 0,
         })
         .onDuplicateKeyUpdate({
           set: {
             selectedOptionId: selectedOptionId ?? null,
+            answerValue: answerValue ?? null,
             timestamp,
           },
         });
@@ -292,6 +314,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
         sessionId: t.String(),
         questionId: t.String(),
         selectedOptionId: t.Nullable(t.String()),
+        answerValue: t.Optional(t.Nullable(t.String())),
         timestamp: t.Number(),
       }),
     }
@@ -342,12 +365,14 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
                 sessionId,
                 questionId: ans.questionId,
                 selectedOptionId: ans.selectedOptionId,
+                answerValue: ans.answerValue ?? null,
                 timestamp: ans.timestamp,
                 isFlagged: 0,
               })
               .onDuplicateKeyUpdate({
                 set: {
                   selectedOptionId: ans.selectedOptionId,
+                  answerValue: ans.answerValue ?? null,
                   timestamp: ans.timestamp,
                 },
               });
@@ -364,6 +389,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
           t.Object({
             questionId: t.String(),
             selectedOptionId: t.Nullable(t.String()),
+            answerValue: t.Optional(t.Nullable(t.String())),
             timestamp: t.Number(),
           }),
           { maxItems: MAX_BATCH_ANSWERS }
@@ -409,92 +435,79 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       // loop. When the session is already submitted, re-grade the answers already
       // stored for it and return the same score instead of erroring. The stored
       // answers are authoritative (the exam is over), so this is deterministic.
+      // Idempotent re-submit: re-grade from stored answers.
       if (session.submitted) {
-        const storedKeyRaw = await db
-          .select({ id: questions.id, correctOptionId: questions.correctOptionId })
+        const storedQs = await db
+          .select({ id: questions.id, type: questions.type, correctOptionId: questions.correctOptionId, config: questions.config })
           .from(questions)
           .where(eq(questions.examId, examId));
-        const storedKey = storedKeyRaw.filter(
-          (q): q is { id: string; correctOptionId: string } => q.correctOptionId !== null
-        );
         const storedAnswers = await db
-          .select({
-            questionId: answers.questionId,
-            selectedOptionId: answers.selectedOptionId,
-          })
+          .select({ questionId: answers.questionId, selectedOptionId: answers.selectedOptionId, answerValue: answers.answerValue })
           .from(answers)
           .where(eq(answers.sessionId, sessionId));
-        const storedSelections = new Map<string, string | null>(
-          storedAnswers.map((a) => [a.questionId, a.selectedOptionId])
-        );
-        log.info("Idempotent re-submit served from stored answers", {
-          examId,
-          sessionId,
-          userId: user.userId,
-        });
-        return { ...gradeAgainstKey(storedKey, storedSelections), passingGrade };
+        const aMap = new Map(storedAnswers.map((a) => [a.questionId, a]));
+        let tc = 0, tw = 0, te = 0;
+        for (const q of storedQs) {
+          const a = aMap.get(q.id);
+          if (!a || (!a.selectedOptionId && !a.answerValue)) { te++; continue; }
+          gradeQuestion(q.type ?? "multiple_choice", q.correctOptionId, q.config, a.selectedOptionId ?? null, a.answerValue ?? null) ? tc++ : tw++;
+        }
+        const total = storedQs.length;
+        log.info("Idempotent re-submit served from stored answers", { examId, sessionId, userId: user.userId });
+        return { score: total > 0 ? Math.round((tc / total) * 100) : 0, totalCorrect: tc, totalWrong: tw, totalEmpty: te, passingGrade };
       }
 
-      // Fetch the answer key from the DB (never trust client-provided correctness).
-      // Non-MC questions have null correctOptionId; filter them out since their
-      // grading logic lives in #91 and is not yet wired.
-      const keyRaw = await db
-        .select({ id: questions.id, correctOptionId: questions.correctOptionId })
+      // Fetch all questions with type + config (answer key must never come from client).
+      const allQuestions = await db
+        .select({ id: questions.id, type: questions.type, correctOptionId: questions.correctOptionId, config: questions.config })
         .from(questions)
         .where(eq(questions.examId, examId));
-      const key = keyRaw.filter(
-        (q): q is { id: string; correctOptionId: string } => q.correctOptionId !== null
-      );
 
       const answerByQuestion = new Map(submitted.map((a) => [a.questionId, a]));
 
       // Persist all answers and mark submitted atomically.
       try {
         await db.transaction(async (tx) => {
-          for (const q of key) {
+          for (const q of allQuestions) {
             const ans = answerByQuestion.get(q.id);
-            const selected = ans?.selectedOptionId ?? null;
-
             await tx
               .insert(answers)
               .values({
                 id: randomUUID(),
                 sessionId,
                 questionId: q.id,
-                selectedOptionId: selected,
+                selectedOptionId: ans?.selectedOptionId ?? null,
+                answerValue: ans?.answerValue ?? null,
                 timestamp: ans?.timestamp ?? Date.now(),
                 isFlagged: ans?.isFlagged ? 1 : 0,
               })
               .onDuplicateKeyUpdate({
                 set: {
-                  selectedOptionId: selected,
+                  selectedOptionId: ans?.selectedOptionId ?? null,
+                  answerValue: ans?.answerValue ?? null,
                   timestamp: ans?.timestamp ?? Date.now(),
                   isFlagged: ans?.isFlagged ? 1 : 0,
                 },
               });
           }
-
-          await tx
-            .update(examSessions)
-            .set({ submitted: 1 })
-            .where(eq(examSessions.id, sessionId));
+          await tx.update(examSessions).set({ submitted: 1 }).where(eq(examSessions.id, sessionId));
         });
       } catch (error) {
-        // Transaction auto-rolls back; log with context so the 500 is traceable.
-        log.error("Exam submission transaction failed — rolled back", error, {
-          examId,
-          sessionId,
-          userId: user.userId,
-        });
+        log.error("Exam submission transaction failed — rolled back", error, { examId, sessionId, userId: user.userId });
         throw error;
       }
 
-      // Grade from the same key + selections (shared with expired-session
-      // finalization in lib/exam-scoring.ts so both paths score identically).
-      const selectedByQuestion = new Map<string, string | null>(
-        key.map((q) => [q.id, answerByQuestion.get(q.id)?.selectedOptionId ?? null])
-      );
-      const result = gradeAgainstKey(key, selectedByQuestion);
+      // Grade all questions by type.
+      let totalCorrect = 0, totalWrong = 0, totalEmpty = 0;
+      for (const q of allQuestions) {
+        const ans = answerByQuestion.get(q.id);
+        const isEmpty = !ans || (!ans.selectedOptionId && !ans.answerValue);
+        if (isEmpty) { totalEmpty++; continue; }
+        gradeQuestion(q.type ?? "multiple_choice", q.correctOptionId, q.config, ans?.selectedOptionId ?? null, ans?.answerValue ?? null)
+          ? totalCorrect++ : totalWrong++;
+      }
+      const total = allQuestions.length;
+      const result = { score: total > 0 ? Math.round((totalCorrect / total) * 100) : 0, totalCorrect, totalWrong, totalEmpty };
 
       log.info("Exam submitted", {
         examId,
@@ -536,6 +549,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
           t.Object({
             questionId: t.String(),
             selectedOptionId: t.Nullable(t.String()),
+            answerValue: t.Optional(t.Nullable(t.String())),
             timestamp: t.Number(),
             isFlagged: t.Boolean(),
           })

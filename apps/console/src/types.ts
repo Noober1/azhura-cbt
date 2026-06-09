@@ -47,8 +47,10 @@ export interface AdminOption {
 export interface AdminQuestion {
   id: string;
   text: string;
+  type: import("@azhura/shared").QuestionType;
+  config: import("@azhura/shared").QuestionConfig | null;
   orderIndex: number;
-  correctOptionId: string;
+  correctOptionId: string | null;
   options: AdminOption[];
 }
 
@@ -88,14 +90,20 @@ export type ExamUpdateInput = Partial<ExamCreateInput>;
 export interface QuestionCreateInput {
   text: string;
   orderIndex?: number;
-  options: { text: string }[];
-  correctOptionIndex: number;
+  type?: import("@azhura/shared").QuestionType;
+  /** Required when type is not multiple_choice. */
+  config?: import("@azhura/shared").QuestionConfig;
+  /** Required when type is multiple_choice or omitted. */
+  options?: { text: string }[];
+  correctOptionIndex?: number;
 }
 
 /** Body for `PATCH /admin/exams/:examId/questions/:qid`. */
 export interface QuestionUpdateInput {
   text?: string;
   orderIndex?: number;
+  type?: import("@azhura/shared").QuestionType;
+  config?: import("@azhura/shared").QuestionConfig;
   options?: { text: string }[];
   correctOptionIndex?: number;
 }

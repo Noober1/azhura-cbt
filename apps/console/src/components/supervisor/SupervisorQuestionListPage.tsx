@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import type { AdminQuestion } from "../../types";
+import type { QuestionType, FillInBlankConfig, MatchingConfig, SortingConfig } from "@azhura/shared";
 import { supervisorQuestionsApi } from "../../lib/supervisor-questions-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
@@ -17,6 +18,19 @@ import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { PencilIcon, TrashIcon, PlusIcon, ChevronLeftIcon } from "../ui/icons";
 import { QuestionContentRenderer } from "./QuestionContentRenderer";
+
+function parseConfig<T>(raw: unknown): T | null {
+  if (!raw) return null;
+  if (typeof raw === "string") { try { return JSON.parse(raw) as T; } catch { return null; } }
+  return raw as T;
+}
+
+const QUESTION_TYPE_LABELS: Record<QuestionType, { label: string; className: string }> = {
+  multiple_choice: { label: "Pilihan Ganda", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  fill_in_blank:   { label: "Isi Jawaban",   className: "bg-violet-50 text-violet-700 border-violet-200" },
+  matching:        { label: "Pasangkan",      className: "bg-amber-50 text-amber-700 border-amber-200" },
+  sorting:         { label: "Urutkan",        className: "bg-teal-50 text-teal-700 border-teal-200" },
+};
 
 export function SupervisorQuestionListPage() {
   const { examId } = useParams<{ examId: string }>();
@@ -89,6 +103,8 @@ export function SupervisorQuestionListPage() {
         <div className="space-y-3">
           {questions.map((q, idx) => {
             const correctOption = q.options.find((o) => o.id === q.correctOptionId);
+            const qType = (q.type ?? "multiple_choice") as QuestionType;
+            const typeMeta = QUESTION_TYPE_LABELS[qType];
             return (
               <div
                 key={q.id}
@@ -99,11 +115,16 @@ export function SupervisorQuestionListPage() {
                     {idx + 1}.
                   </span>
                   <div className="min-w-0 flex-1">
+                    {/* Question type indicator */}
+                    <span className={`mb-1.5 inline-block rounded border px-2 py-0.5 text-xs font-medium ${typeMeta.className}`}>
+                      {typeMeta.label}
+                    </span>
+
                     {/* Question text (HTML rendered) */}
                     <QuestionContentRenderer html={q.text} className="prose-sm text-sm text-ink" />
 
-                    {/* Options */}
-                    {q.options.length > 0 && (
+                    {/* Options for multiple_choice */}
+                    {qType === "multiple_choice" && q.options.length > 0 && (
                       <ul className="mt-2 space-y-1">
                         {q.options.map((opt, oi) => (
                           <li
@@ -123,7 +144,7 @@ export function SupervisorQuestionListPage() {
                       </ul>
                     )}
 
-                    {correctOption && (
+                    {qType === "multiple_choice" && correctOption && (
                       <p className="mt-2 text-xs text-faint">
                         Jawaban benar:{" "}
                         <span className="font-medium text-positive">
@@ -132,6 +153,40 @@ export function SupervisorQuestionListPage() {
                           )}
                         </span>
                       </p>
+                    )}
+
+                    {qType === "fill_in_blank" && (
+                      <p className="mt-2 text-xs text-faint">
+                        Jawaban benar:{" "}
+                        <span className="font-semibold text-positive">
+                          {parseConfig<FillInBlankConfig>(q.config)?.answer ?? "—"}
+                        </span>
+                      </p>
+                    )}
+
+                    {qType === "matching" && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-medium text-faint">Pasangan benar:</p>
+                        {(parseConfig<MatchingConfig>(q.config)?.pairs ?? []).map((pair, pi) => (
+                          <div key={pi} className="flex items-center gap-2 text-xs text-ink-soft">
+                            <span className="rounded bg-canvas px-1.5 py-0.5 font-medium">{pair.left || "—"}</span>
+                            <span className="text-faint">→</span>
+                            <span className="rounded bg-canvas px-1.5 py-0.5 font-medium">{pair.right || "—"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {qType === "sorting" && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-medium text-faint">Urutan benar:</p>
+                        {(parseConfig<SortingConfig>(q.config)?.items ?? []).map((item, si) => (
+                          <div key={si} className="flex items-center gap-2 text-xs text-ink-soft">
+                            <span className="w-4 shrink-0 font-semibold text-faint">{si + 1}.</span>
+                            <span>{item || "—"}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
 

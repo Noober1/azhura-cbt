@@ -13,6 +13,7 @@ import { create } from "zustand";
 import { User } from "../types";
 import api from "../lib/api";
 import { disconnectSocket } from "../lib/socket";
+import { clearLocalDbAnswers } from "../lib/storage";
 import { createLogger } from "../lib/logger";
 import { getErrorMessage, safeJsonParse, toErrorContext } from "../lib/errors";
 
@@ -112,6 +113,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         log.debug("Stronghold token deletion not yet implemented.");
       }
 
+      // Purge offline answer cache so the next participant on this machine
+      // starts with a clean slate (no cross-participant answer leakage).
+      await clearLocalDbAnswers();
       clearPersistedAuth();
 
       set({

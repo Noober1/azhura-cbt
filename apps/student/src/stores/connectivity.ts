@@ -121,6 +121,7 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => {
           answers: batch.map((a) => ({
             questionId: a.questionId,
             selectedOptionId: a.selectedOptionId ?? null,
+            answerValue: a.answerValue ?? null,
             timestamp: a.timestamp,
           })),
         });

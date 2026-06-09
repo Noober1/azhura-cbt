@@ -16,6 +16,7 @@ import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { formatDateTime, formatDuration, isPast } from "../../lib/format";
 import type { AdminQuestion, ExamDetail, ExamSupervisorDetail } from "../../types";
+import type { QuestionType, FillInBlankConfig, MatchingConfig, SortingConfig } from "@azhura/shared";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { Spinner, CenterState } from "../ui/Spinner";
@@ -35,6 +36,19 @@ import {
   UsersIcon,
   ShieldIcon,
 } from "../ui/icons";
+
+function parseConfig<T>(raw: unknown): T | null {
+  if (!raw) return null;
+  if (typeof raw === "string") { try { return JSON.parse(raw) as T; } catch { return null; } }
+  return raw as T;
+}
+
+const QUESTION_TYPE_LABELS: Record<QuestionType, { label: string; className: string }> = {
+  multiple_choice: { label: "Pilihan Ganda", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  fill_in_blank:   { label: "Isi Jawaban",   className: "bg-violet-50 text-violet-700 border-violet-200" },
+  matching:        { label: "Pasangkan",      className: "bg-amber-50 text-amber-700 border-amber-200" },
+  sorting:         { label: "Urutkan",        className: "bg-teal-50 text-teal-700 border-teal-200" },
+};
 
 export function ExamDetailPage() {
   const { examId = "" } = useParams();
@@ -301,7 +315,18 @@ export function ExamDetailPage() {
                   <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent-wash text-xs font-semibold text-accent-strong tabular">
                     {index + 1}
                   </span>
-                  <QuestionContentRenderer html={q.text} className="text-sm font-medium leading-relaxed" />
+                  <div className="min-w-0 flex-1">
+                    {(() => {
+                      const qType = (q.type ?? "multiple_choice") as QuestionType;
+                      const meta = QUESTION_TYPE_LABELS[qType];
+                      return (
+                        <span className={`mb-1.5 inline-block rounded border px-2 py-0.5 text-xs font-medium ${meta.className}`}>
+                          {meta.label}
+                        </span>
+                      );
+                    })()}
+                    <QuestionContentRenderer html={q.text} className="text-sm font-medium leading-relaxed" />
+                  </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
@@ -333,32 +358,64 @@ export function ExamDetailPage() {
                 </div>
               </div>
 
-              <ul className="mt-3 flex flex-col gap-1.5 pl-10">
-                {q.options.map((opt, oi) => {
-                  const isCorrect = opt.id === q.correctOptionId;
-                  return (
-                    <li
-                      key={opt.id}
-                      className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm ${
-                        isCorrect
-                          ? "bg-positive-wash font-medium text-ink"
-                          : "text-ink-soft"
-                      }`}
-                    >
-                      <span className="grid size-5 shrink-0 place-items-center text-faint">
-                        {isCorrect ? (
-                          <CheckIcon className="size-4 text-positive" />
-                        ) : (
-                          <span className="text-xs tabular">
-                            {String.fromCharCode(65 + oi)}
-                          </span>
-                        )}
-                      </span>
-                      <QuestionContentRenderer html={opt.text} />
-                    </li>
-                  );
-                })}
-              </ul>
+              {q.type === "fill_in_blank" ? (
+                <div className="mt-3 pl-10">
+                  <span className="text-xs text-faint">
+                    Jawaban benar:{" "}
+                    <span className="font-semibold text-positive">
+                      {parseConfig<FillInBlankConfig>(q.config)?.answer ?? "—"}
+                    </span>
+                  </span>
+                </div>
+              ) : q.type === "matching" ? (
+                <div className="mt-3 pl-10 space-y-1">
+                  <p className="text-xs font-medium text-faint">Pasangan benar:</p>
+                  {(parseConfig<MatchingConfig>(q.config)?.pairs ?? []).map((pair, pi) => (
+                    <div key={pi} className="flex items-center gap-2 text-xs text-ink-soft">
+                      <span className="rounded bg-canvas px-1.5 py-0.5 font-medium">{pair.left || "—"}</span>
+                      <span className="text-faint">→</span>
+                      <span className="rounded bg-canvas px-1.5 py-0.5 font-medium">{pair.right || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : q.type === "sorting" ? (
+                <div className="mt-3 pl-10 space-y-1">
+                  <p className="text-xs font-medium text-faint">Urutan benar:</p>
+                  {(parseConfig<SortingConfig>(q.config)?.items ?? []).map((item, si) => (
+                    <div key={si} className="flex items-center gap-2 text-xs text-ink-soft">
+                      <span className="w-4 shrink-0 font-semibold text-faint">{si + 1}.</span>
+                      <span>{item || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <ul className="mt-3 flex flex-col gap-1.5 pl-10">
+                  {q.options.map((opt, oi) => {
+                    const isCorrect = opt.id === q.correctOptionId;
+                    return (
+                      <li
+                        key={opt.id}
+                        className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm ${
+                          isCorrect
+                            ? "bg-positive-wash font-medium text-ink"
+                            : "text-ink-soft"
+                        }`}
+                      >
+                        <span className="grid size-5 shrink-0 place-items-center text-faint">
+                          {isCorrect ? (
+                            <CheckIcon className="size-4 text-positive" />
+                          ) : (
+                            <span className="text-xs tabular">
+                              {String.fromCharCode(65 + oi)}
+                            </span>
+                          )}
+                        </span>
+                        <QuestionContentRenderer html={opt.text} />
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </li>
           ))}
         </ol>
