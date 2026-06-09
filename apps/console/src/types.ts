@@ -315,3 +315,27 @@ export interface StudentImportConfirmResult {
   skipped: number;
 }
 
+// ── Exam Import (#82) ─────────────────────────────────────────────────────────
+
+export interface ExamImportRowResult {
+  row: number;
+  status: "ready" | "skip" | "error";
+  judul?: string;
+  durasi_menit?: number;
+  passing_grade?: number;
+  token?: string;
+  expired_at?: string;
+  reason?: string;
+}
+
+export interface ExamImportPreview {
+  sessionToken: string;
+  summary: { ready: number; skip: number; error: number };
+  rows: ExamImportRowResult[];
+}
+
+export interface ExamImportConfirmResult {
+  inserted: number;
+  skipped: number;
+}
+
