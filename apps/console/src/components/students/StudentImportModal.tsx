@@ -22,6 +22,7 @@ import { Spinner } from "../ui/Spinner";
 import { UploadIcon, DownloadIcon, FileTextIcon } from "../ui/icons";
 
 type Step = "idle" | "loading" | "preview" | "confirming" | "done";
+type RowFilter = "all" | "error" | "new" | "update";
 
 interface StudentImportModalProps {
   open: boolean;
@@ -36,6 +37,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
   const [preview, setPreview] = useState<StudentImportPreview | null>(null);
   const [result, setResult] = useState<StudentImportConfirmResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rowFilter, setRowFilter] = useState<RowFilter>("all");
   const inputRef = useRef<HTMLInputElement>(null);
 
   function reset() {
@@ -44,6 +46,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
     setResult(null);
     setError(null);
     setDragOver(false);
+    setRowFilter("all");
   }
 
   function handleClose() {
@@ -111,6 +114,15 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
   }
 
   const errorCount = preview ? preview.total - preview.validCount : 0;
+
+  const filteredRows = preview
+    ? preview.rows.filter((r) => {
+        if (rowFilter === "error") return r.status === "error";
+        if (rowFilter === "new") return r.status === "valid" && !r.isUpdate;
+        if (rowFilter === "update") return r.status === "valid" && r.isUpdate;
+        return true;
+      })
+    : [];
 
   return (
     <Modal
@@ -294,8 +306,41 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
             </p>
           )}
 
+          {/* Row filter */}
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                { key: "all",    label: "Semua",  count: preview.total          },
+                { key: "error",  label: "Error",  count: errorCount             },
+                { key: "new",    label: "Baru",   count: preview.insertCount    },
+                { key: "update", label: "Update", count: preview.updateCount    },
+              ] as const
+            ).map(({ key, label, count }) => (
+              count > 0 && (
+                <button
+                  key={key}
+                  onClick={() => setRowFilter(key)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    rowFilter === key
+                      ? "border-accent bg-accent text-white"
+                      : "border-line bg-canvas text-faint hover:border-faint hover:text-ink"
+                  }`}
+                >
+                  {label}
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums ${
+                      rowFilter === key ? "bg-white/20" : "bg-line/60"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              )
+            ))}
+          </div>
+
           {/* Row table */}
-          <div className="max-h-64 overflow-y-auto rounded-[var(--radius-card)] border border-line">
+          <div className="max-h-72 overflow-y-auto rounded-[var(--radius-card)] border border-line">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-surface">
                 <tr className="border-b border-line text-left text-[0.7rem] font-medium uppercase tracking-wide text-faint">
@@ -307,31 +352,39 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.map((r) => (
-                  <tr
-                    key={r.row}
-                    className={`border-b border-line/60 last:border-0 ${
-                      r.status === "error" ? "bg-danger-wash/30" : ""
-                    }`}
-                  >
-                    <td className="px-3 py-2 tabular text-faint">{r.row}</td>
-                    <td className="px-3 py-2 font-mono">{r.nis || "—"}</td>
-                    <td className="px-3 py-2">{r.nama || "—"}</td>
-                    <td className="px-3 py-2 font-mono font-semibold">{r.grup || "—"}</td>
-                    <td className="px-3 py-2">
-                      {r.status === "valid" ? (
-                        <Badge tone={r.isUpdate ? "neutral" : "positive"}>
-                          {r.isUpdate ? "Update" : "Baru"}
-                        </Badge>
-                      ) : (
-                        <span className="text-danger">
-                          <Badge tone="danger">Error</Badge>
-                          <span className="ml-1.5 text-faint">{r.error}</span>
-                        </span>
-                      )}
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-faint">
+                      Tidak ada baris dengan filter ini.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredRows.map((r) => (
+                    <tr
+                      key={r.row}
+                      className={`border-b border-line/60 last:border-0 ${
+                        r.status === "error" ? "bg-danger-wash/30" : ""
+                      }`}
+                    >
+                      <td className="px-3 py-2 tabular text-faint">{r.row}</td>
+                      <td className="px-3 py-2 font-mono">{r.nis || "—"}</td>
+                      <td className="px-3 py-2">{r.nama || "—"}</td>
+                      <td className="px-3 py-2 font-mono font-semibold">{r.grup || "—"}</td>
+                      <td className="px-3 py-2">
+                        {r.status === "valid" ? (
+                          <Badge tone={r.isUpdate ? "neutral" : "positive"}>
+                            {r.isUpdate ? "Update" : "Baru"}
+                          </Badge>
+                        ) : (
+                          <span className="text-danger">
+                            <Badge tone="danger">Error</Badge>
+                            <span className="ml-1.5 text-faint">{r.error}</span>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
