@@ -199,6 +199,7 @@ export function StudentListPage() {
                 <th className="px-4 py-3 font-medium">Nama</th>
                 <th className="px-4 py-3 font-medium">NIS</th>
                 <th className="hidden px-4 py-3 font-medium md:table-cell">Group</th>
+                <th className="w-16 px-4 py-3 font-medium">Batch</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="hidden px-4 py-3 font-medium lg:table-cell">Dibuat</th>
                 <th className="px-4 py-3 text-right font-medium">Aksi</th>
@@ -219,6 +220,7 @@ export function StudentListPage() {
                       <span className="text-faint">—</span>
                     )}
                   </td>
+                  <td className="w-16 px-4 py-3 tabular text-ink-soft">{student.batch}</td>
                   <td className="px-4 py-3">
                     {student.isActive ? (
                       <Badge tone="positive">Aktif</Badge>
