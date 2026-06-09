@@ -6,7 +6,6 @@
  * KaTeX math and embedded media display correctly.
  */
 
-import DOMPurify from "dompurify";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import type { AdminQuestion } from "../../types";
@@ -17,11 +16,7 @@ import { Spinner } from "../ui/Spinner";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { PencilIcon, TrashIcon, PlusIcon, ChevronLeftIcon } from "../ui/icons";
-import "../editor/editor.css";
-
-function safeHtml(html: string) {
-  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
-}
+import { QuestionContentRenderer } from "./QuestionContentRenderer";
 
 export function SupervisorQuestionListPage() {
   const { examId } = useParams<{ examId: string }>();
@@ -105,10 +100,7 @@ export function SupervisorQuestionListPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     {/* Question text (HTML rendered) */}
-                    <div
-                      className="tiptap-editor prose-sm text-sm text-ink"
-                      dangerouslySetInnerHTML={{ __html: safeHtml(q.text) }}
-                    />
+                    <QuestionContentRenderer html={q.text} className="prose-sm text-sm text-ink" />
 
                     {/* Options */}
                     {q.options.length > 0 && (
@@ -125,11 +117,7 @@ export function SupervisorQuestionListPage() {
                             <span className="shrink-0 font-semibold">
                               {String.fromCharCode(65 + oi)}.
                             </span>
-                            <span
-                              dangerouslySetInnerHTML={{
-                                __html: safeHtml(opt.text),
-                              }}
-                            />
+                            <QuestionContentRenderer html={opt.text} />
                           </li>
                         ))}
                       </ul>
