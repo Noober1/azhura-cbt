@@ -79,3 +79,31 @@
 }
 
 .tiptap-inline .ProseMirror p { margin: 0; }
+
+/* ── Media alignment in read-only / dangerouslySetInnerHTML views ──────────── */
+img[data-tiptap-media],
+video[data-tiptap-media] {
+  display: block;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+img[data-tiptap-media][data-align="left"],
+video[data-tiptap-media][data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+img[data-tiptap-media][data-align="right"],
+video[data-tiptap-media][data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* NodeView ring when selected */
+.media-embed-node.ring-2 {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

@@ -304,3 +304,27 @@ export const ImagePlusIcon = svg(
     <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
   </>
 );
+
+export const AlignLeftIcon = svg(
+  <>
+    <line x1="21" y1="6" x2="3" y2="6" />
+    <line x1="15" y1="12" x2="3" y2="12" />
+    <line x1="17" y1="18" x2="3" y2="18" />
+  </>
+);
+
+export const AlignCenterIcon = svg(
+  <>
+    <line x1="21" y1="6" x2="3" y2="6" />
+    <line x1="17" y1="12" x2="7" y2="12" />
+    <line x1="19" y1="18" x2="5" y2="18" />
+  </>
+);
+
+export const AlignRightIcon = svg(
+  <>
+    <line x1="21" y1="6" x2="3" y2="6" />
+    <line x1="21" y1="12" x2="9" y2="12" />
+    <line x1="21" y1="18" x2="7" y2="18" />
+  </>
+);

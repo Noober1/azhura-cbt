@@ -1,38 +1,21 @@
-/**
- * TipTap extension — MediaEmbed (#88).
- *
- * A block-level atom node that renders images, audio, and video embedded from
- * the media library. The node is draggable so supervisors can reorder media
- * blocks. HTML serialization outputs native elements with `data-tiptap-media`
- * so the CSS can target them and they round-trip through parse/serialize.
- */
-
 import { Node, mergeAttributes } from "@tiptap/core";
-import type { MediaType } from "../../types";
-
-declare module "@tiptap/core" {
-  interface Commands<ReturnType> {
-    mediaEmbed: {
-      insertMedia: (attrs: {
-        src: string;
-        mediaType: MediaType;
-        alt?: string;
-      }) => ReturnType;
-    };
-  }
-}
+import { ReactNodeViewRenderer } from "@tiptap/react";
+import { MediaEmbedView } from "./MediaEmbedView";
 
 export const MediaEmbed = Node.create({
   name: "mediaEmbed",
   group: "block",
   atom: true,
   draggable: true,
+  selectable: true,
 
   addAttributes() {
     return {
-      src: { default: null },
-      mediaType: { default: "image" as MediaType },
-      alt: { default: "" },
+      src:       { default: null },
+      mediaType: { default: "image" },
+      alt:       { default: "" },
+      width:     { default: null },             // null = auto | "25%" | "50%" | "75%" | "100%"
+      align:     { default: "center" },         // "left" | "center" | "right"
     };
   },
 
@@ -40,61 +23,61 @@ export const MediaEmbed = Node.create({
     return [
       {
         tag: "img[data-tiptap-media]",
-        getAttrs: (el) => ({
-          src: (el as HTMLImageElement).getAttribute("src"),
-          mediaType: "image" as MediaType,
-          alt: (el as HTMLImageElement).getAttribute("alt") ?? "",
-        }),
+        getAttrs: (el) => {
+          const e = el as HTMLImageElement;
+          return {
+            src:       e.getAttribute("src"),
+            mediaType: "image",
+            alt:       e.getAttribute("alt") ?? "",
+            width:     e.getAttribute("data-width"),
+            align:     e.getAttribute("data-align") ?? "center",
+          };
+        },
       },
       {
         tag: "audio[data-tiptap-media]",
         getAttrs: (el) => ({
-          src: (el as HTMLAudioElement).getAttribute("src"),
-          mediaType: "audio" as MediaType,
+          src:       (el as HTMLAudioElement).getAttribute("src"),
+          mediaType: "audio",
+          alt:       "",
+          width:     null,
+          align:     (el as HTMLElement).getAttribute("data-align") ?? "center",
         }),
       },
       {
         tag: "video[data-tiptap-media]",
-        getAttrs: (el) => ({
-          src: (el as HTMLVideoElement).getAttribute("src"),
-          mediaType: "video" as MediaType,
-        }),
+        getAttrs: (el) => {
+          const e = el as HTMLVideoElement;
+          return {
+            src:       e.getAttribute("src"),
+            mediaType: "video",
+            alt:       "",
+            width:     e.getAttribute("data-width"),
+            align:     e.getAttribute("data-align") ?? "center",
+          };
+        },
       },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    const { src, mediaType, alt } = HTMLAttributes as {
-      src: string;
-      mediaType: MediaType;
-      alt?: string;
-    };
+    const { src, mediaType, alt, width, align } = HTMLAttributes;
 
-    if (mediaType === "image") {
-      return [
-        "img",
-        mergeAttributes({ src, alt: alt ?? "", "data-tiptap-media": "" }),
-      ];
-    }
+    const shared: Record<string, string> = { "data-tiptap-media": "" };
+    if (align && align !== "center") shared["data-align"] = align;
+    if (width) shared["data-width"] = width;
+    const style = width ? `width:${width};max-width:100%` : undefined;
+
     if (mediaType === "audio") {
-      return [
-        "audio",
-        mergeAttributes({ src, controls: "", "data-tiptap-media": "" }),
-      ];
+      return ["audio", mergeAttributes(shared, { src, controls: "" })];
     }
-    return [
-      "video",
-      mergeAttributes({ src, controls: "", "data-tiptap-media": "" }),
-    ];
+    if (mediaType === "video") {
+      return ["video", mergeAttributes(shared, { src, controls: "", ...(style && { style }) })];
+    }
+    return ["img", mergeAttributes(shared, { src, alt, ...(style && { style }) })];
   },
 
-  addCommands() {
-    return {
-      insertMedia:
-        (attrs) =>
-        ({ commands }) => {
-          return commands.insertContent({ type: this.name, attrs });
-        },
-    };
+  addNodeView() {
+    return ReactNodeViewRenderer(MediaEmbedView);
   },
 });
