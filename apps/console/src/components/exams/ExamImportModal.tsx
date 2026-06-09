@@ -302,7 +302,7 @@ export function ExamImportModal({ open, onClose, onImported }: ExamImportModalPr
                   <th className="px-3 py-2">Baris</th>
                   <th className="px-3 py-2">Judul</th>
                   <th className="px-3 py-2">Durasi</th>
-                  <th className="px-3 py-2">PG</th>
+                  <th className="px-3 py-2">KKM</th>
                   <th className="hidden px-3 py-2 md:table-cell">Token</th>
                   <th className="hidden px-3 py-2 md:table-cell">Kadaluwarsa</th>
                   <th className="px-3 py-2">Status</th>

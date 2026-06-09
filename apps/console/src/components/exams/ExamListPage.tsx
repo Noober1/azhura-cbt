@@ -131,7 +131,7 @@ export function ExamListPage() {
             onClick={() => setImportOpen(true)}
             leadingIcon={<UploadIcon className="size-4" />}
           >
-            Import dari Spreadsheet
+            Import
           </Button>
           <Button onClick={openCreate} leadingIcon={<PlusIcon className="size-4" />}>
             Buat ujian
