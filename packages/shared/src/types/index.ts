@@ -378,6 +378,9 @@ export interface AntiCheatConfig {
   blockShortcuts: boolean;
   detectFocusLoss: boolean;
   detectMultiMonitor: boolean;
+  /** L3 (#27): swallow OS shortcuts (Alt+Tab/Win/…) via a low-level keyboard
+   *  hook. Windows desktop only — a no-op on other OSes and on the web. */
+  blockOsKeyboard: boolean;
 }
 
 /** Public school/app info returned by GET /api/info (no auth required). */
@@ -463,7 +466,8 @@ export interface AntiCheatEvent {
     | 'multi_monitor'
     | 'clipboard_blocked'
     | 'force_refocus'
-    | 'window_close_blocked';
+    | 'window_close_blocked'
+    | 'os_shortcut_blocked';
   timestamp: number;
   details?: string;
 }
