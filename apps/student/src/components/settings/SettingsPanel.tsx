@@ -171,6 +171,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     label: "Deteksi Alt+Tab / kehilangan fokus",
                   },
                   { key: "detectMultiMonitor", label: "Deteksi multi-monitor" },
+                  {
+                    key: "blockOsKeyboard",
+                    label: "Blokir tombol OS (Alt+Tab/Win — khusus Windows)",
+                  },
                 ] as const
               ).map(({ key, label }) => (
                 <div key={key} className="flex items-center justify-between">

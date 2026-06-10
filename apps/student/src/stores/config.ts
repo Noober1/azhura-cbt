@@ -15,6 +15,7 @@ const DEFAULT_ANTI_CHEAT: AntiCheatConfig = {
   blockShortcuts: import.meta.env.VITE_ANTI_CHEAT_BLOCK_SHORTCUTS === "true",
   detectFocusLoss: import.meta.env.VITE_ANTI_CHEAT_DETECT_FOCUS_LOSS === "true",
   detectMultiMonitor: import.meta.env.VITE_ANTI_CHEAT_DETECT_MULTI_MONITOR === "true",
+  blockOsKeyboard: import.meta.env.VITE_ANTI_CHEAT_BLOCK_OS_KEYBOARD === "true",
 };
 
 interface ConfigState {
@@ -73,6 +74,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     set({
       serverUrl: resolvedUrl,
       schoolInfo: schoolInfo ?? null,
+      // Spread order matters: defaults first, so configs persisted by older
+      // versions gain newly-added flags (e.g. blockOsKeyboard) at their default.
       antiCheat: antiCheat ? { ...DEFAULT_ANTI_CHEAT, ...antiCheat } : DEFAULT_ANTI_CHEAT,
       debugMode: debugMode ?? false,
       initialized: true,

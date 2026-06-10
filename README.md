@@ -19,11 +19,13 @@
 2. **Offline-First Answer Cache (SQLite & LocalStorage)**: Setiap jawaban tersimpan seketika ke DB lokal — SQLite via `@tauri-apps/plugin-sql` di native frame, atau fallback `localStorage` di browser.
 3. **Sinkronisasi Otomatis (Connectivity Queue)**: Saat koneksi putus jawaban tetap aman; ketika pulih, background sync queue mengunggah jawaban tertunda.
 4. **Pengawasan Real-time (WebSocket)**: Broadcast alert pengawas, force logout (kick), dan force submission dari panel supervisor.
-5. **Anti-Cheat Engine**:
-   - **Fullscreen Lock** — memaksa layar penuh.
-   - **Focus Monitoring** — mendeteksi Alt+Tab / pindah jendela.
-   - **Keyboard Shortcut Blocker** — memblokir F12, refresh, copy-paste, klik kanan, dll.
-   - _OS-level lockdown_ (kiosk window + Windows low-level keyboard hook + code signing) direncanakan di epic #24.
+5. **Anti-Cheat Engine** (epic #24, berlapis):
+   - **L1 — Fullscreen Lock** — memaksa layar penuh.
+   - **L1 — Focus Monitoring** — mendeteksi Alt+Tab / pindah jendela.
+   - **L1 — Keyboard Shortcut Blocker** — memblokir F12, refresh, copy-paste, klik kanan, dll.
+   - **L2 — Kiosk Window (Tauri)** — fullscreen paksa, always-on-top, force-refocus, blokir close.
+   - **L3 — OS Keyboard Hook (Windows)** — `WH_KEYBOARD_LL` menelan Alt+Tab, Alt+Esc, Win, Ctrl+Esc, dan PrintScreen di level OS selama aplikasi berjalan — aktif app-wide seperti L2, lepas hanya saat toggle dimatikan atau aplikasi ditutup (`VITE_ANTI_CHEAT_BLOCK_OS_KEYBOARD`).
+   - ⚠️ **Batasan by-design**: Ctrl+Alt+Del / Task Manager adalah _Secure Attention Sequence_ yang ditangani kernel Windows — **tidak bisa** diblokir aplikasi user-mode mana pun. Mitigasi: kebijakan lab (Assigned Access / Group Policy) + pengawasan. _Code signing installer_ (#28) menyusul.
 6. **Cakupan per Kelas (Group Scoping)**: Siswa hanya melihat & dapat memulai ujian yang diperuntukkan bagi kelasnya (`exam_groups`); grup dibawa pada JWT.
 
 ---
@@ -166,6 +168,7 @@ Salin `apps/student/.env.example` → `apps/student/.env.local`. Backend punya e
 | `VITE_ANTI_CHEAT_BLOCK_SHORTCUTS` | Memblokir devtools, refresh, klik kanan. | `false` | `true` |
 | `VITE_ANTI_CHEAT_DETECT_FOCUS_LOSS` | Mencatat event Alt+Tab. | `false` | `true` |
 | `VITE_ANTI_CHEAT_DETECT_MULTI_MONITOR` | Memperingatkan multi-monitor. | `false` | `true` |
+| `VITE_ANTI_CHEAT_BLOCK_OS_KEYBOARD` | Menelan Alt+Tab/Win/Ctrl+Esc/PrintScreen via low-level hook (Windows saja; no-op di OS lain & web). | `false` | `true` |
 
 > 💡 Set `VITE_ANTI_CHEAT_ENABLED=true` untuk menguji proteksi keyboard, fullscreen, dan deteksi blur langsung di browser.
 

@@ -1,10 +1,16 @@
 // Azhura CBT — Tauri shell.
 //
-// Hosts the L2 layer of the Exam Lockdown Engine (epic #24): an OS-window kiosk
-// mode driven from the frontend via `enter_kiosk` / `exit_kiosk`, plus a window
-// event handler that forces the window back to the foreground on focus loss and
-// blocks manual close while an exam is active. Window-level violations are
-// emitted to the frontend (`kiosk-refocus`, `kiosk-close-blocked`) for auditing.
+// Hosts the L2 + L3 layers of the Exam Lockdown Engine (epic #24):
+// - L2 (this file): an OS-window kiosk mode driven from the frontend via
+//   `enter_kiosk` / `exit_kiosk`, plus a window event handler that forces the
+//   window back to the foreground on focus loss and blocks manual close while
+//   an exam is active. Window-level violations are emitted to the frontend
+//   (`kiosk-refocus`, `kiosk-close-blocked`) for auditing.
+// - L3 (`kbd_lock`, Windows-only): a low-level keyboard hook that swallows
+//   Alt+Tab/Win/Ctrl+Esc/PrintScreen, driven via `enable_kbd_lock` /
+//   `disable_kbd_lock`.
+
+mod kbd_lock;
 
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, WebviewWindow, Window, WindowEvent};
@@ -86,6 +92,8 @@ fn exit_kiosk(window: WebviewWindow, state: tauri::State<ExamLockState>) -> Resu
 /// kiosk close guard does not block it — this is the sanctioned admin exit.
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle) {
+    // The L3 keyboard hook is released by the RunEvent::Exit handler below,
+    // which AppHandle::exit always triggers — no extra cleanup needed here.
     app.exit(0);
 }
 
@@ -95,26 +103,37 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(ExamLockState::default())
-        .invoke_handler(tauri::generate_handler![enter_kiosk, exit_kiosk, exit_app])
+        .invoke_handler(tauri::generate_handler![
+            enter_kiosk,
+            exit_kiosk,
+            exit_app,
+            kbd_lock::enable_kbd_lock,
+            kbd_lock::disable_kbd_lock
+        ])
         .on_window_event(|window, event| match event {
             // Window lost focus (Alt+Tab, click-away): yank it back to the
             // foreground and report the violation. True prevention is L3.
-            WindowEvent::Focused(false) => {
-                if window.state::<ExamLockState>().is_active() {
-                    reassert_focus(window);
-                    let _ = window.emit(EVENT_REFOCUS, ());
-                }
+            WindowEvent::Focused(false) if window.state::<ExamLockState>().is_active() => {
+                reassert_focus(window);
+                let _ = window.emit(EVENT_REFOCUS, ());
             }
             // Block manual window close during an exam; only an official submit
             // (which calls exit_kiosk first) may close the window.
-            WindowEvent::CloseRequested { api, .. } => {
-                if window.state::<ExamLockState>().is_active() {
-                    api.prevent_close();
-                    let _ = window.emit(EVENT_CLOSE_BLOCKED, ());
-                }
+            WindowEvent::CloseRequested { api, .. }
+                if window.state::<ExamLockState>().is_active() =>
+            {
+                api.prevent_close();
+                let _ = window.emit(EVENT_CLOSE_BLOCKED, ());
             }
             _ => {}
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // Belt-and-braces: release the L3 keyboard hook on every exit path
+            // (window destroyed, exit_app, OS shutdown), not just exam end.
+            if let tauri::RunEvent::Exit = event {
+                kbd_lock::shutdown();
+            }
+        });
 }

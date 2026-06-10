@@ -88,8 +88,9 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
   }, [token, setQuestions]);
 
   // 2. Anti-Cheat L1 (web/DOM) monitoring, scoped to the exam screen to avoid
-  //    false positives at login/dashboard. The L2 Tauri kiosk window is managed
-  //    app-wide (see App.tsx) so the window stays locked from launch.
+  //    false positives at login/dashboard. The L2 Tauri kiosk window and the
+  //    L3 OS keyboard hook are managed app-wide (see App.tsx) so the lockdown
+  //    holds from launch until app exit, not just during the exam.
   useEffect(() => {
     // Exam-scoped detection (focus loss + fullscreen). Input prevention
     // (right-click/shortcuts/clipboard) is app-wide in App.tsx.
