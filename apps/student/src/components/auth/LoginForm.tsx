@@ -67,10 +67,10 @@ export const LoginForm = ({ onSuccess }: LoginFormProps) => {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto shadow-2xl border border-neutral-200/50 bg-white/90 backdrop-blur-md dark:bg-neutral-900/90 dark:border-neutral-800/50">
+    <Card className="w-full max-w-md mx-auto shadow-[8px_8px_0_var(--nb-ink)]">
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-3">
-          <div className="bg-primary/10 text-primary p-3 rounded-2xl">
+          <div className="bg-indigo text-white p-3 rounded-2xl border-[2.5px] border-[var(--nb-ink)] shadow-[3px_3px_0_var(--nb-ink)]">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -87,10 +87,10 @@ export const LoginForm = ({ onSuccess }: LoginFormProps) => {
             </svg>
           </div>
         </div>
-        <CardTitle className="text-2xl font-bold tracking-tight text-neutral-950 dark:text-neutral-50">
+        <CardTitle className="font-heading text-2xl font-extrabold tracking-tight text-foreground">
           Azhura CBT Exam
         </CardTitle>
-        <CardDescription className="text-neutral-500 dark:text-neutral-400">
+        <CardDescription className="text-muted-foreground">
           Masukkan NIS dan password untuk memulai sesi ujian
         </CardDescription>
       </CardHeader>

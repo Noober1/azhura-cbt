@@ -39,7 +39,7 @@ export const NavigationPanel = ({ onSubmitClick }: NavigationPanelProps) => {
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl border border-neutral-200/60 bg-white dark:border-neutral-800/60 dark:bg-neutral-900 shadow-sm">
+    <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl border-[2.5px] border-[var(--nb-ink)] bg-white shadow-[3px_3px_0_var(--nb-ink)]">
       {/* Back/Prev Button */}
       <Button
         variant="outline"
@@ -61,13 +61,12 @@ export const NavigationPanel = ({ onSubmitClick }: NavigationPanelProps) => {
       </Button>
 
       {/* Flag / Ragu-ragu Toggle Button */}
+      {/* Black-bordered flag toggle — solid amber fill (ink text) when active. */}
       <Button
-        variant={isCurrentlyFlagged ? "default" : "outline"}
+        variant="outline"
         onClick={handleFlag}
-        className={`flex items-center gap-2 font-semibold px-5 py-2.5 rounded-xl border-2 transition-all ${
-          isCurrentlyFlagged
-            ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
-            : "hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 dark:hover:bg-amber-950/20 dark:hover:border-amber-900/30"
+        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl ${
+          isCurrentlyFlagged ? "bg-amber text-foreground hover:bg-amber" : "hover:bg-amber/20"
         }`}
       >
         <svg
@@ -76,7 +75,7 @@ export const NavigationPanel = ({ onSubmitClick }: NavigationPanelProps) => {
           fill={isCurrentlyFlagged ? "currentColor" : "none"}
           stroke="currentColor"
           strokeWidth={2}
-          className={`w-5 h-5 ${isCurrentlyFlagged ? "text-white" : "text-amber-500"}`}
+          className="w-5 h-5"
         >
           <path
             strokeLinecap="round"
@@ -90,8 +89,9 @@ export const NavigationPanel = ({ onSubmitClick }: NavigationPanelProps) => {
       {/* Next/Finish Button */}
       {isLast ? (
         <Button
+          variant="emerald"
           onClick={onSubmitClick}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-lg shadow-emerald-600/20 transition-all border border-emerald-600 hover:border-emerald-700"
+          className="flex items-center gap-2 px-6 py-2.5 rounded-xl"
         >
           <span>Kumpulkan Ujian</span>
           <svg

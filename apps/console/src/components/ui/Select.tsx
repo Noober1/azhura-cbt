@@ -14,7 +14,7 @@ export function Select({
 }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`focus-ring h-10 w-full rounded-[var(--radius-field)] border border-line bg-surface px-3 text-sm text-ink transition-colors hover:border-faint disabled:opacity-60 ${className}`}
+      className={`focus-ring h-10 w-full rounded-[var(--radius-field)] border-[2.5px] border-[var(--nb-ink)] bg-surface px-3 text-sm font-medium text-ink transition-colors disabled:opacity-60 ${className}`}
       {...rest}
     >
       {children}

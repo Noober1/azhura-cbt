@@ -5,10 +5,11 @@
 import { useToastStore, type ToastTone } from "../../stores/toast";
 import { CheckIcon, AlertIcon, XIcon } from "./icons";
 
+/* Yellow toast block (neobrutalist) — tone only swaps the leading icon colour. */
 const TONE_STYLES: Record<ToastTone, string> = {
-  success: "border-positive/30 bg-positive-wash text-positive",
-  error: "border-danger/30 bg-danger-wash text-danger",
-  info: "border-accent/30 bg-accent-wash text-accent-strong",
+  success: "text-positive",
+  error: "text-danger",
+  info: "text-accent-strong",
 };
 
 function ToneIcon({ tone }: { tone: ToastTone }) {
@@ -25,14 +26,14 @@ export function Toaster() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`pointer-events-auto flex items-start gap-2.5 rounded-[var(--radius-field)] border px-3.5 py-3 text-sm shadow-lg shadow-ink/5 ${TONE_STYLES[t.tone]}`}
+          className={`pointer-events-auto flex items-start gap-2.5 rounded-[var(--radius-field)] border-[2.5px] border-[var(--nb-ink)] bg-highlight px-3.5 py-3 text-sm shadow-[5px_5px_0_var(--nb-ink)] ${TONE_STYLES[t.tone]}`}
         >
           <ToneIcon tone={t.tone} />
-          <span className="flex-1 leading-snug text-ink">{t.message}</span>
+          <span className="flex-1 font-medium leading-snug text-ink">{t.message}</span>
           <button
             onClick={() => dismiss(t.id)}
             aria-label="Tutup notifikasi"
-            className="focus-ring -mr-1 rounded p-0.5 text-faint hover:text-ink"
+            className="focus-ring -mr-1 rounded p-0.5 text-ink-soft hover:text-ink"
           >
             <XIcon className="size-3.5" />
           </button>

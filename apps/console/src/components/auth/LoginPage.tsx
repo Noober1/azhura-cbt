@@ -36,20 +36,21 @@ export function LoginPage() {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
       {/* Brand panel */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden bg-rail p-12 text-white lg:flex">
+      <aside className="relative hidden flex-col justify-between overflow-hidden border-r-[3px] border-[var(--nb-ink)] bg-rail p-12 text-white lg:flex">
+        {/* Flat indigo block (no blur) — bold neobrutalist brand panel accent. */}
         <div
-          className="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full opacity-30 blur-3xl"
+          className="pointer-events-none absolute -right-20 -top-20 size-72 rotate-12 rounded-[var(--radius-card)] border-[3px] border-[var(--nb-ink)] opacity-90"
           style={{ background: "var(--color-accent)" }}
         />
         <div className="relative flex items-center gap-2.5">
-          <span className="grid size-9 place-items-center rounded-lg bg-white/10 ring-1 ring-white/15">
+          <span className="grid size-9 place-items-center rounded-lg border-2 border-white/25 bg-accent">
             <ShieldIcon className="size-5" />
           </span>
-          <span className="text-sm font-semibold tracking-wide">Azhura CBT</span>
+          <span className="text-sm font-extrabold tracking-tight">Azhura CBT</span>
         </div>
 
         <div className="relative max-w-md">
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight">
+          <h1 className="text-3xl font-extrabold leading-tight tracking-tight">
             Panel Admin
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-rail-soft">
@@ -65,12 +66,13 @@ export function LoginPage() {
 
       {/* Form panel */}
       <main className="flex items-center justify-center p-6 sm:p-10">
-        <div className="w-full max-w-sm">
+        {/* Auth card: 3px ink border + 8px hard shadow on white. */}
+        <div className="w-full max-w-sm rounded-[var(--radius-card)] border-[3px] border-[var(--nb-ink)] bg-surface p-7 shadow-[8px_8px_0_var(--nb-ink)]">
           <div className="mb-8">
-            <h2 className="text-xl font-semibold tracking-tight text-ink">
+            <h2 className="text-xl font-extrabold tracking-tight text-ink">
               Masuk ke Console
             </h2>
-            <p className="mt-1 text-sm text-faint">
+            <p className="mt-1 text-sm font-medium text-ink-soft">
               Gunakan kredensial admin Anda.
             </p>
           </div>
@@ -113,7 +115,7 @@ export function LoginPage() {
             {error && (
               <p
                 role="alert"
-                className="rounded-[var(--radius-field)] border border-danger/20 bg-danger-wash px-3 py-2 text-sm text-danger"
+                className="rounded-[var(--radius-field)] border-[2.5px] border-[var(--nb-ink)] bg-danger-wash px-3 py-2 text-sm font-bold text-ink"
               >
                 {error}
               </p>

@@ -31,7 +31,7 @@ export function ChatMessageItem({ message, isOwn, selfName, mentionNames }: Chat
   if (message.kind === "system") {
     return (
       <div className="my-1.5 flex justify-center">
-        <div className="max-w-[90%] rounded-full border border-amber-300/40 bg-amber-100/80 px-3 py-1 text-center text-xs font-semibold text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-300">
+        <div className="max-w-[90%] rounded-full border-2 border-[var(--nb-ink)] bg-amber px-3 py-1 text-center text-xs font-bold text-foreground">
           📢 {message.content}
         </div>
       </div>
@@ -43,15 +43,15 @@ export function ChatMessageItem({ message, isOwn, selfName, mentionNames }: Chat
       <div
         className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
           isOwn
-            ? "rounded-br-sm bg-indigo-600 text-white"
-            : "rounded-bl-sm bg-white/90 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
+            ? "rounded-br-sm bg-indigo text-white"
+            : "rounded-bl-sm bg-white/90 text-foreground"
         }`}
       >
         {!isOwn && (
-          <p className="mb-0.5 text-[0.7rem] font-bold text-indigo-600 dark:text-indigo-400">
+          <p className="mb-0.5 text-[0.7rem] font-bold text-indigo">
             {message.name}
             {message.groupName && (
-              <span className="ml-1 font-medium text-neutral-400">· {message.groupName}</span>
+              <span className="ml-1 font-medium text-muted-foreground">· {message.groupName}</span>
             )}
           </p>
         )}
@@ -62,10 +62,10 @@ export function ChatMessageItem({ message, isOwn, selfName, mentionNames }: Chat
                 key={idx}
                 className={
                   seg.value.toLowerCase() === selfName.toLowerCase()
-                    ? "rounded bg-amber-300/80 px-1 font-bold text-amber-950"
+                    ? "rounded bg-amber px-1 font-bold text-foreground"
                     : isOwn
-                      ? "font-semibold text-indigo-100 underline decoration-indigo-300/60"
-                      : "font-semibold text-indigo-600 dark:text-indigo-400"
+                      ? "font-semibold text-white underline decoration-white/60"
+                      : "font-semibold text-indigo"
                 }
               >
                 @{seg.value}

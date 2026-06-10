@@ -124,7 +124,7 @@ function LogTable({
     <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          <tr className="border-b-[2.5px] border-[var(--nb-ink)] bg-highlight text-left text-xs font-extrabold uppercase tracking-wider text-ink">
             <th className="px-3 py-2.5">Waktu</th>
             <th className="px-3 py-2.5">Stream</th>
             <th className="px-3 py-2.5">Aktor</th>

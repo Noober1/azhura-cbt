@@ -15,12 +15,12 @@ type RightIdx = number;
 
 /** Color palette for visualizing pairs */
 const PAIR_COLORS = [
-  "border-blue-400 bg-blue-50 dark:bg-blue-900/30",
-  "border-green-400 bg-green-50 dark:bg-green-900/30",
-  "border-purple-400 bg-purple-50 dark:bg-purple-900/30",
-  "border-orange-400 bg-orange-50 dark:bg-orange-900/30",
-  "border-pink-400 bg-pink-50 dark:bg-pink-900/30",
-  "border-cyan-400 bg-cyan-50 dark:bg-cyan-900/30",
+  "border-blue bg-blue/15",
+  "border-green-400 bg-green-50",
+  "border-purple-400 bg-purple-50",
+  "border-orange-400 bg-orange-50",
+  "border-pink-400 bg-pink-50",
+  "border-cyan-400 bg-cyan-50",
 ];
 
 function shuffleIndices(n: number, seed: string): number[] {
@@ -116,29 +116,29 @@ export function MatchingQuestion({ question, questionNumber }: Props) {
   const pairedCount = Object.keys(pairing).length;
 
   return (
-    <div className="flex-1 flex flex-col gap-6 p-6 rounded-2xl border border-neutral-200/60 bg-white dark:border-neutral-800/60 dark:bg-neutral-900 shadow-sm">
-      <div className="flex items-center justify-between pb-4 border-b border-neutral-100 dark:border-neutral-800">
+    <div className="flex-1 flex flex-col gap-6 p-6 rounded-2xl border-[2.5px] border-[var(--nb-ink)] bg-white shadow-[3px_3px_0_var(--nb-ink)]">
+      <div className="flex items-center justify-between pb-4 border-b border-soft">
         <span className="text-sm font-semibold uppercase tracking-wider text-primary bg-primary/5 px-3 py-1 rounded-full">
           Pasangkan
         </span>
-        <span className="text-sm font-bold text-neutral-500 dark:text-neutral-400">
+        <span className="text-sm font-bold text-muted-foreground">
           Nomor {questionNumber} dari {useExamStore.getState().questions.length}
         </span>
       </div>
 
       <RichContent
         html={question.text}
-        className="question-html text-lg font-medium text-neutral-900 dark:text-neutral-100 leading-relaxed"
+        className="question-html text-lg font-medium text-foreground leading-relaxed"
       />
 
-      <div className="text-xs text-neutral-500 dark:text-neutral-400">
+      <div className="text-xs text-muted-foreground">
         Klik item di Kolom A, lalu klik pasangannya di Kolom B. ({pairedCount}/{pairs.length} dipasangkan)
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         {/* Left column */}
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Kolom A</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kolom A</p>
           {pairs.map((pair, leftIdx) => {
             const colorIdx = getColorIndex(leftIdx);
             const isSelected = selectedLeft === leftIdx;
@@ -151,8 +151,8 @@ export function MatchingQuestion({ question, questionNumber }: Props) {
                   isSelected
                     ? "border-primary bg-primary/10 text-primary"
                     : colorIdx !== null
-                    ? `${PAIR_COLORS[colorIdx]} text-neutral-800 dark:text-neutral-200`
-                    : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+                    ? `${PAIR_COLORS[colorIdx]} text-foreground`
+                    : "border-soft bg-muted/50 text-foreground hover:border-soft dark:text-muted-foreground"
                 }`}
               >
                 {pair.left}
@@ -163,7 +163,7 @@ export function MatchingQuestion({ question, questionNumber }: Props) {
 
         {/* Right column (shuffled) */}
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Kolom B</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kolom B</p>
           {shuffledRight.map((realRightIdx, shuffledPos) => {
             const colorIdx = getRightColorIndex(realRightIdx);
             return (
@@ -173,8 +173,8 @@ export function MatchingQuestion({ question, questionNumber }: Props) {
                 onClick={() => handleRightClick(shuffledPos)}
                 className={`rounded-xl border-2 px-3 py-2.5 text-sm text-left font-medium transition-all ${
                   colorIdx !== null
-                    ? `${PAIR_COLORS[colorIdx]} text-neutral-800 dark:text-neutral-200`
-                    : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-primary/30 hover:border-2 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+                    ? `${PAIR_COLORS[colorIdx]} text-foreground`
+                    : "border-soft bg-muted/50 text-foreground hover:border-primary/30 hover:border-2 dark:border-soft dark:text-muted-foreground"
                 } ${selectedLeft !== null ? "cursor-pointer hover:border-primary/50" : ""}`}
               >
                 {pairs[realRightIdx].right}

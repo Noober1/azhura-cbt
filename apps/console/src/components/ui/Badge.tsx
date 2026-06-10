@@ -6,12 +6,13 @@ import type { ReactNode } from "react";
 
 type Tone = "neutral" | "positive" | "danger" | "accent" | "warn";
 
+/* Flat `-wash` fill per tone, ink text, thick ink border (neobrutalist pill). */
 const TONES: Record<Tone, string> = {
-  neutral: "bg-canvas text-ink-soft border-line",
-  positive: "bg-positive-wash text-positive border-positive/20",
-  danger: "bg-danger-wash text-danger border-danger/20",
-  accent: "bg-accent-wash text-accent-strong border-accent/20",
-  warn: "bg-[var(--color-warn)]/12 text-[var(--color-warn)] border-[var(--color-warn)]/25",
+  neutral: "bg-surface",
+  positive: "bg-positive-wash",
+  danger: "bg-danger-wash",
+  accent: "bg-accent-wash",
+  warn: "bg-warn-wash",
 };
 
 interface BadgeProps {
@@ -23,7 +24,7 @@ interface BadgeProps {
 export function Badge({ tone = "neutral", children, className = "" }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${TONES[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full border-[2.5px] border-[var(--nb-ink)] px-2.5 py-0.5 text-xs font-bold text-ink ${TONES[tone]} ${className}`}
     >
       {children}
     </span>

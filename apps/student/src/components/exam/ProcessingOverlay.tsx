@@ -22,7 +22,7 @@ export const ProcessingOverlay = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-neutral-950/70 backdrop-blur-sm p-6 text-center"
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-[rgba(21,19,15,0.75)] p-6 text-center"
       role="alertdialog"
       aria-modal="true"
       aria-label="Mengumpulkan ujian"
@@ -54,11 +54,11 @@ export const ProcessingOverlay = () => {
       <div
         className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold ${
           isOnline
-            ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
-            : "border-amber-400/40 bg-amber-500/10 text-amber-300"
+            ? "border-2 border-white/40 bg-emerald text-white"
+            : "border-2 border-white/40 bg-amber text-foreground"
         }`}
       >
-        <span className={`h-2 w-2 rounded-full ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+        <span className={`h-2 w-2 rounded-full ${isOnline ? "bg-emerald animate-pulse" : "bg-amber"}`} />
         {isOnline ? "Mengirim…" : "Menunggu koneksi"}
       </div>
     </div>

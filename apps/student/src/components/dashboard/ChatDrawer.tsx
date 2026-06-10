@@ -52,11 +52,11 @@ export function ChatDrawer() {
         <button
           type="button"
           aria-label="Buka chat peserta"
-          className="focus-ring fixed bottom-6 right-6 z-40 grid size-14 place-items-center rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-900/30 transition-transform hover:scale-105 active:scale-95"
+          className="focus-ring fixed bottom-6 right-6 z-40 grid size-14 place-items-center rounded-full bg-indigo text-white border-[2.5px] border-[var(--nb-ink)] shadow-[3px_3px_0_var(--nb-ink)] transition-transform hover:scale-105 active:scale-95"
         >
           <MessagesSquare className="size-6" />
           {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-xs font-bold text-white ring-2 ring-indigo-600">
+            <span className="absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full bg-destructive px-1 text-xs font-bold text-white ring-2 ring-[var(--nb-ink)]">
               {unread > 99 ? "99+" : unread}
             </span>
           )}
@@ -67,19 +67,19 @@ export function ChatDrawer() {
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-50 flex h-[80dvh] flex-col rounded-t-2xl bg-white text-neutral-900 shadow-2xl outline-none data-open:animate-in data-open:slide-in-from-bottom data-closed:animate-out data-closed:slide-out-to-bottom dark:bg-neutral-900 dark:text-neutral-50 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:h-[34rem] sm:w-[26rem] sm:rounded-2xl"
+          className="fixed inset-x-0 bottom-0 z-50 flex h-[80dvh] flex-col rounded-t-2xl bg-white text-foreground shadow-2xl outline-none data-open:animate-in data-open:slide-in-from-bottom data-closed:animate-out data-closed:slide-out-to-bottom sm:inset-x-auto sm:right-6 sm:bottom-6 sm:h-[34rem] sm:w-[26rem] sm:rounded-2xl"
         >
-          <header className="flex items-center gap-2 border-b border-neutral-200/70 px-4 py-3 dark:border-neutral-800/70">
-            <MessagesSquare className="size-5 text-indigo-600 dark:text-indigo-400" />
+          <header className="flex items-center gap-2 border-b border-soft px-4 py-3 dark:border-soft">
+            <MessagesSquare className="size-5 text-indigo" />
             <DialogPrimitive.Title className="text-sm font-bold">
               Chat Peserta
             </DialogPrimitive.Title>
-            <span className="ml-auto text-xs font-medium text-neutral-400">
+            <span className="ml-auto text-xs font-medium text-muted-foreground">
               {presence.length} online
             </span>
             <DialogPrimitive.Close
               aria-label="Tutup chat"
-              className="focus-ring -mr-1 ml-1 rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              className="focus-ring -mr-1 ml-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-neutral-700 dark:hover:text-neutral-200"
             >
               <X className="size-5" />
             </DialogPrimitive.Close>

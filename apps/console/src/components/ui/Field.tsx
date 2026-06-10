@@ -24,7 +24,7 @@ export function Field({ label, hint, error, required, children }: FieldProps) {
   const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[0.8125rem] font-medium text-ink">
+      <label htmlFor={id} className="text-[0.8125rem] font-bold text-ink">
         {label}
         {required && <span className="ml-0.5 text-danger">*</span>}
       </label>
@@ -39,7 +39,7 @@ export function Field({ label, hint, error, required, children }: FieldProps) {
 }
 
 const CONTROL_BASE =
-  "focus-ring w-full rounded-[var(--radius-field)] border border-line bg-surface px-3 text-sm text-ink placeholder:text-faint transition-colors hover:border-faint disabled:opacity-60";
+  "focus-ring w-full rounded-[var(--radius-field)] border-[2.5px] border-[var(--nb-ink)] bg-surface px-3 text-sm font-medium text-ink placeholder:text-faint transition-colors disabled:opacity-60";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   const { className = "", ...rest } = props;
@@ -64,9 +64,9 @@ export function Checkbox({ checked, onChange, label, hint, disabled = false }: C
   return (
     <label
       htmlFor={id}
-      className={`flex items-start gap-3 rounded-[var(--radius-field)] border border-line bg-surface px-3 py-2.5 transition-colors ${
-        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-faint"
-      }`}
+      className={`flex items-start gap-3 rounded-[var(--radius-field)] border-[2.5px] border-[var(--nb-ink)] px-3 py-2.5 shadow-[2px_2px_0_var(--nb-ink)] transition-colors ${
+        checked ? "bg-accent-wash" : "bg-surface"
+      } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-canvas"}`}
     >
       <input
         id={id}

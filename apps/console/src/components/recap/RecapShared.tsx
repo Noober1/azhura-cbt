@@ -34,7 +34,7 @@ interface StatCardProps {
 /** A single labelled statistic in the recap summary row. */
 export function StatCard({ label, value, hint }: StatCardProps) {
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-surface px-4 py-3">
+    <div className="rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)] px-4 py-3">
       <p className="text-xs font-medium uppercase tracking-wide text-faint">{label}</p>
       <p className="mt-1 text-2xl font-semibold tabular text-ink">{value}</p>
       {hint && <p className="mt-0.5 text-xs text-faint">{hint}</p>}

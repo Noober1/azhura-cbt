@@ -367,9 +367,9 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
               untuk menetapkannya ke ujian.
             </p>
           ) : (
-            <div className="overflow-hidden rounded-[var(--radius-card)] border border-line">
+            <div className="overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] shadow-[3px_3px_0_var(--nb-ink)]">
               {/* Fixed select-all header (indeterminate when partially selected). */}
-              <label className="flex cursor-pointer items-center gap-2 border-b border-line bg-canvas px-3 py-2.5 transition-colors hover:bg-canvas/60">
+              <label className="flex cursor-pointer items-center gap-2 border-b border-line bg-canvas px-3 py-2.5 transition-colors hover:bg-canvas">
                 <input
                   type="checkbox"
                   ref={(el) => {

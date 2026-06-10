@@ -67,7 +67,7 @@ export function ChatRow({ message, muted, menuOpen, onToggleMenu, onMute }: Chat
           Bisukan
         </Button>
         {menuOpen && (
-          <div className="absolute right-0 z-10 mt-1 w-32 overflow-hidden rounded-[var(--radius-field)] border border-line bg-surface shadow-lg">
+          <div className="absolute right-0 z-10 mt-1 w-32 overflow-hidden rounded-[var(--radius-field)] border-2 border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
             {MUTE_PRESETS.map((p) => (
               <button
                 key={p.label}

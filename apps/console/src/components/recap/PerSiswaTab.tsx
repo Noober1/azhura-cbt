@@ -190,12 +190,12 @@ export function PerSiswaTab() {
             </CenterState>
           </div>
         ) : results.length > 0 ? (
-          <ul className="mt-4 divide-y divide-line overflow-hidden rounded-[var(--radius-card)] border border-line">
+          <ul className="mt-4 divide-y divide-line overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] shadow-[3px_3px_0_var(--nb-ink)]">
             {results.map((s) => (
               <li key={s.id}>
                 <button
                   onClick={() => selectStudent(s)}
-                  className="focus-ring flex w-full items-center justify-between gap-3 bg-surface px-4 py-3 text-left transition-colors hover:bg-canvas/60"
+                  className="focus-ring flex w-full items-center justify-between gap-3 bg-surface px-4 py-3 text-left transition-colors hover:bg-canvas"
                 >
                   <span>
                     <span className="font-medium text-ink">{s.name}</span>
@@ -319,14 +319,14 @@ export function PerSiswaTab() {
               </CenterState>
             </div>
           ) : (
-            <div className="mt-4 overflow-hidden rounded-[var(--radius-card)] border border-line">
+            <div className="mt-4 overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] shadow-[3px_3px_0_var(--nb-ink)]">
               <table className="w-full text-sm">
-                <thead className="border-b border-line bg-canvas">
+                <thead className="border-b-[2.5px] border-[var(--nb-ink)] bg-highlight">
                   <tr>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-faint">Ujian</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-faint">Status</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-faint">Skor</th>
-                    <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-faint lg:table-cell">Mulai</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-extrabold uppercase tracking-wider text-ink">Ujian</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-extrabold uppercase tracking-wider text-ink">Status</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-extrabold uppercase tracking-wider text-ink">Skor</th>
+                    <th className="hidden px-4 py-2.5 text-left text-xs font-extrabold uppercase tracking-wider text-ink lg:table-cell">Mulai</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">

@@ -38,12 +38,12 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
   const pages = buildPages(page, totalPages);
 
   const btnBase =
-    "focus-ring inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-line bg-surface px-2 text-sm font-medium text-ink-soft transition-colors disabled:cursor-not-allowed disabled:opacity-40 hover:bg-canvas hover:text-ink";
+    "focus-ring inline-flex h-8 min-w-8 items-center justify-center rounded-md border-2 border-[var(--nb-ink)] bg-surface px-2 text-sm font-bold text-ink transition-colors disabled:cursor-not-allowed disabled:opacity-40 hover:bg-canvas";
   const btnActive =
-    "focus-ring inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-accent bg-accent px-2 text-sm font-medium text-white";
+    "focus-ring inline-flex h-8 min-w-8 items-center justify-center rounded-md border-2 border-[var(--nb-ink)] bg-accent px-2 text-sm font-bold text-white shadow-[2px_2px_0_var(--nb-ink)]";
 
   return (
-    <div className="flex items-center justify-center gap-1 border-t border-line pt-4">
+    <div className="flex items-center justify-center gap-1.5 border-t-2 border-line-soft pt-4">
       <button
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}

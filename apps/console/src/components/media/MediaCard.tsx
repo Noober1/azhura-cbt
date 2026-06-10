@@ -47,7 +47,7 @@ export function MediaCard({ item, onClick, selected = false, selectionMode = fal
       <button
         type="button"
         onClick={handleClick}
-        className={`focus-ring group relative block w-full aspect-square overflow-hidden rounded-lg border transition-shadow hover:shadow-md hover:shadow-ink/8 ${selected ? "border-accent ring-2 ring-accent/40" : "border-line bg-canvas"}`}
+        className={`focus-ring group relative block w-full aspect-square overflow-hidden rounded-lg border-2 transition-shadow hover:shadow-[3px_3px_0_var(--nb-ink)] ${selected ? "border-[var(--nb-ink)] bg-accent-wash shadow-[3px_3px_0_var(--nb-ink)]" : "border-[var(--nb-ink)] bg-canvas"}`}
       >
         {onToggleSelect && <Checkbox selected={selected} selectionMode={selectionMode} onToggle={handleCheckbox} />}
         <img
@@ -55,7 +55,7 @@ export function MediaCard({ item, onClick, selected = false, selectionMode = fal
           alt={item.originalName}
           className="size-full object-cover transition-transform group-hover:scale-105"
         />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/60 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute inset-x-0 bottom-0 bg-ink/70 px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
           <p className="truncate text-[0.6875rem] text-white">{item.originalName}</p>
         </div>
       </button>
@@ -67,7 +67,7 @@ export function MediaCard({ item, onClick, selected = false, selectionMode = fal
     <button
       type="button"
       onClick={handleClick}
-      className={`focus-ring group relative flex w-full aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border transition-shadow hover:shadow-md hover:shadow-ink/8 ${selected ? "border-accent ring-2 ring-accent/40" : `border-line ${bg}`}`}
+      className={`focus-ring group relative flex w-full aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border-2 transition-shadow hover:shadow-[3px_3px_0_var(--nb-ink)] ${selected ? "border-[var(--nb-ink)] bg-accent-wash shadow-[3px_3px_0_var(--nb-ink)]" : `border-[var(--nb-ink)] ${bg}`}`}
     >
       {onToggleSelect && <Checkbox selected={selected} selectionMode={selectionMode} onToggle={handleCheckbox} />}
       {icon}

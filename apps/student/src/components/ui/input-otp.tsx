@@ -49,7 +49,10 @@ function InputOTPSlot({
       data-slot="input-otp-slot"
       data-active={isActive}
       className={cn(
-        "data-[active=true]:border-ring data-[active=true]:ring-ring/50 data-[active=true]:aria-invalid:ring-destructive/20 dark:data-[active=true]:aria-invalid:ring-destructive/40 aria-invalid:border-destructive data-[active=true]:aria-invalid:border-destructive dark:bg-input/30 border-input relative flex h-9 w-9 items-center justify-center border-y border-r text-sm shadow-xs transition-all outline-none first:rounded-l-md first:border-l last:rounded-r-md data-[active=true]:z-10 data-[active=true]:ring-[3px]",
+        // OTP token box: 44×48 mono digits in their own thick ink border;
+        // accent-wash once typed, destructive border on a rejected token.
+        "tabular relative flex h-12 w-11 items-center justify-center rounded-md border-[2.5px] border-[var(--nb-ink)] bg-background font-mono text-base font-bold transition-all outline-none data-[active=true]:z-10 data-[active=true]:ring-[3px] data-[active=true]:ring-ring/50 aria-invalid:border-destructive data-[active=true]:aria-invalid:ring-destructive/20",
+        char ? "bg-indigo/15" : "",
         className
       )}
       {...props}

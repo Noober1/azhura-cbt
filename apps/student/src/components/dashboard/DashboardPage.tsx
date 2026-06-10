@@ -190,23 +190,23 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
   // whether to redirect into an in-progress (or finalized) session (#4).
   if (isCheckingResume) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-linear-to-tr from-indigo-950 via-slate-900 to-emerald-950">
-        <Loader2 className="h-8 w-8 animate-spin text-white/70" />
-        <p className="text-sm font-medium text-white/60">Memeriksa sesi ujian…</p>
+      <div className="shell min-h-screen flex flex-col items-center justify-center gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-foreground/70" />
+        <p className="text-sm font-bold text-muted-foreground">Memeriksa sesi ujian…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-linear-to-tr from-indigo-950 via-slate-900 to-emerald-950">
+    <div className="shell min-h-screen flex flex-col">
       <DashboardNavbar />
 
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-white">
+          <h1 className="font-heading text-2xl font-extrabold tracking-tight text-foreground">
             Selamat datang, {user?.name?.split(" ")[0] ?? "Peserta"}!
           </h1>
-          <p className="text-sm font-medium text-white/60">
+          <p className="text-sm font-medium text-muted-foreground">
             Berikut adalah ujian yang dapat Anda kerjakan hari ini.
           </p>
         </div>

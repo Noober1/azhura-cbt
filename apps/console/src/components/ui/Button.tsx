@@ -1,14 +1,14 @@
 /**
- * Azhura CBT Console — Button primitive.
+ * Azhura CBT Console — Button primitive (neobrutalist).
  *
- * Variants tuned for an admin workspace: a solid accent primary, a quiet bordered
- * secondary, a low-emphasis ghost, and a destructive danger. All share a focus
- * ring and a disabled/busy state.
+ * Bordered variants carry the signature treatment: 2.5px ink border, hard
+ * offset shadow, hover lift, press-into-shadow active. Ghost stays flat
+ * (no border/shadow) for low-emphasis actions.
  */
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "highlight" | "ghost" | "danger";
 type Size = "sm" | "md";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -18,18 +18,25 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   leadingIcon?: ReactNode;
 }
 
+/* Shared neobrutalist chrome for every bordered variant. */
+const NB =
+  "border-[2.5px] border-[var(--nb-ink)] shadow-[3px_3px_0_var(--nb-ink)] " +
+  "transition-[transform,box-shadow,background-color] duration-[80ms] " +
+  "hover:-translate-x-px hover:-translate-y-px hover:shadow-[5px_5px_0_var(--nb-ink)] " +
+  "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none " +
+  "disabled:hover:translate-x-0 disabled:hover:translate-y-0 disabled:hover:shadow-[3px_3px_0_var(--nb-ink)]";
+
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    "bg-accent text-white hover:bg-accent-strong active:bg-accent-strong shadow-sm shadow-accent/20",
-  secondary:
-    "bg-surface text-ink border border-line hover:border-faint hover:bg-canvas",
-  ghost: "text-ink-soft hover:text-ink hover:bg-canvas",
-  danger: "bg-danger text-white hover:brightness-95 active:brightness-90",
+  primary: `bg-accent text-white hover:bg-accent-strong ${NB}`,
+  secondary: `bg-surface text-ink hover:bg-canvas ${NB}`,
+  highlight: `bg-highlight text-ink ${NB}`,
+  ghost: "text-ink-soft hover:text-ink hover:bg-canvas transition-colors",
+  danger: `bg-danger text-white ${NB}`,
 };
 
 const SIZES: Record<Size, string> = {
-  sm: "h-8 px-3 text-[0.8125rem] gap-1.5 rounded-[var(--radius-field)]",
-  md: "h-10 px-4 text-sm gap-2 rounded-[var(--radius-field)]",
+  sm: "h-[34px] px-3 text-[0.8125rem] gap-1.5 rounded-[var(--radius-field)]",
+  md: "h-[42px] px-4 text-sm gap-2 rounded-[var(--radius-field)]",
 };
 
 export function Button({
@@ -44,7 +51,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`focus-ring inline-flex items-center justify-center font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+      className={`focus-ring inline-flex items-center justify-center whitespace-nowrap font-bold disabled:cursor-not-allowed disabled:opacity-55 ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
       disabled={disabled || busy}
       {...rest}
     >

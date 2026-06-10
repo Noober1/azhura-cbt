@@ -124,7 +124,7 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50 dark:bg-neutral-950 p-6">
+      <div className="shell min-h-screen flex flex-col items-center justify-center p-6">
         <svg
           className="animate-spin h-10 w-10 text-primary mb-4"
           xmlns="http://www.w3.org/2000/svg"
@@ -138,7 +138,7 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
           ></path>
         </svg>
-        <span className="text-sm font-semibold text-neutral-500">Mempersiapkan lembar ujian...</span>
+        <span className="text-sm font-semibold text-muted-foreground">Mempersiapkan lembar ujian...</span>
       </div>
     );
   }
@@ -146,17 +146,17 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
   const activeQuestion = questions[currentQuestionIndex];
 
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-50/50 dark:bg-neutral-950/80">
+    <div className="shell min-h-screen flex flex-col">
       {/* Top Header bar */}
-      <header className="sticky top-0 z-40 w-full border-b border-neutral-200/50 bg-white/80 backdrop-blur-md dark:border-neutral-800/50 dark:bg-neutral-900/80 shadow-xs">
+      <header className="sticky top-0 z-40 w-full border-b-[3px] border-[var(--nb-ink)] bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           
           {/* Exam Title & Meta */}
           <div className="flex flex-col">
-            <h1 className="font-bold text-base text-neutral-950 dark:text-neutral-50 truncate max-w-48 sm:max-w-xs md:max-w-md">
+            <h1 className="font-bold text-base text-foreground truncate max-w-48 sm:max-w-xs md:max-w-md">
               {examTitle || "Ujian CBT Utama"}
             </h1>
-            <div className="flex items-center gap-2 text-xs font-semibold text-neutral-500">
+            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <span>Siswa: {user?.name}</span>
               <span>&bull;</span>
               <span>NIS: {user?.nis}</span>
@@ -169,11 +169,11 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
             <div
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
                 isOnline
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/50"
+                  ? "bg-emerald-50 text-emerald border-emerald-200"
                   : "bg-destructive/5 text-destructive border-destructive/20"
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-destructive"}`} />
+              <span className={`w-2 h-2 rounded-full ${isOnline ? "bg-emerald animate-pulse" : "bg-destructive"}`} />
               <span className="hidden md:inline">{isOnline ? "Online" : "Offline Mode"}</span>
             </div>
 
@@ -181,11 +181,11 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
             <div
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
                 isConnected
-                  ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/50"
-                  : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/50"
+                  ? "bg-blue/15 text-blue"
+                  : "bg-amber/25 text-foreground"
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-blue-500" : "bg-amber-500"}`} />
+              <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-blue" : "bg-amber"}`} />
               <span className="hidden md:inline">{isConnected ? "Server Realtime" : "Koneksi Bermasalah"}</span>
             </div>
 
@@ -210,7 +210,7 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
               questionNumber={currentQuestionIndex + 1}
             />
           ) : (
-            <div className="flex-1 border rounded-2xl flex items-center justify-center text-neutral-400 bg-white dark:bg-neutral-900 border-neutral-200/60 dark:border-neutral-800">
+            <div className="flex-1 border rounded-2xl flex items-center justify-center text-muted-foreground bg-white border-soft">
               Tidak ada soal aktif.
             </div>
           )}

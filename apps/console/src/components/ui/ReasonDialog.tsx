@@ -78,7 +78,7 @@ export function ReasonDialog({
         disabled={busy}
         rows={3}
         placeholder={placeholder}
-        className="focus-ring mt-3 w-full resize-none rounded-[var(--radius-field)] border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint disabled:opacity-55"
+        className="focus-ring mt-3 w-full resize-none rounded-[var(--radius-field)] border-[2.5px] border-[var(--nb-ink)] bg-surface px-3 py-2 text-sm font-medium text-ink placeholder:text-faint disabled:opacity-55"
       />
     </Modal>
   );
