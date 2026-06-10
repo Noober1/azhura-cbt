@@ -108,7 +108,7 @@ export function SupervisorQuestionListPage() {
             return (
               <div
                 key={q.id}
-                className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface"
+                className="overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]"
               >
                 <div className="flex items-start gap-3 px-4 py-3">
                   <span className="mt-0.5 shrink-0 text-sm font-semibold text-faint">

@@ -100,7 +100,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       {/* Brand panel */}
       <aside className="relative hidden flex-col justify-between overflow-hidden bg-rail p-12 text-white lg:flex">
         <div
-          className="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full opacity-30 blur-3xl"
+          className="pointer-events-none absolute -right-20 -top-20 size-72 rotate-12 rounded-[var(--radius-card)] border-[3px] border-[var(--nb-ink)] opacity-90"
           style={{ background: "var(--color-accent)" }}
         />
         <div className="relative flex items-center gap-2.5">

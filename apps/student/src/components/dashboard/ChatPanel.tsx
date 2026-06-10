@@ -131,7 +131,7 @@ export function ChatPanel() {
       {/* Message list */}
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-1">
         {messages.length === 0 ? (
-          <p className="m-auto text-center text-sm text-neutral-400">
+          <p className="m-auto text-center text-sm text-muted-foreground">
             Belum ada pesan. Sapa teman sekelasmu! 👋
           </p>
         ) : (
@@ -161,7 +161,7 @@ export function ChatPanel() {
       {/* Composer */}
       <div className="relative">
         {suggestions.length > 0 && (
-          <ul className="absolute bottom-full left-0 mb-1 w-56 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-800">
+          <ul className="absolute bottom-full left-0 mb-1 w-56 overflow-hidden rounded-lg border-2 border-[var(--nb-ink)] bg-white shadow-[3px_3px_0_var(--nb-ink)]">
             {suggestions.map((m) => (
               <li key={m.userId}>
                 <button
@@ -170,13 +170,13 @@ export function ChatPanel() {
                     e.preventDefault();
                     pickMention(m.name);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-indigo-50 dark:hover:bg-neutral-700"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-indigo/10"
                 >
-                  <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                  <span className="font-semibold text-indigo">
                     @{m.name}
                   </span>
                   {m.groupName && (
-                    <span className="text-xs text-neutral-400">{m.groupName}</span>
+                    <span className="text-xs text-muted-foreground">{m.groupName}</span>
                   )}
                 </button>
               </li>

@@ -36,16 +36,16 @@ function SortableItem({ id, label }: SortableItemProps) {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-center gap-3 rounded-xl border-2 bg-white px-4 py-3 text-sm font-medium text-neutral-800 select-none dark:bg-neutral-900 dark:text-neutral-200 ${
+      className={`flex items-center gap-3 rounded-xl border-2 bg-white px-4 py-3 text-sm font-medium text-neutral-800 select-none ${
         isDragging
-          ? "border-primary shadow-lg opacity-80 z-10"
-          : "border-neutral-200 dark:border-neutral-700"
+          ? "border-primary shadow-[3px_3px_0_var(--nb-ink)] opacity-80 z-10"
+          : "border-soft"
       }`}
     >
       <span
         {...attributes}
         {...listeners}
-        className="cursor-grab touch-none text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 active:cursor-grabbing"
+        className="cursor-grab touch-none text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground active:cursor-grabbing"
         aria-label="Seret untuk mengubah urutan"
       >
         ☰
@@ -106,22 +106,22 @@ export function SortingQuestion({ question, questionNumber }: Props) {
   }
 
   return (
-    <div className="flex-1 flex flex-col gap-6 p-6 rounded-2xl border border-neutral-200/60 bg-white dark:border-neutral-800/60 dark:bg-neutral-900 shadow-sm">
-      <div className="flex items-center justify-between pb-4 border-b border-neutral-100 dark:border-neutral-800">
+    <div className="flex-1 flex flex-col gap-6 p-6 rounded-2xl border-[2.5px] border-[var(--nb-ink)] bg-white shadow-[3px_3px_0_var(--nb-ink)]">
+      <div className="flex items-center justify-between pb-4 border-b border-soft">
         <span className="text-sm font-semibold uppercase tracking-wider text-primary bg-primary/5 px-3 py-1 rounded-full">
           Urutkan
         </span>
-        <span className="text-sm font-bold text-neutral-500 dark:text-neutral-400">
+        <span className="text-sm font-bold text-muted-foreground">
           Nomor {questionNumber} dari {questions.length}
         </span>
       </div>
 
       <RichContent
         html={question.text}
-        className="question-html text-lg font-medium text-neutral-900 dark:text-neutral-100 leading-relaxed"
+        className="question-html text-lg font-medium text-foreground leading-relaxed"
       />
 
-      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+      <p className="text-xs text-muted-foreground">
         Seret item untuk mengubah urutannya dari yang benar.
       </p>
 

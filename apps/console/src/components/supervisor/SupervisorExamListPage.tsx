@@ -63,14 +63,14 @@ export function SupervisorExamListPage() {
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+      <div className="overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-canvas">
-              <th className="px-4 py-3 text-left text-xs font-medium text-faint">Judul Ujian</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-faint">Durasi</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-faint">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-faint">Dibuat</th>
+            <tr className="border-b-[2.5px] border-[var(--nb-ink)] bg-highlight">
+              <th className="px-4 py-3 text-left text-xs text-faint">Judul Ujian</th>
+              <th className="px-4 py-3 text-left text-xs text-faint">Durasi</th>
+              <th className="px-4 py-3 text-left text-xs text-faint">Status</th>
+              <th className="px-4 py-3 text-left text-xs text-faint">Dibuat</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>

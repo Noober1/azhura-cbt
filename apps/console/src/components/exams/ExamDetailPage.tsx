@@ -165,7 +165,7 @@ export function ExamDetailPage() {
       </Button>
 
       {/* Exam header card */}
-      <section className="mt-3 rounded-[var(--radius-card)] border border-line bg-surface p-5 sm:p-6">
+      <section className="mt-3 rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)] p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -255,7 +255,7 @@ export function ExamDetailPage() {
           {supervisors.map((s) => (
             <li
               key={s.userId}
-              className="flex items-center gap-3 rounded-[var(--radius-card)] border border-line bg-surface px-4 py-3 text-sm"
+              className="flex items-center gap-3 rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)] px-4 py-3 text-sm"
             >
               <ShieldIcon className="size-4 shrink-0 text-accent" />
               <span className="font-medium text-ink">{s.name}</span>
@@ -313,7 +313,7 @@ export function ExamDetailPage() {
           {exam.questions.map((q, index) => (
             <li
               key={q.id}
-              className="rounded-[var(--radius-card)] border border-line bg-surface p-4 sm:p-5"
+              className="rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)] p-4 sm:p-5"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 gap-3">

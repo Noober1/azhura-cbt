@@ -62,11 +62,11 @@ export function AppShell() {
     <div className="grid min-h-dvh grid-cols-[68px_1fr] lg:grid-cols-[232px_1fr]">
       {/* Rail */}
       <aside className="sticky top-0 flex h-dvh flex-col bg-rail text-white">
-        <div className="flex h-16 items-center gap-2.5 px-4 lg:px-5">
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/10 ring-1 ring-white/15">
+        <div className="flex h-16 items-center gap-2.5 border-b-2 border-rail-line px-4 lg:px-5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg border-2 border-white/25 bg-accent">
             <ShieldIcon className="size-[18px]" />
           </span>
-          <span className="hidden text-sm font-semibold tracking-wide lg:block">
+          <span className="hidden text-sm font-extrabold tracking-tight lg:block">
             Azhura CBT
           </span>
         </div>
@@ -95,9 +95,10 @@ export function AppShell() {
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
-                  `focus-ring flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors lg:px-3 ${
+                  `focus-ring flex items-center gap-3 rounded-[var(--radius-field)] px-2.5 py-2 text-sm font-bold transition-colors lg:px-3 ${
                     isActive
-                      ? "bg-white/12 text-white"
+                      ? // Yellow block — the neobrutalist active-nav signature.
+                        "border-2 border-[var(--nb-ink)] bg-highlight text-ink shadow-[2px_2px_0_rgba(255,255,255,0.35)]"
                       : "text-rail-soft hover:bg-white/6 hover:text-white"
                   }`
                 }
@@ -111,7 +112,7 @@ export function AppShell() {
 
         <div className="border-t border-rail-line p-2.5 lg:p-3">
           <div className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5">
-            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-white">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full border-2 border-white/30 bg-accent text-xs font-bold text-white">
               {initials}
             </span>
             <div className="hidden min-w-0 flex-1 lg:block">
@@ -126,9 +127,10 @@ export function AppShell() {
 
       {/* Content */}
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-canvas/80 px-5 backdrop-blur lg:px-8">
+        {/* Solid canvas + thick ink bottom border — no blur (neobrutalist). */}
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b-[3px] border-[var(--nb-ink)] bg-canvas px-5 lg:px-8">
           <div className="flex items-center gap-2 text-sm text-faint">
-            <span className="font-medium text-ink">{currentNavLabel}</span>
+            <span className="text-base font-extrabold tracking-tight text-ink">{currentNavLabel}</span>
           </div>
           <Button
             variant="ghost"

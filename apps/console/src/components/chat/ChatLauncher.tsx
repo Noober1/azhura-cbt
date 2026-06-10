@@ -71,11 +71,11 @@ export function ChatLauncher() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Buka chat peserta"
-          className="focus-ring fixed bottom-6 right-6 z-40 grid size-14 place-items-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 transition-transform hover:scale-105 active:scale-95"
+          className="focus-ring fixed bottom-6 right-6 z-40 grid size-14 place-items-center rounded-full border-[2.5px] border-[var(--nb-ink)] bg-accent text-white shadow-[3px_3px_0_var(--nb-ink)] transition-[transform,box-shadow] duration-[80ms] hover:-translate-x-px hover:-translate-y-px hover:shadow-[5px_5px_0_var(--nb-ink)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
         >
           <MessageSquareIcon className="size-6" />
           {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full bg-danger px-1 text-xs font-bold text-white ring-2 ring-accent">
+            <span className="absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full border-2 border-[var(--nb-ink)] bg-danger px-1 text-xs font-bold text-white">
               {unread > 99 ? "99+" : unread}
             </span>
           )}
@@ -85,7 +85,7 @@ export function ChatLauncher() {
       {open && (
         <div className="fixed inset-0 z-50">
           <div
-            className="absolute inset-0 bg-ink/35 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[rgba(21,19,15,0.55)]"
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
@@ -93,11 +93,12 @@ export function ChatLauncher() {
             role="dialog"
             aria-modal="true"
             aria-label="Chat peserta"
-            className="absolute inset-x-0 bottom-0 flex h-[80dvh] flex-col rounded-t-[var(--radius-card)] border-t border-line bg-surface shadow-2xl shadow-ink/20 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:h-[36rem] sm:w-[40rem] sm:rounded-[var(--radius-card)] sm:border"
+            className="absolute inset-x-0 bottom-0 flex h-[80dvh] flex-col overflow-hidden rounded-t-[var(--radius-card)] border-t-[3px] border-[var(--nb-ink)] bg-surface sm:inset-x-auto sm:right-6 sm:bottom-6 sm:h-[36rem] sm:w-[40rem] sm:rounded-[var(--radius-card)] sm:border-[3px] sm:shadow-[8px_8px_0_var(--nb-ink)]"
           >
-            <header className="flex items-center gap-2 border-b border-line px-4 py-3">
-              <MessageSquareIcon className="size-5 text-accent" />
-              <h2 className="text-sm font-semibold text-ink">Chat Peserta</h2>
+            {/* Yellow drawer header band. */}
+            <header className="flex items-center gap-2 border-b-[2.5px] border-[var(--nb-ink)] bg-highlight px-4 py-3">
+              <MessageSquareIcon className="size-5 text-ink" />
+              <h2 className="text-sm font-extrabold text-ink">Chat Peserta</h2>
               <Badge tone={connected ? "positive" : "neutral"}>
                 {connected ? "Live" : "Terputus"}
               </Badge>

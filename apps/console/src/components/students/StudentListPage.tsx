@@ -173,7 +173,7 @@ export function StudentListPage() {
         </div>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+      <div className="mt-4 overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
         {loading ? (
           <CenterState>
             <Spinner className="size-6 text-accent" />
@@ -205,21 +205,21 @@ export function StudentListPage() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-line text-left text-xs font-medium uppercase tracking-wide text-faint">
-                <th className="px-4 py-3 font-medium">Nama</th>
-                <th className="px-4 py-3 font-medium">NIS</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">Group</th>
-                <th className="w-16 px-4 py-3 font-medium">Batch</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="hidden px-4 py-3 font-medium lg:table-cell">Dibuat</th>
-                <th className="px-4 py-3 text-right font-medium">Aksi</th>
+              <tr className="border-b-[2.5px] border-[var(--nb-ink)] bg-highlight text-left text-xs font-extrabold uppercase tracking-wider text-ink">
+                <th className="px-4 py-3">Nama</th>
+                <th className="px-4 py-3">NIS</th>
+                <th className="hidden px-4 py-3 md:table-cell">Group</th>
+                <th className="w-16 px-4 py-3">Batch</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="hidden px-4 py-3 lg:table-cell">Dibuat</th>
+                <th className="px-4 py-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {students.map((student) => (
                 <tr
                   key={student.id}
-                  className="border-b border-line/70 transition-colors last:border-0 hover:bg-canvas/60"
+                  className="border-b-[1.5px] border-line-soft transition-colors last:border-0 hover:bg-canvas"
                 >
                   <td className="px-4 py-3 font-medium text-ink">{student.name}</td>
                   <td className="px-4 py-3 tabular text-ink-soft">{student.nis}</td>

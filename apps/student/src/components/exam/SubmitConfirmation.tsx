@@ -50,14 +50,14 @@ export const SubmitConfirmation = ({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent size="default" className="p-6">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-xl font-bold text-neutral-900 dark:text-neutral-50 flex items-center gap-2">
+          <AlertDialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
               strokeWidth={2}
               stroke="currentColor"
-              className="w-6 h-6 text-amber-500"
+              className="w-6 h-6 text-amber"
             >
               <path
                 strokeLinecap="round"
@@ -67,22 +67,22 @@ export const SubmitConfirmation = ({
             </svg>
             <span>Kumpulkan Ujian Sekarang?</span>
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-sm text-neutral-500 dark:text-neutral-400 mt-2">
+          <AlertDialogDescription className="text-sm text-muted-foreground mt-2">
             Harap tinjau ringkasan pekerjaan Anda di bawah ini sebelum menyelesaikan sesi ujian. Tindakan ini **tidak dapat dibatalkan** dan jawaban Anda akan dikunci secara permanen.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         {/* Summary Stats Card */}
-        <div className="my-4 p-4 rounded-xl border border-neutral-100 bg-neutral-50/50 dark:border-neutral-800 dark:bg-neutral-800/20 space-y-2 text-sm font-semibold">
-          <div className="flex justify-between items-center text-neutral-600 dark:text-neutral-400">
+        <div className="my-4 p-4 rounded-xl border border-soft bg-muted/50 dark:border-soft space-y-2 text-sm font-semibold">
+          <div className="flex justify-between items-center text-muted-foreground">
             <span>Total Soal:</span>
-            <span className="font-extrabold text-neutral-900 dark:text-neutral-50">{questions.length}</span>
+            <span className="font-extrabold text-foreground">{questions.length}</span>
           </div>
-          <div className="flex justify-between items-center text-blue-600 dark:text-blue-400">
+          <div className="flex justify-between items-center text-blue">
             <span>Sudah Dijawab:</span>
             <span>{answeredCount} Soal</span>
           </div>
-          <div className="flex justify-between items-center text-amber-500">
+          <div className="flex justify-between items-center text-amber">
             <span>Masih Ragu-Ragu:</span>
             <span>{flaggedCount} Soal</span>
           </div>
@@ -104,7 +104,7 @@ export const SubmitConfirmation = ({
               onConfirm();
             }}
             disabled={isSubmitting}
-            className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
+            className="font-bold bg-emerald hover:brightness-95 text-white rounded-xl"
           >
             {isSubmitting ? "Mengumpulkan..." : "Ya, Kumpulkan"}
           </AlertDialogAction>

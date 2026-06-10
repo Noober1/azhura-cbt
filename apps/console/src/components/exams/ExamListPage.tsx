@@ -152,7 +152,7 @@ export function ExamListPage() {
       </div>
 
       {/* Table / states */}
-      <div className="mt-4 overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+      <div className="mt-4 overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
         {loading ? (
           <CenterState>
             <Spinner className="size-6 text-accent" />
@@ -184,20 +184,20 @@ export function ExamListPage() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-line text-left text-xs font-medium uppercase tracking-wide text-faint">
-                <th className="px-4 py-3 font-medium">Judul</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">Soal</th>
-                <th className="hidden px-4 py-3 font-medium lg:table-cell">Durasi</th>
-                <th className="hidden px-4 py-3 font-medium lg:table-cell">Kedaluwarsa</th>
-                <th className="px-4 py-3 text-right font-medium">Aksi</th>
+              <tr className="border-b-[2.5px] border-[var(--nb-ink)] bg-highlight text-left text-xs font-extrabold uppercase tracking-wider text-ink">
+                <th className="px-4 py-3">Judul</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="hidden px-4 py-3 md:table-cell">Soal</th>
+                <th className="hidden px-4 py-3 lg:table-cell">Durasi</th>
+                <th className="hidden px-4 py-3 lg:table-cell">Kedaluwarsa</th>
+                <th className="px-4 py-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {exams.map((exam) => (
                 <tr
                   key={exam.id}
-                  className="group border-b border-line/70 transition-colors last:border-0 hover:bg-canvas/60"
+                  className="group border-b-[1.5px] border-line-soft transition-colors last:border-0 hover:bg-canvas"
                 >
                   <td className="px-4 py-3">
                     <button

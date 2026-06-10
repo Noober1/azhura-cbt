@@ -2,12 +2,22 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Azhura CBT Student — NEOBRUTALIST tokens. Cream shell + near-black ink
+ * primary, flat saturated state palette (blue=answered, amber=ragu-ragu,
+ * emerald=CTA/pass, red=error), thick borders + hard offset shadows.
+ * shadcn variable names are unchanged; only values changed. Canonical
+ * values: design_handoff_neobrutalist/reference/colors_and_type.css.
+ */
+
 @theme inline {
-    --font-heading: var(--font-sans);
+    --font-heading: 'Geist Variable', sans-serif; /* heading = Geist 800/900, no new typeface */
     --font-sans: 'Geist Variable', sans-serif;
+    --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -24,6 +34,7 @@
     --color-ring: var(--ring);
     --color-input: var(--input);
     --color-border: var(--border);
+    --color-border-soft: var(--border-soft);
     --color-destructive: var(--destructive);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
@@ -39,48 +50,76 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+    /* Flat brand / exam-state accents (black-outlined colour blocks). */
+    --color-indigo: var(--indigo);
+    --color-emerald: var(--emerald);
+    --color-blue: var(--blue);
+    --color-amber: var(--amber);
+    --color-shell-bg: var(--shell-bg);
+    --color-shell-dot: var(--shell-dot);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-xl: 0.5625rem;  /* 9px — option rows / buttons */
+    --radius-2xl: 0.75rem;   /* 12px — student cards */
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+    /* Hard offset shadows — never blurred. */
+    --shadow-xs: 2px 2px 0 var(--nb-ink);
+    --shadow-sm: 3px 3px 0 var(--nb-ink);
+    --shadow-md: 5px 5px 0 var(--nb-ink);
+    --shadow-2xl: 8px 8px 0 var(--nb-ink);
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --background: #ffffff;
+    --foreground: #15130f;
+    --card: #ffffff;
+    --card-foreground: #15130f;
+    --popover: #ffffff;
+    --popover-foreground: #15130f;
+    --primary: #15130f;
+    --primary-foreground: #ffffff;
+    --secondary: #f1e8d6;
+    --secondary-foreground: #15130f;
+    --muted: #f1e8d6;
+    --muted-foreground: #6b655a;
+    --accent: #f1e8d6;
+    --accent-foreground: #15130f;
+    --destructive: #ff5a4d;
+    --border: #15130f;
+    --border-soft: #e7dec9;
+    --input: #15130f;
+    --ring: #5b4bf5;
+    --chart-1: #5b4bf5;
+    --chart-2: #16a35a;
+    --chart-3: #2563eb;
+    --chart-4: #ffc23d;
+    --chart-5: #ff5a4d;
+    --radius: 0.5rem;
+    --sidebar: #ffffff;
+    --sidebar-foreground: #15130f;
+    --sidebar-primary: #15130f;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #f1e8d6;
+    --sidebar-accent-foreground: #15130f;
+    --sidebar-border: #15130f;
+    --sidebar-ring: #5b4bf5;
+
+    /* Brand / exam-state accents — flat, saturated, black-outlined. */
+    --indigo: #5b4bf5;
+    --emerald: #16a35a;
+    --blue: #2563eb;
+    --amber: #ffc23d;
+
+    /* Shell (replaces the old gradient): flat cream paper + dot grid. */
+    --shell-bg: #faf2e4;
+    --shell-dot: #15130f;
+
+    /* Neobrutalist structure — the one ink for ALL borders + outlines. */
+    --nb-ink: #15130f;
+    --nb-bw: 2.5px;
+    --nb-bw-lg: 3px;
 }
 
 .dark {
@@ -100,6 +139,7 @@
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
+    --border-soft: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
     --chart-1: oklch(0.87 0 0);
@@ -127,4 +167,44 @@
   html {
     @apply font-sans;
     }
+}
+
+/* Square ink scrollbar. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--foreground);
+  border-radius: 0;
+}
+
+@layer components {
+  /* Flat cream shell + ink dot-grid (replaces the old gradient + blobs). */
+  .shell {
+    background-color: var(--shell-bg);
+    background-image: radial-gradient(var(--shell-dot) 1.4px, transparent 1.4px);
+    background-size: 22px 22px;
+  }
+  /* Neobrutalist surface: thick ink border + hard offset shadow. */
+  .nb {
+    border: var(--nb-bw) solid var(--nb-ink);
+    box-shadow: 3px 3px 0 var(--nb-ink);
+    border-radius: 0.75rem; /* 12px student card radius */
+  }
+  /* Press physics: hover lifts out of the shadow, active sinks into it. */
+  .nb-press {
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .nb-press:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--nb-ink);
+  }
+  .nb-press:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
 }

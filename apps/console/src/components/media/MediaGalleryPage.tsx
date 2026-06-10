@@ -229,7 +229,7 @@ export function MediaGalleryPage() {
 
       {/* Bulk action bar — floats above the chat FAB */}
       {selectionMode && (
-        <div className="fixed bottom-20 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 shadow-lg shadow-ink/10">
+        <div className="fixed bottom-20 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border-[2.5px] border-[var(--nb-ink)] bg-surface px-4 py-2 shadow-[3px_3px_0_var(--nb-ink)]">
           <span className="text-sm font-medium text-ink">{selected.size} dipilih</span>
           <span className="text-line">·</span>
           <button

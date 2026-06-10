@@ -80,10 +80,10 @@ export function EmojiPickerButton({ onSelect, disabled }: EmojiPickerButtonProps
       </Button>
 
       {open && (
-        <div className="absolute bottom-12 right-0 z-50 shadow-xl rounded-lg overflow-hidden">
+        <div className="absolute bottom-12 right-0 z-50 rounded-lg overflow-hidden border-2 border-[var(--nb-ink)] shadow-[3px_3px_0_var(--nb-ink)]">
           <Suspense
             fallback={
-              <div className="grid h-72 w-72 place-items-center bg-white text-sm text-neutral-500">
+              <div className="grid h-72 w-72 place-items-center bg-white text-sm text-muted-foreground">
                 Memuat emoji…
               </div>
             }

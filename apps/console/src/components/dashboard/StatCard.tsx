@@ -14,9 +14,9 @@ const accentClass: Record<NonNullable<StatCardProps["accent"]>, string> = {
 
 export function StatCard({ label, value, sub, accent = "default" }: StatCardProps) {
   return (
-    <div className="rounded-xl border border-line bg-surface p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-faint">{label}</p>
-      <p className={`mt-2 text-3xl font-semibold tabular-nums ${accentClass[accent]}`}>
+    <div className="rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface p-5 shadow-[3px_3px_0_var(--nb-ink)]">
+      <p className="text-xs font-bold uppercase tracking-wider text-ink-soft">{label}</p>
+      <p className={`tabular mt-2 text-3xl font-extrabold tracking-tight ${accentClass[accent]}`}>
         {value}
       </p>
       {sub && <p className="mt-1 text-sm text-faint">{sub}</p>}

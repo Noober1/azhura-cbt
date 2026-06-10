@@ -233,7 +233,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
             className={`flex cursor-pointer flex-col items-center gap-3 rounded-[var(--radius-card)] border-2 border-dashed px-6 py-10 text-center transition-colors ${
               dragOver
                 ? "border-accent bg-accent/5"
-                : "border-line hover:border-faint hover:bg-canvas/60"
+                : "border-line hover:border-faint hover:bg-canvas"
             }`}
           >
             <span className="grid size-12 place-items-center rounded-full bg-canvas">

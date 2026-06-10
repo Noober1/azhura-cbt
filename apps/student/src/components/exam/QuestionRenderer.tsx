@@ -42,19 +42,19 @@ function MultipleChoiceQuestion({ question, questionNumber }: QuestionRendererPr
   };
 
   return (
-    <div className="flex-1 flex flex-col gap-6 p-6 rounded-2xl border border-neutral-200/60 bg-white dark:border-neutral-800/60 dark:bg-neutral-900 shadow-sm">
-      <div className="flex items-center justify-between pb-4 border-b border-neutral-100 dark:border-neutral-800">
-        <span className="text-sm font-semibold uppercase tracking-wider text-primary bg-primary/5 px-3 py-1 rounded-full">
+    <div className="flex-1 flex flex-col gap-6 p-6 rounded-2xl border-[2.5px] border-[var(--nb-ink)] bg-white shadow-[3px_3px_0_var(--nb-ink)]">
+      <div className="flex items-center justify-between pb-4 border-b-2 border-soft">
+        <span className="text-sm font-bold uppercase tracking-wider text-foreground border-2 border-[var(--nb-ink)] bg-secondary px-3 py-1 rounded-full">
           Soal Pilihan Ganda
         </span>
-        <span className="text-sm font-bold text-neutral-500 dark:text-neutral-400">
+        <span className="tabular text-sm font-bold text-muted-foreground">
           Nomor {questionNumber} dari {useExamStore.getState().questions.length}
         </span>
       </div>
 
       <RichContent
         html={question.text}
-        className="question-html text-lg font-medium text-neutral-900 dark:text-neutral-100 leading-relaxed"
+        className="question-html text-lg font-medium text-foreground leading-relaxed"
       />
 
       <RadioGroup
@@ -70,10 +70,10 @@ function MultipleChoiceQuestion({ question, questionNumber }: QuestionRendererPr
             <div
               key={option.id}
               onClick={() => handleSelectOption(option.id)}
-              className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
+              className={`flex items-center gap-4 p-4 rounded-xl border-2 border-[var(--nb-ink)] cursor-pointer transition-all duration-150 ${
                 isSelected
-                  ? "bg-primary/5 border-primary shadow-sm"
-                  : "bg-neutral-50/50 border-neutral-100 hover:bg-neutral-50 hover:border-neutral-200 dark:bg-neutral-800/40 dark:border-neutral-800 dark:hover:bg-neutral-800/80 dark:hover:border-neutral-700"
+                  ? "bg-indigo/15 shadow-[3px_3px_0_var(--nb-ink)] -translate-x-px -translate-y-px"
+                  : "bg-white hover:bg-muted/50"
               }`}
             >
               <RadioGroupItem
@@ -84,13 +84,13 @@ function MultipleChoiceQuestion({ question, questionNumber }: QuestionRendererPr
               <Label
                 htmlFor={option.id}
                 onClick={(e) => e.stopPropagation()}
-                className="flex-1 flex gap-3 text-base font-medium cursor-pointer leading-normal text-neutral-800 dark:text-neutral-200"
+                className="flex-1 flex gap-3 text-base font-medium cursor-pointer leading-normal text-foreground"
               >
                 <span
-                  className={`flex items-center justify-center w-7 h-7 rounded-lg text-sm font-bold border transition-colors ${
+                  className={`flex items-center justify-center w-7 h-7 rounded-lg text-sm font-bold border-2 border-[var(--nb-ink)] transition-colors ${
                     isSelected
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-white text-neutral-500 border-neutral-200 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-white text-foreground"
                   }`}
                 >
                   {optionLetter}

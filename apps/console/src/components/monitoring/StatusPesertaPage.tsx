@@ -50,9 +50,19 @@ const CONNECTION_LABEL: Record<RosterConnection, string> = {
 function ConnectionBadge({ connection }: { connection: RosterConnection }) {
   const tone =
     connection === "connected" ? "positive" : connection === "pending" ? "warn" : "danger";
+  // Bordered state dot inside the pill; online keeps its subtle pulse.
+  const dot =
+    connection === "connected"
+      ? "bg-positive animate-pulse"
+      : connection === "pending"
+        ? "bg-warn"
+        : "bg-danger";
   return (
     <Badge tone={tone}>
-      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+      <span
+        className={`size-2 rounded-full border border-[var(--nb-ink)] ${dot}`}
+        aria-hidden="true"
+      />
       {CONNECTION_LABEL[connection]}
     </Badge>
   );
@@ -72,7 +82,7 @@ function RemainingTime({
   const urgent = !isPaused && ms > 0 && ms <= 5 * 60 * 1000;
   const expired = ms <= 0;
   return (
-    <span className={`tabular font-medium ${expired ? "text-faint" : urgent ? "text-danger" : "text-ink"}`}>
+    <span className={`tabular font-bold ${expired ? "text-faint" : urgent ? "animate-pulse text-danger" : "text-ink"}`}>
       {expired ? "Habis" : isPaused ? `⏸ ${formatRemaining(ms)}` : formatRemaining(ms)}
     </span>
   );
@@ -97,8 +107,8 @@ function SectionHeader({ title, count, action }: { title: string; count: number;
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold text-ink">{title}</h2>
-        <span className="tabular rounded-full bg-canvas px-2 py-0.5 text-xs font-medium text-faint">{count}</span>
+        <h2 className="text-sm font-extrabold text-ink">{title}</h2>
+        <span className="tabular rounded-full border-2 border-[var(--nb-ink)] bg-highlight px-2 py-0.5 text-xs font-bold text-ink">{count}</span>
       </div>
       {action}
     </div>
@@ -231,14 +241,14 @@ export function StatusPesertaPage() {
       </div>
 
       {loading ? (
-        <div className="mt-6 overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+        <div className="mt-6 overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
           <CenterState>
             <Spinner className="size-6 text-accent" />
             <span>Memuat daftar peserta…</span>
           </CenterState>
         </div>
       ) : error ? (
-        <div className="mt-6 overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+        <div className="mt-6 overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
           <CenterState>
             <span className="text-danger">{error}</span>
             <Button variant="secondary" size="sm" onClick={reload}>
@@ -247,7 +257,7 @@ export function StatusPesertaPage() {
           </CenterState>
         </div>
       ) : participants.length === 0 ? (
-        <div className="mt-6 overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+        <div className="mt-6 overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
           <CenterState>
             <span className="grid size-12 place-items-center rounded-full bg-canvas text-faint">
               <ActivityIcon className="size-6" />
@@ -259,7 +269,7 @@ export function StatusPesertaPage() {
         <div className="mt-6 space-y-5">
           {/* Dashboard (idle) section */}
           {dashboard.length > 0 && (
-            <section className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+            <section className="overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
               <SectionHeader
                 title="Dashboard"
                 count={dashboard.length}
@@ -276,17 +286,17 @@ export function StatusPesertaPage() {
               />
               <table className="w-full border-t border-line text-sm">
                 <thead>
-                  <tr className="border-b border-line text-left text-xs font-medium uppercase tracking-wide text-faint">
-                    <th className="px-4 py-2.5 font-medium">Nama</th>
-                    <th className="px-4 py-2.5 font-medium">NIS</th>
-                    <th className="hidden px-4 py-2.5 font-medium md:table-cell">Group</th>
-                    <th className="px-4 py-2.5 font-medium">Koneksi</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Aksi</th>
+                  <tr className="border-b-[2.5px] border-[var(--nb-ink)] bg-highlight text-left text-xs font-extrabold uppercase tracking-wider text-ink">
+                    <th className="px-4 py-2.5">Nama</th>
+                    <th className="px-4 py-2.5">NIS</th>
+                    <th className="hidden px-4 py-2.5 md:table-cell">Group</th>
+                    <th className="px-4 py-2.5">Koneksi</th>
+                    <th className="px-4 py-2.5 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {dashboard.map((p) => (
-                    <tr key={p.userId} className="border-b border-line/70 transition-colors last:border-0 hover:bg-canvas/60">
+                    <tr key={p.userId} className="border-b-[1.5px] border-line-soft transition-colors last:border-0 hover:bg-canvas">
                       <IdentityCells p={p} />
                       <td className="px-4 py-3 text-right">
                         <Button
@@ -308,22 +318,22 @@ export function StatusPesertaPage() {
 
           {/* One section per exam */}
           {examSections.map(([title, rows]) => (
-            <section key={title} className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+            <section key={title} className="overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
               <SectionHeader title={title} count={rows.length} />
               <table className="w-full border-t border-line text-sm">
                 <thead>
-                  <tr className="border-b border-line text-left text-xs font-medium uppercase tracking-wide text-faint">
-                    <th className="px-4 py-2.5 font-medium">Nama</th>
-                    <th className="px-4 py-2.5 font-medium">NIS</th>
-                    <th className="hidden px-4 py-2.5 font-medium md:table-cell">Group</th>
-                    <th className="px-4 py-2.5 font-medium">Koneksi</th>
-                    <th className="px-4 py-2.5 font-medium">Sisa waktu</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Aksi</th>
+                  <tr className="border-b-[2.5px] border-[var(--nb-ink)] bg-highlight text-left text-xs font-extrabold uppercase tracking-wider text-ink">
+                    <th className="px-4 py-2.5">Nama</th>
+                    <th className="px-4 py-2.5">NIS</th>
+                    <th className="hidden px-4 py-2.5 md:table-cell">Group</th>
+                    <th className="px-4 py-2.5">Koneksi</th>
+                    <th className="px-4 py-2.5">Sisa waktu</th>
+                    <th className="px-4 py-2.5 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((p) => (
-                    <tr key={p.userId} className="border-b border-line/70 transition-colors last:border-0 hover:bg-canvas/60">
+                    <tr key={p.userId} className="border-b-[1.5px] border-line-soft transition-colors last:border-0 hover:bg-canvas">
                       <IdentityCells p={p} />
                       <td className="px-4 py-3">
                         {p.exam && (

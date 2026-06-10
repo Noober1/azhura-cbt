@@ -124,10 +124,10 @@ export function DashboardPage() {
 
       {/* Row 3: exam score chart */}
       <section>
-        <h2 className="mb-3 text-sm font-medium text-faint">
+        <h2 className="mb-3 text-sm font-extrabold uppercase tracking-wider text-ink">
           Nilai per Ujian — Min / Median / Max
         </h2>
-        <div className="rounded-xl border border-line bg-surface p-5">
+        <div className="rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface p-5 shadow-[3px_3px_0_var(--nb-ink)]">
           {chartRows.length === 0 ? (
             <p className="py-10 text-center text-sm text-faint">
               Belum ada data ujian yang selesai.
@@ -140,36 +140,39 @@ export function DashboardPage() {
                 barCategoryGap="30%"
                 barGap={3}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-line, #e5e7eb)" />
+                <CartesianGrid strokeDasharray="4 4" stroke="var(--color-line-soft, #e7dec9)" />
                 <XAxis
                   dataKey="name"
-                  tick={{ fontSize: 12, fill: "var(--color-faint, #6b7280)" }}
+                  tick={{ fontSize: 12, fontWeight: 700, fill: "var(--color-ink-soft, #4a463e)" }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   domain={[0, 100]}
-                  tick={{ fontSize: 12, fill: "var(--color-faint, #6b7280)" }}
+                  tick={{ fontSize: 12, fontWeight: 700, fill: "var(--color-ink-soft, #4a463e)" }}
                   axisLine={false}
                   tickLine={false}
                   width={32}
                 />
                 <Tooltip
                   contentStyle={{
-                    borderRadius: "var(--radius-card, 8px)",
-                    border: "1px solid var(--color-line, #e5e7eb)",
+                    borderRadius: "var(--radius-card, 9px)",
+                    border: "2.5px solid var(--nb-ink, #15130f)",
+                    boxShadow: "3px 3px 0 var(--nb-ink, #15130f)",
                     fontSize: 13,
+                    fontWeight: 600,
                   }}
                   formatter={(value) => [`${value ?? ""}`, ""]}
                 />
                 <Legend
-                  iconType="circle"
-                  iconSize={8}
-                  wrapperStyle={{ fontSize: 12 }}
+                  iconType="square"
+                  iconSize={10}
+                  wrapperStyle={{ fontSize: 12, fontWeight: 700 }}
                 />
-                <Bar dataKey="Min"    fill="var(--color-danger, #ef4444)"  radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Median" fill="var(--color-accent, #6366f1)"  radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Max"    fill="var(--color-positive, #22c55e)" radius={[4, 4, 0, 0]} />
+                {/* 2px ink stroke on every bar — neobrutalist chart treatment. */}
+                <Bar dataKey="Min"    fill="var(--color-danger, #ff5a4d)"   stroke="var(--nb-ink, #15130f)" strokeWidth={2} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Median" fill="var(--color-accent, #5b4bf5)"   stroke="var(--nb-ink, #15130f)" strokeWidth={2} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Max"    fill="var(--color-positive, #16a35a)" stroke="var(--nb-ink, #15130f)" strokeWidth={2} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
