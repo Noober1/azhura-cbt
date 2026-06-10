@@ -3,8 +3,10 @@
 // Installs a `SetWindowsHookEx(WH_KEYBOARD_LL)` hook that swallows forbidden
 // system key combos (Alt+Tab, Alt+Esc, Win, Ctrl+Esc, PrintScreen) before the
 // OS acts on them — true prevention, unlike the L2 refocus mitigation. The hook
-// is active only while an exam runs: the frontend calls `enable_kbd_lock` /
-// `disable_kbd_lock` (see `src/lib/kbd-lock.ts`); each swallowed keydown is
+// is app-wide like the L2 kiosk: the frontend (App.tsx) calls `enable_kbd_lock`
+// while anti-cheat + `blockOsKeyboard` are on and `disable_kbd_lock` only when
+// that toggle is switched off (see `src/lib/kbd-lock.ts`); each swallowed
+// keydown is
 // emitted to the frontend as `kbd-lock-blocked` for the anti-cheat audit sink.
 //
 // Known limitation (by design of Windows, NOT a bug): Ctrl+Alt+Del is the

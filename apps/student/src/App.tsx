@@ -6,6 +6,11 @@ import { PassphraseDialog } from "./components/settings/PassphraseDialog";
 import { SettingsPanel } from "./components/settings/SettingsPanel";
 import { useConfigStore } from "./stores/config";
 import { enterKiosk, exitKiosk, listenKioskEvents } from "./lib/kiosk";
+import {
+  enableKbdLock,
+  disableKbdLock,
+  listenKbdLockEvents,
+} from "./lib/kbd-lock";
 import { startInputHardening } from "./lib/anti-cheat-config";
 import { isResolutionSufficient } from "./lib/screen";
 import { ResolutionGuard } from "./components/setup/ResolutionGuard";
@@ -47,6 +52,7 @@ function App() {
   // close the app between sessions. The only way out is the hidden panel's
   // "Keluar dari aplikasi" (which uses destroy() to bypass the close guard).
   const antiCheatEnabled = useConfigStore((s) => s.antiCheat.enabled);
+  const blockOsKeyboard = useConfigStore((s) => s.antiCheat.blockOsKeyboard);
 
   useEffect(() => {
     // Don't lock into kiosk while the resolution guard is blocking the app —
@@ -68,6 +74,52 @@ function App() {
       stopHardening();
     };
   }, [antiCheatEnabled, screenOk]);
+
+  // L3 lockdown (#27) is app-wide too, mirroring the L2 kiosk above: the OS
+  // keyboard hook stays installed across login/dashboard/exam/result so
+  // Alt+Tab/Win don't come back the moment the student submits. It is only
+  // released when the toggle is switched off in the hidden settings panel or
+  // on app exit (RunEvent::Exit in src-tauri handles the latter). Like the
+  // kiosk, it stays off while the resolution guard is blocking the app, so the
+  // student can still reach OS display settings. Setup is sequenced
+  // (subscribe → enable) so no blocked combo is missed, and a cancellation
+  // flag keeps cleanup correct when it fires mid-setup (StrictMode
+  // double-invoke, config change in flight).
+  useEffect(() => {
+    // While the resolution guard blocks the app the hook was never installed,
+    // so just bail (mirrors the kiosk effect) — no teardown call needed.
+    if (!screenOk) return;
+    if (!antiCheatEnabled || !blockOsKeyboard) {
+      void disableKbdLock();
+      return;
+    }
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    const setup = async () => {
+      const off = await listenKbdLockEvents();
+      if (cancelled) {
+        off();
+        return;
+      }
+      unlisten = off;
+
+      await enableKbdLock();
+      if (cancelled) {
+        // Cleanup ran while enable was in flight — undo it.
+        void disableKbdLock();
+      }
+    };
+    void setup();
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      // No disableKbdLock() here: the hook must survive route changes. The
+      // disable paths are the guard branch above (toggle off) and app exit.
+    };
+  }, [antiCheatEnabled, blockOsKeyboard, screenOk]);
 
   useEffect(() => {
     if (!isTauri()) return;

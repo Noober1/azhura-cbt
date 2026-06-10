@@ -9,11 +9,6 @@ import {
   enterFullscreen,
   detectMultiMonitor,
 } from "../../lib/anti-cheat-config";
-import {
-  enableKbdLock,
-  disableKbdLock,
-  listenKbdLockEvents,
-} from "../../lib/kbd-lock";
 import { QuestionRenderer } from "./QuestionRenderer";
 import { ExamSidebar } from "./ExamSidebar";
 import { NavigationPanel } from "./NavigationPanel";
@@ -93,8 +88,9 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
   }, [token, setQuestions]);
 
   // 2. Anti-Cheat L1 (web/DOM) monitoring, scoped to the exam screen to avoid
-  //    false positives at login/dashboard. The L2 Tauri kiosk window is managed
-  //    app-wide (see App.tsx) so the window stays locked from launch.
+  //    false positives at login/dashboard. The L2 Tauri kiosk window and the
+  //    L3 OS keyboard hook are managed app-wide (see App.tsx) so the lockdown
+  //    holds from launch until app exit, not just during the exam.
   useEffect(() => {
     // Exam-scoped detection (focus loss + fullscreen). Input prevention
     // (right-click/shortcuts/clipboard) is app-wide in App.tsx.
@@ -107,41 +103,6 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
 
     return () => cleanMonitoring();
   }, [config.enabled, config.fullscreen, config.detectMultiMonitor]);
-
-  // 2b. Anti-Cheat L3 (#27) — OS low-level keyboard hook, exam-scoped (unlike
-  //     the app-wide L2 kiosk): installed when the exam mounts, released on
-  //     unmount (submit/result). Windows desktop only; no-op elsewhere.
-  //     Setup is sequenced (subscribe → enable) so no blocked combo is missed,
-  //     and a cancellation flag keeps cleanup correct even when it fires while
-  //     setup is still in flight (StrictMode double-invoke, fast unmount).
-  useEffect(() => {
-    if (!config.enabled || !config.blockOsKeyboard) return;
-
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-
-    const setup = async () => {
-      const off = await listenKbdLockEvents();
-      if (cancelled) {
-        off();
-        return;
-      }
-      unlisten = off;
-
-      await enableKbdLock();
-      if (cancelled) {
-        // Cleanup ran while enable was in flight — undo it.
-        void disableKbdLock();
-      }
-    };
-    void setup();
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-      void disableKbdLock();
-    };
-  }, [config.enabled, config.blockOsKeyboard]);
 
   // 3. Confirm Final Submit — hand off to finalizeExam, which shows the blocking
   // Processing overlay and retries until the server accepts (idempotent). The

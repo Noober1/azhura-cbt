@@ -7,8 +7,10 @@
  * PrintScreen before the OS acts on them. This module just invokes those Rust
  * commands and forwards each blocked attempt into the `anti-cheat` audit sink.
  *
- * Unlike the app-wide L2 kiosk (`kiosk.ts`), the keyboard lock is exam-scoped:
- * ExamLayout enables it when the exam mounts and disables it on unmount.
+ * Like the L2 kiosk (`kiosk.ts`), the keyboard lock is app-wide: App.tsx
+ * enables it whenever anti-cheat + `blockOsKeyboard` are on, and it stays
+ * active until the toggle is switched off in the hidden settings panel or
+ * the app exits (`RunEvent::Exit` releases the hook on the Rust side).
  *
  * The hook is Windows-only — on macOS/Linux desktop the Rust commands are
  * no-ops, and in web mode (non-Tauri) every function here is a no-op, so the
