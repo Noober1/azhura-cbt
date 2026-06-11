@@ -17,7 +17,7 @@ const getInitials = (name?: string): string => {
 /** Left-column card summarizing the signed-in participant's identity. */
 export const ParticipantCard = ({ user }: ParticipantCardProps) => {
   return (
-    <Card className="">
+    <Card data-tour="participant-card">
       <CardHeader className="items-center text-center pb-2">
         <div className="flex justify-center mb-3">
           <div className="size-20 rounded-full bg-indigo text-white flex items-center justify-center text-2xl font-extrabold border-[2.5px] border-[var(--nb-ink)] shadow-[3px_3px_0_var(--nb-ink)]">

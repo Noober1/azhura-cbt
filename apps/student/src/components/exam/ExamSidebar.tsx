@@ -52,7 +52,7 @@ export const ExamSidebar = () => {
       </div>
 
       {/* Grid of Question Numbers */}
-      <div className="flex-1">
+      <div className="flex-1" data-tour="exam-nav-grid">
         <span className="block text-sm font-semibold text-muted-foreground mb-3">
           Navigasi Nomor Soal
         </span>

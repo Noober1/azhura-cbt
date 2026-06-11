@@ -21,6 +21,9 @@ const log = createLogger("Storage");
 /** localStorage key holding the web-fallback answers map. */
 const LOCAL_KEY = "cbt_offline_answers";
 
+/** localStorage key prefix for the web-fallback key/value flag store. */
+const FLAG_LOCAL_PREFIX = "cbt_flag:";
+
 /** Map of questionId -> answer, used for the localStorage fallback shape. */
 type AnswerMap = Record<string, ExamAnswer>;
 
@@ -65,7 +68,16 @@ const getDatabase = async (): Promise<TauriDatabase | null> => {
         isFlagged INTEGER
       )
     `);
-    log.info("SQLite database initialized and table prepared.");
+    // Generic key/value store for small persisted flags (e.g. "tour seen").
+    // Kept in the same offline DB so a single handle serves both purposes; the
+    // web build falls back to localStorage (see {@link getFlag}/{@link setFlag}).
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS flags (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      )
+    `);
+    log.info("SQLite database initialized and tables prepared.");
     return db;
   } catch (error) {
     log.error("Failed to initialize SQLite database", error);
@@ -189,5 +201,65 @@ export const clearLocalDbAnswers = async (): Promise<void> => {
     } catch (error) {
       log.error("Failed to clear localStorage answers", error);
     }
+  }
+};
+
+// --- Generic flag store (small persisted booleans/strings) ------------------
+//
+// A tiny key/value layer reusing the same hybrid SQLite (native) / localStorage
+// (web) strategy as the answer store above. Used for the product-tour "seen"
+// flag (#145) so the onboarding tour auto-runs only once. Intentionally narrow:
+// values are short strings, never large blobs.
+
+/** Reads a persisted flag value (SQLite, or localStorage fallback). */
+export const getFlag = async (key: string): Promise<string | null> => {
+  const database = await getDatabase();
+
+  if (database) {
+    try {
+      const rows = await database.select<Array<{ value: string }>>(
+        "SELECT value FROM flags WHERE key = $1",
+        [key]
+      );
+      return rows.length > 0 ? rows[0].value : null;
+    } catch (error) {
+      log.error("SQLite flag read failed, falling back to localStorage", error, { key });
+    }
+  }
+
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(FLAG_LOCAL_PREFIX + key);
+  } catch (error) {
+    log.error("Failed to read flag from localStorage", error, { key });
+    return null;
+  }
+};
+
+/**
+ * Persists a flag value (SQLite, or localStorage fallback). Never throws:
+ * failures are logged and routed to the fallback. A failed write is non-fatal —
+ * worst case a once-only tour shows again on the next visit.
+ */
+export const setFlag = async (key: string, value: string): Promise<void> => {
+  const database = await getDatabase();
+
+  if (database) {
+    try {
+      await database.execute(
+        "INSERT OR REPLACE INTO flags (key, value) VALUES ($1, $2)",
+        [key, value]
+      );
+      return;
+    } catch (error) {
+      log.error("SQLite flag write failed, falling back to localStorage", error, { key });
+    }
+  }
+
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(FLAG_LOCAL_PREFIX + key, value);
+  } catch (error) {
+    log.error("Failed to write flag to localStorage", error, { key });
   }
 };

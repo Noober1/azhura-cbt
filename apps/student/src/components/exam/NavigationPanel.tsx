@@ -45,6 +45,7 @@ export const NavigationPanel = ({ onSubmitClick }: NavigationPanelProps) => {
         variant="outline"
         onClick={handlePrev}
         disabled={isFirst}
+        data-tour="exam-prevnext"
         className="flex items-center gap-2 font-semibold px-5 py-2.5 rounded-xl transition-all"
       >
         <svg
@@ -65,6 +66,7 @@ export const NavigationPanel = ({ onSubmitClick }: NavigationPanelProps) => {
       <Button
         variant="outline"
         onClick={handleFlag}
+        data-tour="exam-flag"
         className={`flex items-center gap-2 px-5 py-2.5 rounded-xl ${
           isCurrentlyFlagged ? "bg-amber text-foreground hover:bg-amber" : "hover:bg-amber/20"
         }`}
@@ -91,6 +93,7 @@ export const NavigationPanel = ({ onSubmitClick }: NavigationPanelProps) => {
         <Button
           variant="emerald"
           onClick={onSubmitClick}
+          data-tour="exam-submit"
           className="flex items-center gap-2 px-6 py-2.5 rounded-xl"
         >
           <span>Kumpulkan Ujian</span>

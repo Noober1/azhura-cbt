@@ -9,6 +9,9 @@ import {
   enterFullscreen,
   detectMultiMonitor,
 } from "../../lib/anti-cheat-config";
+import { isEnforcementActive, runExamTourIfSafe } from "../../lib/tour";
+import { Button } from "../ui/button";
+import { HelpCircle } from "lucide-react";
 import { QuestionRenderer } from "./QuestionRenderer";
 import { ExamSidebar } from "./ExamSidebar";
 import { NavigationPanel } from "./NavigationPanel";
@@ -49,6 +52,9 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
   const { isOnline } = useConnectivityStore();
   const { isConnected } = useSocketStore();
   const config = useConfigStore((s) => s.antiCheat);
+  // When lockdown enforcement is active, the in-exam help button is hidden so a
+  // tour overlay can never appear over a fullscreen/focus-monitored exam (#145).
+  const enforcementActive = isEnforcementActive(config);
 
   const [isLoading, setIsLoading] = useState(true);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -165,6 +171,25 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
 
           {/* Right Status Widgets */}
           <div className="flex items-center gap-3">
+            {/* Exam-session help (#145) — SAFE-CONTEXT ONLY. Hidden whenever
+                anti-cheat enforcement is active (fullscreen / focus-loss /
+                OS keyboard lock), so a tour overlay never appears during a
+                locked-down exam. When shown, the driver.js overlay stays inside
+                the window and never moves focus out. The full panduan is also
+                available before the exam from the start-exam dialog. */}
+            {!enforcementActive && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => runExamTourIfSafe(config)}
+                aria-label="Lihat panduan cara mengerjakan ujian"
+                className="font-semibold rounded-lg"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Lihat panduan</span>
+              </Button>
+            )}
+
             {/* Connection Indicator */}
             <div
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
@@ -190,7 +215,9 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
             </div>
 
             {/* Timer Countdown widget */}
-            <TimerDisplay />
+            <div data-tour="exam-timer">
+              <TimerDisplay />
+            </div>
           </div>
 
         </div>
@@ -205,10 +232,12 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
         {/* Right Side: Primary Active Question Panel */}
         <div className="flex-1 flex flex-col gap-6">
           {activeQuestion ? (
-            <QuestionRenderer
-              question={activeQuestion}
-              questionNumber={currentQuestionIndex + 1}
-            />
+            <div data-tour="exam-question">
+              <QuestionRenderer
+                question={activeQuestion}
+                questionNumber={currentQuestionIndex + 1}
+              />
+            </div>
           ) : (
             <div className="flex-1 border rounded-2xl flex items-center justify-center text-muted-foreground bg-white border-soft">
               Tidak ada soal aktif.
