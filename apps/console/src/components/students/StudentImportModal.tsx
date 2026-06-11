@@ -129,7 +129,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
   return (
     <Modal
       open={open}
-      title="Import Siswa dari Spreadsheet"
+      title="Import Siswa dari file"
       description="Upload file .xlsx atau .csv dengan kolom: nis, nama, grup (kode grup), batch (opsional, 1–10, default 1)"
       onClose={handleClose}
       size="lg"

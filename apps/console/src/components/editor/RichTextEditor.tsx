@@ -33,6 +33,7 @@ import {
   RedoIcon,
   ImagePlusIcon,
 } from "../ui/icons";
+import { Tooltip } from "../ui/Tooltip";
 import { resolveMediaUrl } from "../../lib/format";
 
 type ListFn = (
@@ -55,25 +56,33 @@ interface ToolbarButtonProps {
   onClick: () => void;
   active?: boolean;
   disabled?: boolean;
-  title: string;
+  /** Tooltip text + accessible name for this icon-only control. */
+  label: string;
   children: React.ReactNode;
 }
 
-function ToolbarButton({ onClick, active, disabled, title, children }: ToolbarButtonProps) {
+/**
+ * Icon-only toolbar control. Wraps the button in a {@link Tooltip} (visible on
+ * hover and keyboard focus) and mirrors the same text into `aria-label` so the
+ * control is announced to screen readers.
+ */
+function ToolbarButton({ onClick, active, disabled, label, children }: ToolbarButtonProps) {
   return (
-    <button
-      type="button"
-      onMouseDown={(e) => { e.preventDefault(); onClick(); }}
-      disabled={disabled}
-      title={title}
-      className={`focus-ring inline-flex size-7 items-center justify-center rounded transition-colors disabled:opacity-40 ${
-        active
-          ? "bg-accent/15 text-accent"
-          : "text-ink-soft hover:bg-canvas hover:text-ink"
-      }`}
-    >
-      {children}
-    </button>
+    <Tooltip label={label}>
+      <button
+        type="button"
+        onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+        disabled={disabled}
+        aria-label={label}
+        className={`focus-ring inline-flex size-7 items-center justify-center rounded transition-colors disabled:opacity-40 ${
+          active
+            ? "bg-accent/15 text-accent"
+            : "text-ink-soft hover:bg-canvas hover:text-ink"
+        }`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -148,7 +157,7 @@ export function RichTextEditor({
           onClick={() => editor?.chain().focus().toggleBold().run()}
           active={editor?.isActive("bold")}
           disabled={disabled}
-          title="Bold"
+          label="Tebal"
         >
           <BoldIcon className="size-3.5" />
         </ToolbarButton>
@@ -156,7 +165,7 @@ export function RichTextEditor({
           onClick={() => editor?.chain().focus().toggleItalic().run()}
           active={editor?.isActive("italic")}
           disabled={disabled}
-          title="Italic"
+          label="Miring"
         >
           <ItalicIcon className="size-3.5" />
         </ToolbarButton>
@@ -164,7 +173,7 @@ export function RichTextEditor({
           onClick={() => editor?.chain().focus().toggleUnderline().run()}
           active={editor?.isActive("underline")}
           disabled={disabled}
-          title="Underline"
+          label="Garis bawah"
         >
           <UnderlineIcon className="size-3.5" />
         </ToolbarButton>
@@ -172,7 +181,7 @@ export function RichTextEditor({
           onClick={() => editor?.chain().focus().toggleStrike().run()}
           active={editor?.isActive("strike")}
           disabled={disabled}
-          title="Strikethrough"
+          label="Coret"
         >
           <StrikethroughIcon className="size-3.5" />
         </ToolbarButton>
@@ -185,7 +194,7 @@ export function RichTextEditor({
             onClick={() => editor?.chain().focus().toggleHeading({ level }).run()}
             active={editor?.isActive("heading", { level })}
             disabled={disabled}
-            title={`Heading ${level}`}
+            label={`Judul ${level}`}
           >
             <span className="text-[0.625rem] font-bold">H{level}</span>
           </ToolbarButton>
@@ -197,7 +206,7 @@ export function RichTextEditor({
           onClick={() => editor?.chain().focus().toggleBulletList().run()}
           active={editor?.isActive("bulletList")}
           disabled={disabled}
-          title="Bullet list"
+          label="Daftar poin"
         >
           <ListIcon className="size-3.5" />
         </ToolbarButton>
@@ -205,7 +214,7 @@ export function RichTextEditor({
           onClick={() => editor?.chain().focus().toggleOrderedList().run()}
           active={editor?.isActive("orderedList")}
           disabled={disabled}
-          title="Ordered list"
+          label="Daftar bernomor"
         >
           <ListOrderedIcon className="size-3.5" />
         </ToolbarButton>
@@ -213,7 +222,7 @@ export function RichTextEditor({
           onClick={() => editor?.chain().focus().toggleBlockquote().run()}
           active={editor?.isActive("blockquote")}
           disabled={disabled}
-          title="Blockquote"
+          label="Kutipan"
         >
           <BlockquoteIcon className="size-3.5" />
         </ToolbarButton>
@@ -223,14 +232,14 @@ export function RichTextEditor({
         <ToolbarButton
           onClick={insertInlineMath}
           disabled={disabled}
-          title="Masukkan rumus inline ($…$)"
+          label="Rumus inline"
         >
           <span className="font-serif text-xs italic">∑</span>
         </ToolbarButton>
         <ToolbarButton
           onClick={insertBlockMath}
           disabled={disabled}
-          title="Masukkan rumus blok ($$…$$)"
+          label="Rumus blok"
         >
           <span className="font-serif text-[0.625rem] italic">∑∑</span>
         </ToolbarButton>
@@ -240,7 +249,7 @@ export function RichTextEditor({
         <ToolbarButton
           onClick={() => setPickerOpen(true)}
           disabled={disabled}
-          title="Sisipkan media"
+          label="Sisipkan media"
         >
           <ImagePlusIcon className="size-3.5" />
         </ToolbarButton>
@@ -249,14 +258,14 @@ export function RichTextEditor({
           <ToolbarButton
             onClick={() => editor?.chain().focus().undo().run()}
             disabled={disabled || !editor?.can().undo()}
-            title="Undo"
+            label="Urungkan"
           >
             <UndoIcon className="size-3.5" />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => editor?.chain().focus().redo().run()}
             disabled={disabled || !editor?.can().redo()}
-            title="Redo"
+            label="Ulangi"
           >
             <RedoIcon className="size-3.5" />
           </ToolbarButton>

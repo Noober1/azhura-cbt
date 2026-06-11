@@ -4,6 +4,7 @@
 
 import { useToastStore, type ToastTone } from "../../stores/toast";
 import { CheckIcon, AlertIcon, XIcon } from "./icons";
+import { Tooltip } from "./Tooltip";
 
 /* Yellow toast block (neobrutalist) — tone only swaps the leading icon colour. */
 const TONE_STYLES: Record<ToastTone, string> = {
@@ -30,13 +31,15 @@ export function Toaster() {
         >
           <ToneIcon tone={t.tone} />
           <span className="flex-1 font-medium leading-snug text-ink">{t.message}</span>
-          <button
-            onClick={() => dismiss(t.id)}
-            aria-label="Tutup notifikasi"
-            className="focus-ring -mr-1 rounded p-0.5 text-ink-soft hover:text-ink"
-          >
-            <XIcon className="size-3.5" />
-          </button>
+          <Tooltip label="Tutup notifikasi">
+            <button
+              onClick={() => dismiss(t.id)}
+              aria-label="Tutup notifikasi"
+              className="focus-ring -mr-1 rounded p-0.5 text-ink-soft hover:text-ink"
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          </Tooltip>
         </div>
       ))}
     </div>
