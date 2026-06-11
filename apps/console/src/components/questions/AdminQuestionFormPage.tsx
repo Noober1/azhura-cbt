@@ -17,6 +17,7 @@ import { RichTextEditor } from "../editor/RichTextEditor";
 import { InlineEditor } from "../editor/InlineEditor";
 import { Button } from "../ui/Button";
 import { Spinner } from "../ui/Spinner";
+import { Tooltip } from "../ui/Tooltip";
 import { ChevronLeftIcon, EyeIcon, PlusIcon, TrashIcon } from "../ui/icons";
 import { QuestionPreviewModal } from "../supervisor/QuestionPreviewModal";
 import { FillInBlankForm } from "./FillInBlankForm";
@@ -304,15 +305,17 @@ export function AdminQuestionFormPage() {
                   />
                 </div>
                 {options.length > MIN_OPTIONS && (
-                  <button
-                    type="button"
-                    onClick={() => removeOption(idx)}
-                    disabled={busy}
-                    aria-label={`Hapus opsi ${OPTION_LABELS[idx]}`}
-                    className="focus-ring mt-2.5 rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-40"
-                  >
-                    <TrashIcon className="size-4" />
-                  </button>
+                  <Tooltip label={`Hapus opsi ${OPTION_LABELS[idx]}`} className="mt-2.5 inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => removeOption(idx)}
+                      disabled={busy}
+                      aria-label={`Hapus opsi ${OPTION_LABELS[idx]}`}
+                      className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-40"
+                    >
+                      <TrashIcon className="size-4" />
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             ))}

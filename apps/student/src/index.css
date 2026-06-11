@@ -114,7 +114,9 @@
 
     /* Shell (replaces the old gradient): flat cream paper + dot grid. */
     --shell-bg: #faf2e4;
-    --shell-dot: #15130f;
+    /* Low-opacity ink so the dot grid reads as faint texture, not noise behind
+     * out-of-card text (#143). */
+    --shell-dot: rgba(21, 19, 15, 0.12);
 
     /* Neobrutalist structure — the one ink for ALL borders + outlines. */
     --nb-ink: #15130f;
@@ -187,7 +189,7 @@
   .shell {
     background-color: var(--shell-bg);
     background-image: radial-gradient(var(--shell-dot) 1.4px, transparent 1.4px);
-    background-size: 22px 22px;
+    background-size: 26px 26px;
   }
   /* Neobrutalist surface: thick ink border + hard offset shadow. */
   .nb {

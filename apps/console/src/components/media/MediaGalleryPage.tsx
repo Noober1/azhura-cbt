@@ -14,6 +14,7 @@ import { MediaCard } from "./MediaCard";
 import { MediaUploadZone } from "./MediaUploadZone";
 import { MediaPreviewModal } from "./MediaPreviewModal";
 import { Pagination } from "../ui/Pagination";
+import { Tooltip } from "../ui/Tooltip";
 import { UploadIcon, SearchIcon, ImageIcon, AudioIcon, VideoIcon, TrashIcon, XIcon } from "../ui/icons";
 
 type TabType = "all" | MediaType;
@@ -239,13 +240,15 @@ export function MediaGalleryPage() {
             Pilih semua halaman ini
           </button>
           <span className="text-line">·</span>
-          <button
-            onClick={clearSelection}
-            className="focus-ring rounded-md p-1 text-faint hover:text-ink"
-            aria-label="Batalkan pilihan"
-          >
-            <XIcon className="size-4" />
-          </button>
+          <Tooltip label="Batalkan pilihan">
+            <button
+              onClick={clearSelection}
+              className="focus-ring rounded-md p-1 text-faint hover:text-ink"
+              aria-label="Batalkan pilihan"
+            >
+              <XIcon className="size-4" />
+            </button>
+          </Tooltip>
           {isAdmin && (
           <button
             onClick={() => setConfirmBulkOpen(true)}

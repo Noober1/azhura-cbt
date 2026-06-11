@@ -14,14 +14,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { examsApi } from "../../lib/exams-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
-import { formatDateTime, formatDuration, isPast } from "../../lib/format";
 import type { AdminQuestion, ExamDetail, ExamSupervisorDetail } from "../../types";
 import type { QuestionType, FillInBlankConfig, MatchingConfig, SortingConfig } from "@azhura/shared";
 import { Button } from "../ui/Button";
-import { Badge } from "../ui/Badge";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { IconButton } from "../ui/IconButton";
 import { ExamFormModal } from "./ExamFormModal";
+import { ExamContextCard } from "./ExamContextCard";
 import { SupervisorAssignModal } from "./SupervisorAssignModal";
 import { QuestionContentRenderer } from "../supervisor/QuestionContentRenderer";
 import {
@@ -29,8 +29,6 @@ import {
   PencilIcon,
   TrashIcon,
   ChevronLeftIcon,
-  ClockIcon,
-  KeyIcon,
   CheckIcon,
   AlertIcon,
   UsersIcon,
@@ -165,71 +163,38 @@ export function ExamDetailPage() {
       </Button>
 
       {/* Exam header card */}
-      <section className="mt-3 rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)] p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              {exam.isActive ? (
-                <Badge tone="positive">Aktif</Badge>
-              ) : (
-                <Badge tone="neutral">Nonaktif</Badge>
-              )}
-              {isPast(exam.expiredAt) && <Badge tone="danger">Kedaluwarsa</Badge>}
-            </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
-              {exam.title}
-            </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-faint">
-              <span className="inline-flex items-center gap-1.5">
-                <ClockIcon className="size-4" />
-                {formatDuration(exam.durationMinutes)}
-              </span>
-              <span>Kedaluwarsa {formatDateTime(exam.expiredAt)}</span>
-              {exam.token && (
-                <span className="inline-flex items-center gap-1.5">
-                  <KeyIcon className="size-4" />
-                  <span className="tabular font-medium text-ink-soft">{exam.token}</span>
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => navigate(`/exams/${examId}/sessions`)}
-              leadingIcon={<UsersIcon className="size-4" />}
-            >
-              Status peserta
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => setExamFormOpen(true)}
-              leadingIcon={<PencilIcon className="size-4" />}
-            >
-              Edit ujian
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4 text-xs text-faint">
-          <span className="rounded-md bg-canvas px-2 py-1">
-            Acak soal: {exam.randomizeQuestion ? "Ya" : "Tidak"}
-          </span>
-          <span className="rounded-md bg-canvas px-2 py-1">
-            Acak jawaban: {exam.randomizeAnswer ? "Ya" : "Tidak"}
-          </span>
-          <span className="rounded-md bg-canvas px-2 py-1">
-            Group: {exam.allowedGroups.length > 0
-              ? exam.allowedGroups.map((g) => g.name).join(", ")
-              : "—"}
-          </span>
-          <span className="rounded-md bg-canvas px-2 py-1">
-            Batch: {exam.batches.length > 0
-              ? exam.batches.join(", ")
-              : "Semua batch"}
-          </span>
-        </div>
-      </section>
+      <div className="mt-3">
+        <ExamContextCard
+          title={exam.title}
+          durationMinutes={exam.durationMinutes}
+          isActive={exam.isActive}
+          expiredAt={exam.expiredAt}
+          token={exam.token}
+          showToken
+          randomizeQuestion={exam.randomizeQuestion}
+          randomizeAnswer={exam.randomizeAnswer}
+          batches={exam.batches}
+          allowedGroupNames={exam.allowedGroups.map((g) => g.name)}
+          actions={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => navigate(`/exams/${examId}/sessions`)}
+                leadingIcon={<UsersIcon className="size-4" />}
+              >
+                Status peserta
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setExamFormOpen(true)}
+                leadingIcon={<PencilIcon className="size-4" />}
+              >
+                Edit ujian
+              </Button>
+            </>
+          }
+        />
+      </div>
 
       {/* Supervisors */}
       <div className="mt-8 flex items-end justify-between">
@@ -334,32 +299,19 @@ export function ExamDetailPage() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <button
+                  <IconButton
+                    icon={<PencilIcon className="size-4" />}
+                    label={`Edit soal ${index + 1}`}
+                    disabled={isLocked}
                     onClick={isLocked ? undefined : () => navigate(`/exams/${examId}/questions/${q.id}/edit`)}
+                  />
+                  <IconButton
+                    icon={<TrashIcon className="size-4" />}
+                    label={`Hapus soal ${index + 1}`}
+                    variant="danger"
                     disabled={isLocked}
-                    aria-label={`Edit soal ${index + 1}`}
-                    aria-disabled={isLocked}
-                    className={`focus-ring rounded-md p-2 transition-colors ${
-                      isLocked
-                        ? "cursor-not-allowed text-faint/40"
-                        : "text-faint hover:bg-canvas hover:text-ink"
-                    }`}
-                  >
-                    <PencilIcon className="size-4" />
-                  </button>
-                  <button
                     onClick={isLocked ? undefined : () => setDeletingQuestion(q)}
-                    disabled={isLocked}
-                    aria-label={`Hapus soal ${index + 1}`}
-                    aria-disabled={isLocked}
-                    className={`focus-ring rounded-md p-2 transition-colors ${
-                      isLocked
-                        ? "cursor-not-allowed text-faint/40"
-                        : "text-faint hover:bg-danger-wash hover:text-danger"
-                    }`}
-                  >
-                    <TrashIcon className="size-4" />
-                  </button>
+                  />
                 </div>
               </div>
 
