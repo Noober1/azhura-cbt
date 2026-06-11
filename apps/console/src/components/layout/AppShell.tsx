@@ -9,12 +9,14 @@
 
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useState, type ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/Button";
 import { Tooltip } from "../ui/Tooltip";
 import { FileTextIcon, PenLineIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon, BarChartIcon, LayoutDashboardIcon, ImageIcon, HelpCircleIcon } from "../ui/icons";
 import { ChatLauncher } from "../chat/ChatLauncher";
 import { TutorialDialog } from "../help/TutorialDialog";
+import { pageTransition, pageVariants } from "../../lib/motion";
 import type { TourAnchor } from "../../lib/tour";
 
 interface NavItem {
@@ -48,6 +50,8 @@ export function AppShell() {
   const location = useLocation();
   const { user, role, logout } = useAuthStore();
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  // `useReducedMotion()` returns boolean | null; coerce so callees take a boolean.
+  const reduce = useReducedMotion() ?? false;
 
   const currentNavLabel =
     NAV.find((item) => location.pathname.startsWith(item.to))?.label ?? "Konsol";
@@ -173,7 +177,22 @@ export function AppShell() {
         </header>
 
         <main className="flex-1 px-5 py-6 lg:px-8 lg:py-8">
-          <Outlet />
+          {/* Route transition: each section fades + settles into place. Keyed by
+              pathname so AnimatePresence runs exit→enter on navigation; `mode="wait"`
+              lets the old page leave before the new one arrives. Reduced motion
+              collapses this to an instant opacity fade (no translate, 0 duration). */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={location.pathname}
+              variants={pageVariants(reduce)}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={pageTransition(reduce)}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
 

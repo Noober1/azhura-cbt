@@ -22,6 +22,7 @@
     "dompurify": "^3.0.0",
     "driver.js": "^1.4.0",
     "katex": "^0.16.0",
+    "motion": "^12.40.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.15.1",
