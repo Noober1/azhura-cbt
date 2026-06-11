@@ -8,10 +8,14 @@
  * - `GET    /admin/exams/:examId/supervisors`            — list assigned supervisors
  * - `POST   /admin/exams/:examId/supervisors`            — assign a supervisor
  * - `DELETE /admin/exams/:examId/supervisors/:userId`    — unassign a supervisor
+ *
+ * The supervisor list itself (`GET /admin/supervisors`) lives in `supervisors.ts`
+ * (#140) — the single source for both the management page and this picker. It is
+ * intentionally NOT defined here to avoid two handlers on the same path.
  */
 
 import { Elysia, t } from "elysia";
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
@@ -25,21 +29,6 @@ const log = createLogger("AdminExamSupervisors");
 export const adminExamSupervisorRoutes = new Elysia({ prefix: "/admin" })
   .use(authPlugin)
   .onBeforeHandle(requireAdmin)
-
-  /**
-   * GET /api/admin/supervisors
-   *
-   * Returns all users with role = supervisor (for the assignment picker).
-   */
-  .get("/supervisors", async () => {
-    const rows = await db
-      .select({ id: users.id, name: users.name, nis: users.nis })
-      .from(users)
-      .where(and(eq(users.role, "supervisor"), eq(users.isActive, 1)))
-      .orderBy(asc(users.name))
-      .limit(200);
-    return rows;
-  })
 
   /**
    * GET /api/admin/exams/:examId/supervisors

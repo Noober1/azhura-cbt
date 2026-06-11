@@ -6,13 +6,15 @@
  * provisioning lives in `students.ts`. Supervisors have no group/batch (they
  * proctor across exams), so `groupId` is always `null`. Endpoints (under
  * `/api/admin`):
+ * - `GET    /admin/supervisors`              — list all supervisors (`?q=`, `?activeOnly=`).
  * - `POST   /admin/supervisors`              — create (password hashed, NIS unique).
  * - `PUT    /admin/supervisors/:id`          — partial profile update (nis/name/isActive).
  * - `PATCH  /admin/supervisors/:id/password` — reset password.
  * - `DELETE /admin/supervisors/:id`          — delete the account.
  *
- * `GET /admin/supervisors` is intentionally NOT defined here — it already exists
- * in `exam-supervisors.ts` as the active-supervisor picker for assignment.
+ * `GET /admin/supervisors` is the single source for the supervisor list — both
+ * the management page (#140, all accounts) and the assignment picker (active-only,
+ * filtered client-side). It must NOT also be defined in `exam-supervisors.ts`.
  *
  * Passwords are always bcrypt-hashed and never returned. NIS is the global login
  * identity across ALL roles, so uniqueness is enforced against the whole `users`
@@ -22,7 +24,7 @@
 import { Elysia, t } from "elysia";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, like, or } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
@@ -81,7 +83,7 @@ async function getSupervisorDetail(id: string): Promise<SupervisorAccount> {
       createdAt: users.createdAt,
     })
     .from(users)
-    .where(eq(users.id, id))
+    .where(and(eq(users.id, id), eq(users.role, SUPERVISOR_ROLE)))
     .limit(1);
 
   if (!row) throw new NotFoundError("Pengawas tidak ditemukan.");
@@ -96,9 +98,65 @@ async function getSupervisorDetail(id: string): Promise<SupervisorAccount> {
   };
 }
 
+/** Max supervisor rows returned by the list (counts are small in practice). */
+const LIST_LIMIT = 500;
+
 export const adminSupervisorRoutes = new Elysia({ prefix: "/admin" })
   .use(authPlugin)
   .onBeforeHandle(requireAdmin)
+
+  /**
+   * GET /api/admin/supervisors
+   * Lists supervisor accounts as {@link SupervisorAccount}, ordered by name. This
+   * is the single source for both the management page (all accounts) and the
+   * assignment picker (which filters to active client-side).
+   * - `?q=`          — case-insensitive match on NIS or name.
+   * - `?activeOnly=` — when `"true"`, restricts to active accounts.
+   */
+  .get(
+    "/supervisors",
+    async ({ query }) => {
+      const term = query.q?.trim();
+      const activeOnly = query.activeOnly === "true";
+
+      const filters = [eq(users.role, SUPERVISOR_ROLE)];
+      if (activeOnly) filters.push(eq(users.isActive, 1));
+      if (term) {
+        const pattern = `%${term}%`;
+        const match = or(like(users.nis, pattern), like(users.name, pattern));
+        if (match) filters.push(match);
+      }
+
+      const rows = await db
+        .select({
+          id: users.id,
+          nis: users.nis,
+          name: users.name,
+          initialPassword: users.initialPassword,
+          isActive: users.isActive,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(and(...filters))
+        .orderBy(asc(users.name))
+        .limit(LIST_LIMIT);
+
+      return rows.map<SupervisorAccount>((row) => ({
+        id: row.id,
+        nis: row.nis,
+        name: row.name,
+        isActive: tinyToBool(row.isActive),
+        initialPassword: row.initialPassword ?? null,
+        createdAt: row.createdAt.getTime(),
+      }));
+    },
+    {
+      query: t.Object({
+        q: t.Optional(t.String()),
+        activeOnly: t.Optional(t.String()),
+      }),
+    }
+  )
 
   /**
    * POST /api/admin/supervisors
