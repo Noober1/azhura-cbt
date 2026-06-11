@@ -22,6 +22,7 @@ import { toast } from "../../stores/toast";
 import { Spinner } from "../ui/Spinner";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { Tooltip } from "../ui/Tooltip";
 import { PencilIcon, TrashIcon, PlusIcon, ChevronLeftIcon } from "../ui/icons";
 import { ExamContextCard } from "../exams/ExamContextCard";
 import { QuestionContentRenderer } from "./QuestionContentRenderer";
@@ -223,24 +224,28 @@ export function SupervisorQuestionListPage() {
 
                   {/* Actions */}
                   <div className="flex shrink-0 gap-1">
-                    <button
-                      onClick={() =>
-                        navigate(
-                          `/supervisor/exams/${examId}/questions/${q.id}/edit`
-                        )
-                      }
-                      className="focus-ring rounded-md p-1.5 text-faint hover:bg-canvas hover:text-ink"
-                      title="Edit soal"
-                    >
-                      <PencilIcon className="size-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget(q)}
-                      className="focus-ring rounded-md p-1.5 text-faint hover:bg-danger/10 hover:text-danger"
-                      title="Hapus soal"
-                    >
-                      <TrashIcon className="size-4" />
-                    </button>
+                    <Tooltip label="Edit soal">
+                      <button
+                        onClick={() =>
+                          navigate(
+                            `/supervisor/exams/${examId}/questions/${q.id}/edit`
+                          )
+                        }
+                        aria-label="Edit soal"
+                        className="focus-ring rounded-md p-1.5 text-faint hover:bg-canvas hover:text-ink"
+                      >
+                        <PencilIcon className="size-4" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label="Hapus soal">
+                      <button
+                        onClick={() => setDeleteTarget(q)}
+                        aria-label="Hapus soal"
+                        className="focus-ring rounded-md p-1.5 text-faint hover:bg-danger/10 hover:text-danger"
+                      >
+                        <TrashIcon className="size-4" />
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               </div>
