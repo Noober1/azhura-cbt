@@ -8,6 +8,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { XIcon } from "./icons";
+import { Tooltip } from "./Tooltip";
 
 interface ModalProps {
   open: boolean;
@@ -66,13 +67,15 @@ export function Modal({
             <h2 className="text-base font-extrabold tracking-tight text-ink">{title}</h2>
             {description && <p className="mt-0.5 text-sm font-medium text-ink-soft">{description}</p>}
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Tutup"
-            className="focus-ring -mr-1 rounded-md border-2 border-[var(--nb-ink)] bg-surface p-1 text-ink transition-colors hover:bg-canvas"
-          >
-            <XIcon className="size-5" />
-          </button>
+          <Tooltip label="Tutup" className="-mr-1 inline-flex">
+            <button
+              onClick={onClose}
+              aria-label="Tutup"
+              className="focus-ring rounded-md border-2 border-[var(--nb-ink)] bg-surface p-1 text-ink transition-colors hover:bg-canvas"
+            >
+              <XIcon className="size-5" />
+            </button>
+          </Tooltip>
         </header>
 
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>

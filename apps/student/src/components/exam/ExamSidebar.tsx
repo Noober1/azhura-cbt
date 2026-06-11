@@ -56,7 +56,7 @@ export const ExamSidebar = () => {
         <span className="block text-sm font-semibold text-muted-foreground mb-3">
           Navigasi Nomor Soal
         </span>
-        <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-5 gap-2 max-h-88 overflow-y-auto pr-1">
+        <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-5 gap-2 max-h-88 overflow-y-auto p-1.5">
           {questions.map((q, index) => {
             const isSelected = index === currentQuestionIndex;
             const isAnswered = !!(answers[q.id]?.selectedOptionId || answers[q.id]?.answerValue);

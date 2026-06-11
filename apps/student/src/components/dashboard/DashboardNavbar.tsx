@@ -1,5 +1,6 @@
 import { GraduationCap, LogOut, HelpCircle } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
+import { useConfigStore } from "../../stores/config";
 import { Button } from "../ui/button";
 import { replayDashboardTour } from "../../lib/tour";
 
@@ -9,6 +10,8 @@ import { replayDashboardTour } from "../../lib/tour";
  */
 export const DashboardNavbar = () => {
   const { user, logout, isLoading } = useAuthStore();
+  // Prefer the configured school name at the branding slot when available (#148).
+  const schoolName = useConfigStore((s) => s.schoolInfo?.schoolName);
 
   return (
     // Solid near-black band + thick ink bottom border — no blur (neobrutalist).
@@ -21,7 +24,7 @@ export const DashboardNavbar = () => {
           </div>
           <div className="flex flex-col leading-tight">
             <span className="font-extrabold tracking-tight text-sm text-primary-foreground">
-              Azhura CBT
+              {schoolName ?? "Azhura CBT"}
             </span>
             <span className="text-[0.7rem] font-medium text-primary-foreground/60">
               Computer-Based Test
@@ -58,7 +61,7 @@ export const DashboardNavbar = () => {
             className="font-semibold rounded-lg"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Keluar Sesi</span>
+            <span className="hidden sm:inline">Keluar</span>
           </Button>
         </div>
       </div>

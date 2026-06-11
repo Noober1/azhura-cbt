@@ -17,6 +17,7 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Field, Textarea, Input } from "../ui/Field";
 import { PlusIcon, TrashIcon } from "../ui/icons";
+import { Tooltip } from "../ui/Tooltip";
 
 interface QuestionFormModalProps {
   open: boolean;
@@ -224,15 +225,17 @@ export function QuestionFormModal({
                   placeholder={`Opsi ${index + 1}`}
                   className="h-9 border-0 bg-transparent px-0 hover:border-0 focus-visible:outline-0"
                 />
-                <button
-                  type="button"
-                  onClick={() => removeOption(index)}
-                  disabled={options.length <= MIN_OPTIONS}
-                  aria-label={`Hapus opsi ${index + 1}`}
-                  className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-canvas hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <TrashIcon className="size-4" />
-                </button>
+                <Tooltip label={`Hapus opsi ${index + 1}`}>
+                  <button
+                    type="button"
+                    onClick={() => removeOption(index)}
+                    disabled={options.length <= MIN_OPTIONS}
+                    aria-label={`Hapus opsi ${index + 1}`}
+                    className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-canvas hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <TrashIcon className="size-4" />
+                  </button>
+                </Tooltip>
               </div>
             );
           })}

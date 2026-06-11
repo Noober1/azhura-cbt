@@ -8,6 +8,7 @@
 
 import api from "./api";
 import type { AdminQuestion, AssignedExam } from "../types";
+import type { SupervisorExamDetail } from "@azhura/shared";
 
 export interface SupervisorQuestionInput {
   text: string;
@@ -21,6 +22,14 @@ export interface SupervisorQuestionInput {
 export const supervisorQuestionsApi = {
   async listExams(): Promise<AssignedExam[]> {
     const { data } = await api.get<AssignedExam[]>("/supervisor/exams");
+    return data;
+  },
+
+  /** Read-only exam context for the question page (#141). Token is never returned. */
+  async getExam(examId: string): Promise<SupervisorExamDetail> {
+    const { data } = await api.get<SupervisorExamDetail>(
+      `/supervisor/exams/${examId}`
+    );
     return data;
   },
 
