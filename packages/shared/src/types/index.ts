@@ -293,6 +293,29 @@ export interface SupervisorExamDetail {
   allowedGroupNames: string[];
   /** Number of questions currently in the exam. */
   questionCount: number;
+/** A supervisor user account as returned by the admin supervisor CRUD routes (#139). Never includes the password hash. */
+export interface SupervisorAccount {
+  id: string;
+  nis: string;
+  name: string;
+  isActive: boolean;
+  /** Plaintext initial/last-reset password kept for credential distribution; null for older accounts. */
+  initialPassword: string | null;
+  createdAt: number;
+}
+
+/** Request body for creating a supervisor account. */
+export interface CreateSupervisorRequest {
+  nis: string;
+  name: string;
+  password: string;
+}
+
+/** Request body for a partial supervisor profile update (password has its own route). */
+export interface UpdateSupervisorRequest {
+  nis?: string;
+  name?: string;
+  isActive?: boolean;
 }
 
 // ── Public chat room (#17) ───────────────────────────────────────────────────

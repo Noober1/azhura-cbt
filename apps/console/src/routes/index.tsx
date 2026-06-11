@@ -2,9 +2,9 @@
  * Azhura CBT Console — routing.
  *
  * Public: /login. Everything else is behind <ProtectedRoute> (requires auth).
- * Admin-only routes (/exams, /students, /groups) are additionally wrapped in
- * <AdminRoute> which redirects supervisors to /monitoring. Default redirects
- * are role-aware via <DefaultRedirect>.
+ * Admin-only routes (/exams, /students, /supervisors, /groups) are additionally
+ * wrapped in <AdminRoute> which redirects supervisors to /monitoring. Default
+ * redirects are role-aware via <DefaultRedirect>.
  */
 
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
@@ -16,6 +16,7 @@ import { ExamListPage } from "../components/exams/ExamListPage";
 import { ExamDetailPage } from "../components/exams/ExamDetailPage";
 import { ExamSessionsPage } from "../components/exams/ExamSessionsPage";
 import { StudentListPage } from "../components/students/StudentListPage";
+import { SupervisorListPage } from "../components/supervisors/SupervisorListPage";
 import { GroupListPage } from "../components/groups/GroupListPage";
 import { StatusPesertaPage } from "../components/monitoring/StatusPesertaPage";
 import { DashboardPage } from "../components/dashboard/DashboardPage";
@@ -68,6 +69,7 @@ export function AppRoutes() {
         <Route path="/exams/:examId/questions/new" element={<AdminRoute><AdminQuestionFormPage /></AdminRoute>} />
         <Route path="/exams/:examId/questions/:questionId/edit" element={<AdminRoute><AdminQuestionFormPage /></AdminRoute>} />
         <Route path="/students" element={<AdminRoute><StudentListPage /></AdminRoute>} />
+        <Route path="/supervisors" element={<AdminRoute><SupervisorListPage /></AdminRoute>} />
         <Route path="/groups" element={<AdminRoute><GroupListPage /></AdminRoute>} />
         <Route path="/media" element={<MediaGalleryPage />} />
         <Route path="/supervisor/exams" element={<SupervisorExamListPage />} />
