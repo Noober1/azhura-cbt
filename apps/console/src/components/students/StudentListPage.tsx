@@ -7,13 +7,15 @@
  * instead (the confirm dialog stays open so they can switch tactics).
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { studentsApi } from "../../lib/students-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { useDebounce } from "../../hooks/useDebounce";
 import { useGroups } from "../../hooks/useGroups";
 import { formatDateTime } from "../../lib/format";
+import { listContainerVariants, rowItemVariants } from "../../lib/motion";
 import type { StudentSummary } from "../../types";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
@@ -42,6 +44,11 @@ const PAGE_SIZE = 10;
 
 export function StudentListPage() {
   const { groups } = useGroups();
+  const reduce = useReducedMotion() ?? false;
+  // Stagger the rows in on the FIRST render of results only. Subsequent loads
+  // (search, filter, pagination) re-render the same table — re-staggering then
+  // would feel like flicker, so we flip this off after the first paint.
+  const hasStaggeredRef = useRef(false);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 350);
@@ -88,6 +95,14 @@ export function StudentListPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // Only the first paint of a populated table staggers; after that rows mount
+  // plainly so refetch-driven re-renders don't re-animate.
+  const showRows = !loading && !error && students.length > 0;
+  const staggerNow = showRows && !hasStaggeredRef.current;
+  useEffect(() => {
+    if (showRows) hasStaggeredRef.current = true;
+  }, [showRows]);
+
   function openCreate() {
     setEditing(null);
     setFormOpen(true);
@@ -102,6 +117,50 @@ export function StudentListPage() {
     setFormOpen(false);
     setEditing(null);
     load();
+  }
+
+  // Shared row cells — rendered inside either a motion.tr (first-paint stagger)
+  // or a plain tr, so the markup stays in one place.
+  function renderStudentCells(student: StudentSummary) {
+    return (
+      <>
+        <td className="px-4 py-3 font-medium text-ink">{student.name}</td>
+        <td className="px-4 py-3 tabular text-ink-soft">{student.nis}</td>
+        <td className="hidden px-4 py-3 md:table-cell">
+          {student.groupName ? (
+            <Badge tone="accent">{student.groupName}</Badge>
+          ) : (
+            <span className="text-faint">—</span>
+          )}
+        </td>
+        <td className="w-16 px-4 py-3 tabular text-ink-soft">{student.batch}</td>
+        <td className="px-4 py-3">
+          {student.isActive ? (
+            <Badge tone="positive">Aktif</Badge>
+          ) : (
+            <Badge tone="danger">Nonaktif</Badge>
+          )}
+        </td>
+        <td className="hidden px-4 py-3 text-ink-soft lg:table-cell">
+          {formatDateTime(student.createdAt)}
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex items-center justify-end gap-1">
+            <IconButton
+              icon={<PencilIcon className="size-4" />}
+              label={`Edit ${student.name}`}
+              onClick={() => openEdit(student)}
+            />
+            <IconButton
+              icon={<TrashIcon className="size-4" />}
+              label={`Hapus ${student.name}`}
+              variant="danger"
+              onClick={() => setDeleting(student)}
+            />
+          </div>
+        </td>
+      </>
+    );
   }
 
   async function confirmDelete() {
@@ -220,50 +279,39 @@ export function StudentListPage() {
                 <th className="px-4 py-3 text-right">Aksi</th>
               </tr>
             </thead>
-            <tbody>
-              {students.map((student) => (
-                <tr
-                  key={student.id}
-                  className="border-b-[1.5px] border-line-soft transition-colors last:border-0 hover:bg-canvas"
-                >
-                  <td className="px-4 py-3 font-medium text-ink">{student.name}</td>
-                  <td className="px-4 py-3 tabular text-ink-soft">{student.nis}</td>
-                  <td className="hidden px-4 py-3 md:table-cell">
-                    {student.groupName ? (
-                      <Badge tone="accent">{student.groupName}</Badge>
-                    ) : (
-                      <span className="text-faint">—</span>
-                    )}
-                  </td>
-                  <td className="w-16 px-4 py-3 tabular text-ink-soft">{student.batch}</td>
-                  <td className="px-4 py-3">
-                    {student.isActive ? (
-                      <Badge tone="positive">Aktif</Badge>
-                    ) : (
-                      <Badge tone="danger">Nonaktif</Badge>
-                    )}
-                  </td>
-                  <td className="hidden px-4 py-3 text-ink-soft lg:table-cell">
-                    {formatDateTime(student.createdAt)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <IconButton
-                        icon={<PencilIcon className="size-4" />}
-                        label={`Edit ${student.name}`}
-                        onClick={() => openEdit(student)}
-                      />
-                      <IconButton
-                        icon={<TrashIcon className="size-4" />}
-                        label={`Hapus ${student.name}`}
-                        variant="danger"
-                        onClick={() => setDeleting(student)}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+            {/* Rows fade/settle in with a tiny stagger on first paint only
+                (see `staggerNow`); afterwards they render as plain rows. The
+                shared cells live in renderStudentCells to stay DRY across both
+                the animated and static branches. Reduced motion drops the
+                stagger and the translate via the variant helpers. */}
+            {staggerNow ? (
+              <motion.tbody
+                variants={listContainerVariants(reduce)}
+                initial="initial"
+                animate="animate"
+              >
+                {students.map((student) => (
+                  <motion.tr
+                    key={student.id}
+                    variants={rowItemVariants(reduce)}
+                    className="border-b-[1.5px] border-line-soft transition-colors last:border-0 hover:bg-canvas"
+                  >
+                    {renderStudentCells(student)}
+                  </motion.tr>
+                ))}
+              </motion.tbody>
+            ) : (
+              <tbody>
+                {students.map((student) => (
+                  <tr
+                    key={student.id}
+                    className="border-b-[1.5px] border-line-soft transition-colors last:border-0 hover:bg-canvas"
+                  >
+                    {renderStudentCells(student)}
+                  </tr>
+                ))}
+              </tbody>
+            )}
           </table>
         )}
       </div>
