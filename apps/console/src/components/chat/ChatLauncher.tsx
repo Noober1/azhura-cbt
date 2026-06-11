@@ -13,6 +13,7 @@ import { useChatStream } from "./useChatStream";
 import { ChatRoomPanel } from "./ChatRoomPanel";
 import { Badge } from "../ui/Badge";
 import { MessageSquareIcon, XIcon } from "../ui/icons";
+import { Tooltip } from "../ui/Tooltip";
 
 export function ChatLauncher() {
   const { messages, presence, connected, enabled, historyLoaded } = useChatStream();
@@ -67,19 +68,21 @@ export function ChatLauncher() {
   return (
     <>
       {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Buka chat peserta"
-          className="focus-ring fixed bottom-6 right-6 z-40 grid size-14 place-items-center rounded-full border-[2.5px] border-[var(--nb-ink)] bg-accent text-white shadow-[3px_3px_0_var(--nb-ink)] transition-[transform,box-shadow] duration-[80ms] hover:-translate-x-px hover:-translate-y-px hover:shadow-[5px_5px_0_var(--nb-ink)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
-        >
-          <MessageSquareIcon className="size-6" />
-          {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full border-2 border-[var(--nb-ink)] bg-danger px-1 text-xs font-bold text-white">
-              {unread > 99 ? "99+" : unread}
-            </span>
-          )}
-        </button>
+        <Tooltip label="Buka chat peserta" className="fixed bottom-6 right-6 z-40 inline-flex">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="Buka chat peserta"
+            className="focus-ring grid size-14 place-items-center rounded-full border-[2.5px] border-[var(--nb-ink)] bg-accent text-white shadow-[3px_3px_0_var(--nb-ink)] transition-[transform,box-shadow] duration-[80ms] hover:-translate-x-px hover:-translate-y-px hover:shadow-[5px_5px_0_var(--nb-ink)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+          >
+            <MessageSquareIcon className="size-6" />
+            {unread > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full border-2 border-[var(--nb-ink)] bg-danger px-1 text-xs font-bold text-white">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </button>
+        </Tooltip>
       )}
 
       {open && (
@@ -103,13 +106,15 @@ export function ChatLauncher() {
                 {connected ? "Live" : "Terputus"}
               </Badge>
               <span className="ml-auto text-xs text-faint">{presence.length} siswa online</span>
-              <button
-                onClick={() => setOpen(false)}
-                aria-label="Tutup chat"
-                className="focus-ring -mr-1 ml-1 rounded-md p-1 text-faint transition-colors hover:bg-canvas hover:text-ink"
-              >
-                <XIcon className="size-5" />
-              </button>
+              <Tooltip label="Tutup chat" className="-mr-1 ml-1 inline-flex">
+                <button
+                  onClick={() => setOpen(false)}
+                  aria-label="Tutup chat"
+                  className="focus-ring rounded-md p-1 text-faint transition-colors hover:bg-canvas hover:text-ink"
+                >
+                  <XIcon className="size-5" />
+                </button>
+              </Tooltip>
             </header>
 
             <ChatRoomPanel messages={messages} />

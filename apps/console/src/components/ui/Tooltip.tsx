@@ -5,14 +5,24 @@ interface TooltipProps {
   label: string;
   children: ReactNode;
   side?: "top" | "bottom";
+  /**
+   * Classes for the inline wrapper that anchors the tooltip. Defaults to
+   * `relative inline-flex`. Override when the wrapped control needs different
+   * positioning (e.g. a `fixed` floating action button) so the tooltip is
+   * measured against the right box.
+   */
+  className?: string;
 }
 
 /**
  * Tooltip that renders into document.body via a portal so it escapes any
  * ancestor `overflow: hidden` container (e.g. the table card wrapper).
  * Shows after a 300ms delay to avoid flicker on fast cursor passes.
+ *
+ * Shows on both pointer hover and keyboard focus, so every consumer is
+ * keyboard-accessible without extra wiring.
  */
-export function Tooltip({ label, children, side = "top" }: TooltipProps) {
+export function Tooltip({ label, children, side = "top", className = "relative inline-flex" }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -40,7 +50,7 @@ export function Tooltip({ label, children, side = "top" }: TooltipProps) {
   return (
     <div
       ref={wrapperRef}
-      className="relative inline-flex"
+      className={className}
       onMouseEnter={show}
       onMouseLeave={hide}
       onFocus={show}

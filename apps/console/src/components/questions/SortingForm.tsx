@@ -1,5 +1,6 @@
 import type { SortingConfig } from "@azhura/shared";
 import { PlusIcon, TrashIcon } from "../ui/icons";
+import { Tooltip } from "../ui/Tooltip";
 
 interface Props {
   config: SortingConfig;
@@ -68,34 +69,40 @@ export function SortingForm({ config, onChange, disabled }: Props) {
               className="flex-1 rounded-[var(--radius-field)] border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
             />
             <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={() => moveUp(idx)}
-                disabled={disabled || idx === 0}
-                aria-label="Pindah ke atas"
-                className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-surface-raised hover:text-ink disabled:opacity-30"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                onClick={() => moveDown(idx)}
-                disabled={disabled || idx === items.length - 1}
-                aria-label="Pindah ke bawah"
-                className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-surface-raised hover:text-ink disabled:opacity-30"
-              >
-                ↓
-              </button>
+              <Tooltip label="Pindah ke atas">
+                <button
+                  type="button"
+                  onClick={() => moveUp(idx)}
+                  disabled={disabled || idx === 0}
+                  aria-label="Pindah ke atas"
+                  className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-surface-raised hover:text-ink disabled:opacity-30"
+                >
+                  ↑
+                </button>
+              </Tooltip>
+              <Tooltip label="Pindah ke bawah">
+                <button
+                  type="button"
+                  onClick={() => moveDown(idx)}
+                  disabled={disabled || idx === items.length - 1}
+                  aria-label="Pindah ke bawah"
+                  className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-surface-raised hover:text-ink disabled:opacity-30"
+                >
+                  ↓
+                </button>
+              </Tooltip>
             </div>
-            <button
-              type="button"
-              onClick={() => removeItem(idx)}
-              disabled={disabled || items.length <= MIN_ITEMS}
-              aria-label={`Hapus item ${idx + 1}`}
-              className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-30"
-            >
-              <TrashIcon className="size-4" />
-            </button>
+            <Tooltip label={`Hapus item ${idx + 1}`}>
+              <button
+                type="button"
+                onClick={() => removeItem(idx)}
+                disabled={disabled || items.length <= MIN_ITEMS}
+                aria-label={`Hapus item ${idx + 1}`}
+                className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-30"
+              >
+                <TrashIcon className="size-4" />
+              </button>
+            </Tooltip>
           </div>
         ))}
       </div>

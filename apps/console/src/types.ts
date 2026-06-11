@@ -194,13 +194,15 @@ export type { SystemSettings } from "@azhura/shared";
 /** Body for `PATCH /admin/settings` — all fields are optional. */
 export type SystemSettingsInput = Partial<import("@azhura/shared").SystemSettings>;
 
-// ── Supervisor assignment (#86) ──────────────────────────────────────────────
+// ── Supervisor accounts & assignment (#86, #139, #140) ───────────────────────
 
-export interface SupervisorUser {
-  id: string;
-  name: string;
-  nis: string;
-}
+// Defined once in @azhura/shared so the backend CRUD contract, the management
+// page (#140), and the assignment picker all share one shape.
+export type {
+  SupervisorAccount,
+  CreateSupervisorRequest,
+  UpdateSupervisorRequest,
+} from "@azhura/shared";
 
 export interface ExamSupervisorDetail {
   examId: string;

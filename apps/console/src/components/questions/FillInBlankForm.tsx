@@ -1,5 +1,6 @@
 import type { FillInBlankConfig } from "@azhura/shared";
 import { PlusIcon, TrashIcon } from "../ui/icons";
+import { Tooltip } from "../ui/Tooltip";
 
 interface Props {
   config: FillInBlankConfig;
@@ -68,15 +69,17 @@ export function FillInBlankForm({ config, onChange, disabled }: Props) {
               className="flex-1 rounded-[var(--radius-field)] border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
             />
             {answers.length > 1 && (
-              <button
-                type="button"
-                onClick={() => removeAnswer(idx)}
-                disabled={disabled}
-                aria-label={`Hapus jawaban ${idx + 1}`}
-                className="focus-ring shrink-0 rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-40"
-              >
-                <TrashIcon className="size-4" />
-              </button>
+              <Tooltip label={`Hapus jawaban ${idx + 1}`} className="inline-flex shrink-0">
+                <button
+                  type="button"
+                  onClick={() => removeAnswer(idx)}
+                  disabled={disabled}
+                  aria-label={`Hapus jawaban ${idx + 1}`}
+                  className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-40"
+                >
+                  <TrashIcon className="size-4" />
+                </button>
+              </Tooltip>
             )}
           </div>
         ))}

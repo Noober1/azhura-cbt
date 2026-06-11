@@ -1,4 +1,5 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { Tooltip } from "./Tooltip";
 
 interface PaginationProps {
   page: number;
@@ -44,14 +45,16 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
 
   return (
     <div className="flex items-center justify-center gap-1.5 border-t-2 border-line-soft pt-4">
-      <button
-        disabled={page <= 1}
-        onClick={() => onPageChange(page - 1)}
-        aria-label="Halaman sebelumnya"
-        className={btnBase}
-      >
-        <ChevronLeftIcon className="size-4" />
-      </button>
+      <Tooltip label="Halaman sebelumnya">
+        <button
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          aria-label="Halaman sebelumnya"
+          className={btnBase}
+        >
+          <ChevronLeftIcon className="size-4" />
+        </button>
+      </Tooltip>
 
       {pages.map((p, i) =>
         p === "…" ? (
@@ -75,14 +78,16 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         )
       )}
 
-      <button
-        disabled={page >= totalPages}
-        onClick={() => onPageChange(page + 1)}
-        aria-label="Halaman berikutnya"
-        className={btnBase}
-      >
-        <ChevronRightIcon className="size-4" />
-      </button>
+      <Tooltip label="Halaman berikutnya">
+        <button
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          aria-label="Halaman berikutnya"
+          className={btnBase}
+        >
+          <ChevronRightIcon className="size-4" />
+        </button>
+      </Tooltip>
     </div>
   );
 }

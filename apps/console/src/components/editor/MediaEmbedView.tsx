@@ -1,6 +1,7 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/core";
 import { AlignLeftIcon, AlignCenterIcon, AlignRightIcon, TrashIcon } from "../ui/icons";
+import { Tooltip } from "../ui/Tooltip";
 
 interface MediaAttrs {
   src: string;
@@ -67,19 +68,20 @@ export function MediaEmbedView({ node, updateAttributes, deleteNode, selected }:
             {!isAudio && (
               <>
                 {ALIGN_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    title={opt.title}
-                    onClick={() => updateAttributes({ align: opt.value })}
-                    className={`focus-ring inline-flex size-6 items-center justify-center rounded transition-colors ${
-                      (align ?? "center") === opt.value
-                        ? "bg-accent/15 text-accent"
-                        : "text-ink-soft hover:bg-canvas hover:text-ink"
-                    }`}
-                  >
-                    {opt.icon}
-                  </button>
+                  <Tooltip key={opt.value} label={opt.title}>
+                    <button
+                      type="button"
+                      aria-label={opt.title}
+                      onClick={() => updateAttributes({ align: opt.value })}
+                      className={`focus-ring inline-flex size-6 items-center justify-center rounded transition-colors ${
+                        (align ?? "center") === opt.value
+                          ? "bg-accent/15 text-accent"
+                          : "text-ink-soft hover:bg-canvas hover:text-ink"
+                      }`}
+                    >
+                      {opt.icon}
+                    </button>
+                  </Tooltip>
                 ))}
 
                 <span className="mx-1 h-4 w-px bg-line" />
@@ -105,14 +107,16 @@ export function MediaEmbedView({ node, updateAttributes, deleteNode, selected }:
             )}
 
             {/* Delete */}
-            <button
-              type="button"
-              title="Hapus media"
-              onClick={() => deleteNode()}
-              className="focus-ring inline-flex size-6 items-center justify-center rounded text-faint transition-colors hover:bg-danger/10 hover:text-danger"
-            >
-              <TrashIcon className="size-3.5" />
-            </button>
+            <Tooltip label="Hapus media">
+              <button
+                type="button"
+                aria-label="Hapus media"
+                onClick={() => deleteNode()}
+                className="focus-ring inline-flex size-6 items-center justify-center rounded text-faint transition-colors hover:bg-danger/10 hover:text-danger"
+              >
+                <TrashIcon className="size-3.5" />
+              </button>
+            </Tooltip>
           </div>
         </div>
       )}
