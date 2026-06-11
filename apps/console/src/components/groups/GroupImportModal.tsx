@@ -14,6 +14,7 @@ import { groupsImportApi } from "../../lib/groups-import-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { saveBlob } from "../../lib/download";
+import { COPY } from "../../lib/copy";
 import type { GroupImportPreview, GroupImportConfirmResult } from "../../types";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
@@ -52,7 +53,7 @@ export function GroupImportModal({ open, onClose, onImported }: GroupImportModal
 
   async function runDryRun(file: File) {
     if (!file.name.match(/\.(xlsx|csv)$/i)) {
-      setError("Format tidak didukung. Gunakan file .xlsx atau .csv.");
+      setError(COPY.unsupportedFile);
       return;
     }
     setError(null);

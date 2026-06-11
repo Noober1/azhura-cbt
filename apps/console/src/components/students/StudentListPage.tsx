@@ -24,6 +24,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { StudentFormModal } from "./StudentFormModal";
 import { StudentImportModal } from "./StudentImportModal";
 import { StudentCardModal } from "./StudentCardModal";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import {
   PlusIcon,
   SearchIcon,
@@ -124,7 +125,10 @@ export function StudentListPage() {
             {total > 0 ? `${total} siswa` : "Belum ada siswa"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <PageHelpButton topic="students" />
+          {/* Divider separates the help affordance from the action buttons. */}
+          <span className="h-6 w-px bg-line-soft" aria-hidden="true" />
           <Button
             variant="secondary"
             onClick={() => setCardOpen(true)}

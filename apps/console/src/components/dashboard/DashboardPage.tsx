@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -11,7 +12,9 @@ import {
 import { useDashboard } from "./useDashboard";
 import { StatCard } from "./StatCard";
 import { Spinner, CenterState } from "../ui/Spinner";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import { LayoutDashboardIcon } from "../ui/icons";
+import { maybeAutoRunTour } from "../../lib/tour";
 import type { ExamScoreSummary } from "../../types";
 
 // ── Chart helpers ─────────────────────────────────────────────────────────────
@@ -41,6 +44,14 @@ function toChartRows(scores: ExamScoreSummary[]): ChartRow[] {
 export function DashboardPage() {
   const { snapshot, loading, error, wsConnected } = useDashboard();
 
+  // First-run product tour (#132): auto-runs once when the admin first reaches
+  // the dashboard after setup/login — only after the page content has loaded so
+  // the tour does not start over a spinner. No-op on every subsequent visit.
+  const dashboardReady = !loading && !error && snapshot !== null;
+  useEffect(() => {
+    if (dashboardReady) maybeAutoRunTour();
+  }, [dashboardReady]);
+
   if (loading) {
     return (
       <CenterState>
@@ -66,13 +77,16 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-ink">
-          Selamat datang, {welcome.name}
-        </h1>
-        <p className="mt-1 text-sm text-faint">
-          Ringkasan sistem secara realtime.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-ink">
+            Selamat datang, {welcome.name}
+          </h1>
+          <p className="mt-1 text-sm text-faint">
+            Ringkasan sistem secara realtime.
+          </p>
+        </div>
+        <PageHelpButton topic="dashboard" />
       </div>
 
       {/* Stale data banner */}

@@ -22,6 +22,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { IconButton } from "../ui/IconButton";
 import { ExamFormModal } from "./ExamFormModal";
 import { ExamImportModal } from "./ExamImportModal";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import {
   PlusIcon,
   SearchIcon,
@@ -126,6 +127,9 @@ export function ExamListPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <PageHelpButton topic="exams" />
+          {/* Divider separates the help affordance from the action buttons. */}
+          <span className="h-6 w-px bg-line-soft" aria-hidden="true" />
           <Button
             variant="secondary"
             onClick={() => setImportOpen(true)}

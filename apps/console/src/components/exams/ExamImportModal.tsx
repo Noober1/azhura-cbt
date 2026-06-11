@@ -14,6 +14,7 @@ import { examsImportApi } from "../../lib/exams-import-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { formatDateTime } from "../../lib/format";
+import { COPY } from "../../lib/copy";
 import type { ExamImportPreview, ExamImportConfirmResult } from "../../types";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
@@ -55,7 +56,7 @@ export function ExamImportModal({ open, onClose, onImported }: ExamImportModalPr
 
   async function runDryRun(file: File) {
     if (!file.name.match(/\.(xlsx|csv)$/i)) {
-      setError("Format tidak didukung. Gunakan file .xlsx atau .csv.");
+      setError(COPY.unsupportedFile);
       return;
     }
     setError(null);

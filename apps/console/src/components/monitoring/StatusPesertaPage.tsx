@@ -26,6 +26,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { ReasonDialog } from "../ui/ReasonDialog";
 import { BroadcastDialog } from "./BroadcastDialog";
 import { TimeChangeDialog } from "./TimeChangeDialog";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import { ActivityIcon, LogOutIcon, CheckIcon, XIcon, AlertIcon, ClockIcon } from "../ui/icons";
 
 /** A pending proctor action on an exam-taker, awaiting reason + confirmation. */
@@ -221,6 +222,9 @@ export function StatusPesertaPage() {
             <span className={`size-2 rounded-full ${wsConnected ? "bg-positive" : "bg-danger"}`} aria-hidden="true" />
             {wsConnected ? "Realtime aktif" : "Realtime terputus"}
           </span>
+          <PageHelpButton topic="monitoring" />
+          {/* Divider separates the help affordance from the proctor actions. */}
+          <span className="h-6 w-px bg-line-soft" aria-hidden="true" />
           <Button
             variant="secondary"
             size="sm"
