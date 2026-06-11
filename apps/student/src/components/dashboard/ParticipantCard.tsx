@@ -46,12 +46,14 @@ export const ParticipantCard = ({ user }: ParticipantCardProps) => {
           label="Kelas / Group"
           value={user?.groupName ?? "-"}
         />
-        <div className="mt-3 flex items-center gap-2 rounded-xl border-2 border-[var(--nb-ink)] bg-emerald/15 px-3 py-2.5 text-emerald dark:text-emerald-400">
-          <ShieldCheck className="w-4 h-4 shrink-0" />
-          <span className="text-xs font-semibold leading-tight">
-            Identitas terverifikasi. Pastikan ini benar Anda sebelum memulai ujian.
-          </span>
-        </div>
+        {user && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl border-2 border-[var(--nb-ink)] bg-emerald/15 px-3 py-2.5 text-emerald dark:text-emerald-400">
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            <span className="text-xs font-semibold leading-tight">
+              Identitas terverifikasi. Pastikan ini benar Anda sebelum memulai ujian.
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

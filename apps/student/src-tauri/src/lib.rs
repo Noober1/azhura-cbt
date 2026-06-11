@@ -102,6 +102,24 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .setup(|app| {
+            // Encrypted-at-rest credential storage (#129). The Stronghold
+            // snapshot key is derived with argon2 from a random salt persisted
+            // next to the app's local data. `with_argon2` needs the resolved
+            // path, so the plugin is registered here (in `setup`) rather than
+            // in the static builder chain above. The frontend
+            // (`src/lib/secure-store.ts`) opens/reads/writes the vault.
+            let salt_path = app
+                .path()
+                .app_local_data_dir()
+                .map_err(|e| {
+                    format!("could not resolve app local data dir for Stronghold salt: {e}")
+                })?
+                .join("salt.txt");
+            app.handle()
+                .plugin(tauri_plugin_stronghold::Builder::with_argon2(&salt_path).build())?;
+            Ok(())
+        })
         .manage(ExamLockState::default())
         .invoke_handler(tauri::generate_handler![
             enter_kiosk,

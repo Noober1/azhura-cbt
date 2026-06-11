@@ -18,9 +18,25 @@ const SetupGuard = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+/**
+ * Briefly shown on native while the encrypted JWT is read from Stronghold at
+ * startup (#129), so a protected route doesn't flash /login before hydration
+ * finishes. Never rendered on web: there `initialized` is already true on the
+ * first render (sync localStorage hydration), so the redirect logic runs as
+ * before with no extra loader.
+ */
+const AuthLoading = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <p className="text-sm text-muted-foreground">Memuat sesi…</p>
+  </div>
+);
+
 /** Wraps protected routes, redirecting to `/login` when unauthenticated. */
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, initialized } = useAuthStore();
+  // Wait for startup hydration before deciding — otherwise native would bounce
+  // an authenticated user to /login while the vault is still being read.
+  if (!initialized) return <AuthLoading />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
