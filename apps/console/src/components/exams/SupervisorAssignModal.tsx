@@ -4,18 +4,24 @@
  * Loads all supervisor accounts and the current assignment for the exam,
  * then shows a searchable checkbox list. On save it diffs the selection and
  * issues only the needed POST/DELETE calls in parallel.
+ *
+ * `supervisorsApi.listAll()` returns every account (#140), so the picker filters
+ * to active supervisors client-side — only active accounts can proctor. When no
+ * active account exists yet, the empty state offers a shortcut to create one.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { examsApi } from "../../lib/exams-api";
 import { supervisorsApi } from "../../lib/supervisors-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
-import type { ExamSupervisorDetail, SupervisorUser } from "../../types";
+import type { ExamSupervisorDetail, SupervisorAccount } from "../../types";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Field";
 import { Spinner, CenterState } from "../ui/Spinner";
+import { PlusIcon } from "../ui/icons";
+import { SupervisorFormModal } from "../supervisors/SupervisorFormModal";
 
 interface SupervisorAssignModalProps {
   open: boolean;
@@ -31,12 +37,19 @@ export function SupervisorAssignModal({
   onClose,
   onSaved,
 }: SupervisorAssignModalProps) {
-  const [allSupervisors, setAllSupervisors] = useState<SupervisorUser[]>([]);
+  const [allSupervisors, setAllSupervisors] = useState<SupervisorAccount[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [original, setOriginal] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  /** Refreshes only the supervisor account list (active accounts for the picker). */
+  const reloadSupervisors = useCallback(async () => {
+    const all = await supervisorsApi.listAll(true);
+    setAllSupervisors(all);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -45,7 +58,7 @@ export function SupervisorAssignModal({
     setSaving(false);
     setLoading(true);
     setQ("");
-    Promise.all([supervisorsApi.listAll(), examsApi.listSupervisors(examId)])
+    Promise.all([supervisorsApi.listAll(true), examsApi.listSupervisors(examId)])
       .then(([all, assigned]) => {
         if (cancelled) return;
         setAllSupervisors(all);
@@ -151,9 +164,16 @@ export function SupervisorAssignModal({
           <span>Memuat…</span>
         </CenterState>
       ) : allSupervisors.length === 0 ? (
-        <p className="py-4 text-center text-sm text-faint">
-          Belum ada akun supervisor. Buat akun supervisor terlebih dahulu.
-        </p>
+        <CenterState>
+          <span>Belum ada akun pengawas yang aktif.</span>
+          <Button
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+            leadingIcon={<PlusIcon className="size-4" />}
+          >
+            Buat akun pengawas
+          </Button>
+        </CenterState>
       ) : (
         <div className="flex flex-col gap-3">
           <Input
@@ -200,6 +220,19 @@ export function SupervisorAssignModal({
           )}
         </div>
       )}
+
+      {/* Shortcut: create a supervisor account without leaving the assignment flow. */}
+      <SupervisorFormModal
+        open={createOpen}
+        supervisor={null}
+        onClose={() => setCreateOpen(false)}
+        onSaved={() => {
+          setCreateOpen(false);
+          void reloadSupervisors().catch((err) =>
+            toast.error(getErrorMessage(err, "Gagal memuat data pengawas."))
+          );
+        }}
+      />
     </Modal>
   );
 }
