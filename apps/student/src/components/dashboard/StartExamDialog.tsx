@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { TriangleAlert, FileText, Clock, KeyRound } from "lucide-react";
+import { TriangleAlert, FileText, Clock, KeyRound, HelpCircle } from "lucide-react";
 import type { AvailableExam } from "../../types";
 import {
   AlertDialog,
@@ -146,6 +146,27 @@ export const StartExamDialog = ({
             jalan.
           </p>
         </div>
+
+        {/* Pre-lockdown panduan (#145): a short, plain-language explanation of the
+            exam screen, shown here — on the safe dashboard, BEFORE any fullscreen
+            / kiosk lockdown engages. This is the safe place to teach the exam UI;
+            the in-exam tour is suppressed while enforcement is active. */}
+        <details className="group mt-4 rounded-xl border-2 border-[var(--nb-ink)] bg-muted/40">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-3.5 py-2.5 text-sm font-bold text-foreground">
+            <HelpCircle className="w-4 h-4 text-indigo" />
+            Panduan singkat cara mengerjakan
+            <span className="ml-auto text-xs font-semibold text-muted-foreground transition-transform group-open:rotate-90">
+              ›
+            </span>
+          </summary>
+          <ul className="space-y-1.5 px-4 pb-3.5 pt-1 text-xs font-medium leading-relaxed text-muted-foreground">
+            <li>• Lihat <strong>waktu tersisa</strong> di pojok kanan atas. Waktu habis = ujian dikumpulkan otomatis.</li>
+            <li>• Jawab tiap soal: pilihan ganda ditekan, isian diketik, soal pasangkan/urutkan digeser.</li>
+            <li>• Belum yakin? Tekan <strong>Ragu-ragu</strong> agar nomor soal ditandai kuning.</li>
+            <li>• Gunakan <strong>Sebelumnya</strong>/<strong>Berikutnya</strong> untuk pindah soal. Jawaban tersimpan otomatis.</li>
+            <li>• Tekan <strong>Selesai</strong> hanya jika sudah benar-benar selesai — jawaban dikunci permanen dan tidak bisa diubah.</li>
+          </ul>
+        </details>
 
         {/* Access token gate (#1): only for token-protected exams. */}
         {requiresToken && (

@@ -51,6 +51,7 @@ export function ChatDrawer() {
       <DialogPrimitive.Trigger asChild>
         <button
           type="button"
+          data-tour="chat-launcher"
           aria-label="Buka chat peserta"
           className="focus-ring fixed bottom-6 right-6 z-40 grid size-14 place-items-center rounded-full bg-indigo text-white border-[2.5px] border-[var(--nb-ink)] shadow-[3px_3px_0_var(--nb-ink)] transition-transform hover:scale-105 active:scale-95"
         >

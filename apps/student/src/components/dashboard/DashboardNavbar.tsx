@@ -1,11 +1,12 @@
-import { GraduationCap, LogOut } from "lucide-react";
+import { GraduationCap, LogOut, HelpCircle } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useConfigStore } from "../../stores/config";
 import { Button } from "../ui/button";
+import { replayDashboardTour } from "../../lib/tour";
 
 /**
  * Main dashboard navigation bar. Shows the app brand on the left and the
- * signed-in student's full name plus a logout action on the right.
+ * signed-in student's full name plus help + logout actions on the right.
  */
 export const DashboardNavbar = () => {
   const { user, logout, isLoading } = useAuthStore();
@@ -31,7 +32,7 @@ export const DashboardNavbar = () => {
           </div>
         </div>
 
-        {/* User + Logout */}
+        {/* User + actions */}
         <div className="flex items-center gap-3">
           <div className="hidden sm:flex flex-col items-end leading-tight">
             <span className="font-bold text-sm text-primary-foreground truncate max-w-48">
@@ -41,6 +42,17 @@ export const DashboardNavbar = () => {
               NIS: {user?.nis ?? "-"}
             </span>
           </div>
+          {/* Replays the dashboard product tour on demand (#145). */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => replayDashboardTour()}
+            aria-label="Buka panduan penggunaan"
+            className="font-semibold rounded-lg"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Panduan</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"

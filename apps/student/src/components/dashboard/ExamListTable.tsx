@@ -21,8 +21,13 @@ export const ExamListTable = ({
   startingExamId,
   onStart,
 }: ExamListTableProps) => {
+  // Indices used to anchor the product tour (#145) to a single representative
+  // row: the first startable exam, and the first token-gated startable exam.
+  const firstStartableIndex = exams.findIndex((e) => !e.completed);
+  const firstTokenIndex = exams.findIndex((e) => e.requiresToken && !e.completed);
+
   return (
-    <Card className="">
+    <Card data-tour="exam-list">
       <CardHeader className="border-b pb-4">
         <div className="flex items-center gap-2.5">
           <div className="bg-indigo/10 text-indigo p-2 rounded-lg">
@@ -60,7 +65,7 @@ export const ExamListTable = ({
                 </tr>
               </thead>
               <tbody>
-                {exams.map((exam) => (
+                {exams.map((exam, index) => (
                   <tr
                     key={exam.id}
                     className="border-b border-soft last:border-0 transition-colors hover:bg-muted/50 dark:border-soft"
@@ -70,6 +75,8 @@ export const ExamListTable = ({
                         {exam.title}
                         {exam.requiresToken && !exam.completed && (
                           <span
+                            // Tour anchor (#145) on the first token-gated row only.
+                            data-tour={index === firstTokenIndex ? "exam-token" : undefined}
                             title="Ujian ini memerlukan token akses"
                             className="inline-flex items-center gap-1 rounded-md bg-indigo/10 px-1.5 py-0.5 text-[11px] font-semibold text-indigo"
                           >
@@ -101,6 +108,8 @@ export const ExamListTable = ({
                         </span>
                       ) : (
                         <Button
+                          // Tour anchor (#145) on the first startable row only.
+                          data-tour={index === firstStartableIndex ? "exam-start" : undefined}
                           size="sm"
                           onClick={() => onStart(exam)}
                           disabled={startingExamId !== null}

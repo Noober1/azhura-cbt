@@ -18,6 +18,7 @@ import { isAxiosError } from "axios";
 import { toast } from "sonner";
 import { createLogger } from "../../lib/logger";
 import { getErrorMessage, toErrorContext } from "../../lib/errors";
+import { maybeAutoRunDashboardTour } from "../../lib/tour";
 import { DashboardNavbar } from "./DashboardNavbar";
 import { ParticipantCard } from "./ParticipantCard";
 import { ExamListTable } from "./ExamListTable";
@@ -34,7 +35,7 @@ interface DashboardPageProps {
 }
 
 export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProps) => {
-  const { user, token } = useAuthStore();
+  const { user, token, userId } = useAuthStore();
   const { setExamSession } = useExamStore();
   const examListVersion = useSocketStore((state) => state.examListVersion);
 
@@ -116,6 +117,18 @@ export const DashboardPage = ({ onExamStarted, onShowResult }: DashboardPageProp
   useEffect(() => {
     if (!isCheckingResume) fetchExams();
   }, [fetchExams, isCheckingResume]);
+
+  // First-run product tour (#145): auto-run once per participant, only after the
+  // dashboard is actually shown (resume check cleared + exams settled, so the
+  // [data-tour] anchors are mounted). The dashboard is a safe context — no exam-
+  // scoped anti-cheat — so this carries no lockdown risk. `maybeAutoRun…` is a
+  // no-op once the per-user "seen" flag is set, so re-runs from the deps are fine.
+  const tourTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (isCheckingResume || isLoading || tourTriggeredRef.current) return;
+    tourTriggeredRef.current = true;
+    void maybeAutoRunDashboardTour(userId);
+  }, [isCheckingResume, isLoading, userId]);
 
   // Open the realtime connection while on the dashboard so the server can push
   // exam-list changes (#3). Connecting here — not only during an exam — is what
