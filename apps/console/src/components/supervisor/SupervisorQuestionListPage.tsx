@@ -9,7 +9,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import type { AdminQuestion } from "../../types";
-import type { QuestionType, FillInBlankConfig, MatchingConfig, SortingConfig } from "@azhura/shared";
+import type {
+  QuestionType,
+  FillInBlankConfig,
+  MatchingConfig,
+  SortingConfig,
+  SupervisorExamDetail,
+} from "@azhura/shared";
 import { supervisorQuestionsApi } from "../../lib/supervisor-questions-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
@@ -17,6 +23,7 @@ import { Spinner } from "../ui/Spinner";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { PencilIcon, TrashIcon, PlusIcon, ChevronLeftIcon } from "../ui/icons";
+import { ExamContextCard } from "../exams/ExamContextCard";
 import { QuestionContentRenderer } from "./QuestionContentRenderer";
 
 function parseConfig<T>(raw: unknown): T | null {
@@ -36,6 +43,7 @@ export function SupervisorQuestionListPage() {
   const { examId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
 
+  const [exam, setExam] = useState<SupervisorExamDetail | null>(null);
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<AdminQuestion | null>(null);
@@ -44,8 +52,12 @@ export function SupervisorQuestionListPage() {
     if (!examId) return;
     try {
       setLoading(true);
-      const data = await supervisorQuestionsApi.listQuestions(examId);
-      setQuestions(data);
+      const [examData, questionData] = await Promise.all([
+        supervisorQuestionsApi.getExam(examId),
+        supervisorQuestionsApi.listQuestions(examId),
+      ]);
+      setExam(examData);
+      setQuestions(questionData);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -57,9 +69,14 @@ export function SupervisorQuestionListPage() {
 
   async function handleDelete() {
     if (!examId || !deleteTarget) return;
-    await supervisorQuestionsApi.deleteQuestion(examId, deleteTarget.id);
-    toast.success("Soal dihapus.");
-    await load();
+    try {
+      await supervisorQuestionsApi.deleteQuestion(examId, deleteTarget.id);
+      toast.success("Soal dihapus.");
+      await load();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Gagal menghapus soal."));
+      throw err; // keep the confirm dialog open so the user can retry
+    }
   }
 
   return (
@@ -84,6 +101,20 @@ export function SupervisorQuestionListPage() {
           Tambah Soal
         </Button>
       </div>
+
+      {/* Exam context — read-only for supervisors (no token, no admin actions). */}
+      {exam && (
+        <ExamContextCard
+          title={exam.title}
+          as="h2"
+          durationMinutes={exam.durationMinutes}
+          isActive={exam.isActive}
+          expiredAt={exam.expiredAt}
+          allowedGroupNames={exam.allowedGroupNames}
+          passingGrade={exam.passingGrade}
+          questionCount={questions.length}
+        />
+      )}
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
