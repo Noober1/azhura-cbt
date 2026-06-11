@@ -21,6 +21,10 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-store = "2"
+# Encrypted-at-rest credential storage (#129): the student JWT is persisted in
+# an IOTA Stronghold snapshot instead of plaintext localStorage on native.
+# Pinned to the same major as the JS plugin (@tauri-apps/plugin-stronghold).
+tauri-plugin-stronghold = "2.3.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -33,4 +37,10 @@ windows = { version = "0.61", features = [
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_System_Threading",
 ] }
+
+# Stronghold (#129) derives its snapshot key with argon2, which pulls in scrypt.
+# scrypt is unusably slow when compiled at the default dev opt-level, so the
+# Tauri docs recommend bumping just this package to opt-level 3 even in debug.
+[profile.dev.package.scrypt]
+opt-level = 3
 
