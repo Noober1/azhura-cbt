@@ -271,6 +271,28 @@ export interface ExamSupervisorDetail extends ExamSupervisor {
   nis: string;
 }
 
+/**
+ * Read-only exam context shown to a supervisor on the question-management page
+ * (`GET /supervisor/exams/:examId`, #141). It mirrors the admin exam-detail card
+ * (title, duration, passing grade, status, expiry, allowed groups, question
+ * count) but is deliberately stripped of admin-only data — most importantly the
+ * access `token` is NEVER included, since supervisors must not see it.
+ */
+export interface SupervisorExamDetail {
+  id: string;
+  title: string;
+  /** Total working time, in minutes. */
+  durationMinutes: number;
+  /** Whether the exam is currently active (open to students). */
+  isActive: boolean;
+  /** Exam expiry, epoch milliseconds. */
+  expiredAt: number;
+  /** Minimum passing score (0–100). 0 = no passing grade (all pass). */
+  passingGrade: number;
+  /** Display names of the groups allowed to take this exam (e.g. "Kelas 7A"). */
+  allowedGroupNames: string[];
+  /** Number of questions currently in the exam. */
+  questionCount: number;
 /** A supervisor user account as returned by the admin supervisor CRUD routes (#139). Never includes the password hash. */
 export interface SupervisorAccount {
   id: string;
