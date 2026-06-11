@@ -15,6 +15,7 @@ import { Modal } from "../ui/Modal";
 import { MediaCard } from "../media/MediaCard";
 import { MediaUploadZone } from "../media/MediaUploadZone";
 import { Spinner } from "../ui/Spinner";
+import { Tooltip } from "../ui/Tooltip";
 
 type ListFn = (
   params: { type?: string; q?: string; page?: number; limit?: number },
@@ -176,23 +177,29 @@ export function MediaPickerModal({
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-center gap-2">
-          <button type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="focus-ring rounded border border-line px-2 py-0.5 text-xs disabled:opacity-40"
-          >
-            &lsaquo;
-          </button>
+          <Tooltip label="Halaman sebelumnya">
+            <button type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+              aria-label="Halaman sebelumnya"
+              className="focus-ring rounded border border-line px-2 py-0.5 text-xs disabled:opacity-40"
+            >
+              &lsaquo;
+            </button>
+          </Tooltip>
           <span className="text-xs text-faint">
             {page} / {totalPages}
           </span>
-          <button type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="focus-ring rounded border border-line px-2 py-0.5 text-xs disabled:opacity-40"
-          >
-            &rsaquo;
-          </button>
+          <Tooltip label="Halaman berikutnya">
+            <button type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              aria-label="Halaman berikutnya"
+              className="focus-ring rounded border border-line px-2 py-0.5 text-xs disabled:opacity-40"
+            >
+              &rsaquo;
+            </button>
+          </Tooltip>
         </div>
       )}
     </Modal>

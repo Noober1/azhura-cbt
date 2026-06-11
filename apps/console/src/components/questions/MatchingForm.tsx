@@ -1,5 +1,6 @@
 import type { MatchingConfig } from "@azhura/shared";
 import { PlusIcon, TrashIcon } from "../ui/icons";
+import { Tooltip } from "../ui/Tooltip";
 
 interface Props {
   config: MatchingConfig;
@@ -62,15 +63,17 @@ export function MatchingForm({ config, onChange, disabled }: Props) {
               placeholder={`B${idx + 1}…`}
               className="rounded-[var(--radius-field)] border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50"
             />
-            <button
-              type="button"
-              onClick={() => removePair(idx)}
-              disabled={disabled || pairs.length <= MIN_PAIRS}
-              aria-label={`Hapus pasangan ${idx + 1}`}
-              className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-30"
-            >
-              <TrashIcon className="size-4" />
-            </button>
+            <Tooltip label={`Hapus pasangan ${idx + 1}`}>
+              <button
+                type="button"
+                onClick={() => removePair(idx)}
+                disabled={disabled || pairs.length <= MIN_PAIRS}
+                aria-label={`Hapus pasangan ${idx + 1}`}
+                className="focus-ring rounded-md p-1.5 text-faint transition-colors hover:bg-danger-wash hover:text-danger disabled:opacity-30"
+              >
+                <TrashIcon className="size-4" />
+              </button>
+            </Tooltip>
           </div>
         ))}
       </div>

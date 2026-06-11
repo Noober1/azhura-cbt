@@ -113,7 +113,7 @@ export function GroupImportModal({ open, onClose, onImported }: GroupImportModal
   return (
     <Modal
       open={open}
-      title="Import Grup dari Spreadsheet"
+      title="Import Grup dari file"
       description="Upload file .xlsx atau .csv dengan kolom: code, name"
       onClose={handleClose}
       size="lg"

@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: <LayoutDashboardIcon className="size-[18px]" />, adminOnly: true },
   { to: "/groups", label: "Grup", icon: <LayersIcon className="size-[18px]" />, adminOnly: true, tourId: "groups" },
   { to: "/students", label: "Peserta", icon: <UsersIcon className="size-[18px]" />, adminOnly: true, tourId: "students" },
+  { to: "/supervisors", label: "Pengawas", icon: <ShieldIcon className="size-[18px]" />, adminOnly: true },
   { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" />, adminOnly: true, tourId: "exams" },
   { to: "/media", label: "Media", icon: <ImageIcon className="size-[18px]" />, tourId: "media" },
   { to: "/supervisor/exams", label: "Soal Ujian", icon: <PenLineIcon className="size-[18px]" />, supervisorOnly: true },

@@ -21,6 +21,7 @@ import { Input } from "../ui/Field";
 import { Select } from "../ui/Select";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { IconButton } from "../ui/IconButton";
 import { StudentFormModal } from "./StudentFormModal";
 import { StudentImportModal } from "./StudentImportModal";
 import { StudentCardModal } from "./StudentCardModal";
@@ -247,20 +248,17 @@ export function StudentListPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button
+                      <IconButton
+                        icon={<PencilIcon className="size-4" />}
+                        label={`Edit ${student.name}`}
                         onClick={() => openEdit(student)}
-                        aria-label={`Edit ${student.name}`}
-                        className="focus-ring rounded-md p-2 text-faint transition-colors hover:bg-canvas hover:text-ink"
-                      >
-                        <PencilIcon className="size-4" />
-                      </button>
-                      <button
+                      />
+                      <IconButton
+                        icon={<TrashIcon className="size-4" />}
+                        label={`Hapus ${student.name}`}
+                        variant="danger"
                         onClick={() => setDeleting(student)}
-                        aria-label={`Hapus ${student.name}`}
-                        className="focus-ring rounded-md p-2 text-faint transition-colors hover:bg-danger-wash hover:text-danger"
-                      >
-                        <TrashIcon className="size-4" />
-                      </button>
+                      />
                     </div>
                   </td>
                 </tr>

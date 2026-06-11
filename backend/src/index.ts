@@ -20,6 +20,7 @@ import { adminExamRoutes } from "./routes/admin/exams";
 import { adminQuestionRoutes } from "./routes/admin/questions";
 import { adminGroupRoutes } from "./routes/admin/groups";
 import { adminStudentRoutes } from "./routes/admin/students";
+import { adminSupervisorRoutes } from "./routes/admin/supervisors";
 import { adminSettingsRoutes } from "./routes/admin/settings";
 import { adminLogsRoutes } from "./routes/admin/logs";
 import { adminRecapRoutes } from "./routes/admin/recap";
@@ -131,6 +132,7 @@ const app = new Elysia()
       .use(adminQuestionRoutes)
       .use(adminGroupRoutes)
       .use(adminStudentRoutes)
+      .use(adminSupervisorRoutes)
       .use(adminSettingsRoutes)
       .use(adminLogsRoutes)
       .use(adminRecapRoutes)

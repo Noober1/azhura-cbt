@@ -116,7 +116,7 @@ export function ExamImportModal({ open, onClose, onImported }: ExamImportModalPr
   return (
     <Modal
       open={open}
-      title="Import Ujian dari Spreadsheet"
+      title="Import Ujian dari file"
       description="Upload file .xlsx atau .csv dengan kolom: judul, durasi_menit, passing_grade, token (opsional), expired_at (YYYY-MM-DD HH:mm)"
       onClose={handleClose}
       size="lg"

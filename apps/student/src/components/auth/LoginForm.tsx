@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuthStore } from "../../stores/auth";
+import { useConfigStore } from "../../stores/config";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -32,6 +33,8 @@ interface LoginFormProps {
  */
 export const LoginForm = ({ onSuccess }: LoginFormProps) => {
   const { login, isLoading, error: authError } = useAuthStore();
+  // Show the configured school name (from first-run setup) when available (#148).
+  const schoolName = useConfigStore((s) => s.schoolInfo?.schoolName);
   const [formError, setFormError] = useState<string | null>(null);
 
   const {
@@ -88,14 +91,14 @@ export const LoginForm = ({ onSuccess }: LoginFormProps) => {
           </div>
         </div>
         <CardTitle className="font-heading text-2xl font-extrabold tracking-tight text-foreground">
-          Azhura CBT Exam
+          {schoolName ?? "Azhura CBT Exam"}
         </CardTitle>
         <CardDescription className="text-muted-foreground">
           Masukkan NIS dan password untuk memulai sesi ujian
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pb-6">
           {/* Form Error Message */}
           {(formError || authError) && (
             <div className="p-3 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/20 flex items-center gap-2">

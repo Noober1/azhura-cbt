@@ -14,6 +14,7 @@
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { XIcon } from "./icons";
+import { Tooltip } from "./Tooltip";
 
 /** Ordered stack of currently-open modal ids; the last entry is on top. */
 const openModalStack: string[] = [];
@@ -100,13 +101,15 @@ export function Modal({
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {headerAction}
-            <button
-              onClick={onClose}
-              aria-label="Tutup"
-              className="focus-ring -mr-1 rounded-md border-2 border-[var(--nb-ink)] bg-surface p-1 text-ink transition-colors hover:bg-canvas"
-            >
-              <XIcon className="size-5" />
-            </button>
+            <Tooltip label="Tutup" className="-mr-1 inline-flex">
+              <button
+                onClick={onClose}
+                aria-label="Tutup"
+                className="focus-ring rounded-md border-2 border-[var(--nb-ink)] bg-surface p-1 text-ink transition-colors hover:bg-canvas"
+              >
+                <XIcon className="size-5" />
+              </button>
+            </Tooltip>
           </div>
         </header>
 

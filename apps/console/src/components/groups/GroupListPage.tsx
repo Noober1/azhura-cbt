@@ -17,6 +17,7 @@ import { Badge } from "../ui/Badge";
 import { Input } from "../ui/Field";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { IconButton } from "../ui/IconButton";
 import { GroupFormModal } from "./GroupFormModal";
 import { GroupImportModal } from "./GroupImportModal";
 import { PageHelpButton } from "../ui/PageHelpButton";
@@ -204,20 +205,17 @@ export function GroupListPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button
+                      <IconButton
+                        icon={<PencilIcon className="size-4" />}
+                        label={`Edit ${group.name}`}
                         onClick={() => openEdit(group)}
-                        aria-label={`Edit ${group.name}`}
-                        className="focus-ring rounded-md p-2 text-faint transition-colors hover:bg-canvas hover:text-ink"
-                      >
-                        <PencilIcon className="size-4" />
-                      </button>
-                      <button
+                      />
+                      <IconButton
+                        icon={<TrashIcon className="size-4" />}
+                        label={`Hapus ${group.name}`}
+                        variant="danger"
                         onClick={() => setDeleting(group)}
-                        aria-label={`Hapus ${group.name}`}
-                        className="focus-ring rounded-md p-2 text-faint transition-colors hover:bg-danger-wash hover:text-danger"
-                      >
-                        <TrashIcon className="size-4" />
-                      </button>
+                      />
                     </div>
                   </td>
                 </tr>

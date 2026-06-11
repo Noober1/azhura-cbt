@@ -16,15 +16,16 @@
 
 import { Elysia, t } from "elysia";
 import { randomUUID } from "crypto";
-import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray } from "drizzle-orm";
 import { db, schema } from "../db";
 import { authPlugin } from "../middleware/requireAuth";
 import type { JwtPayload } from "../middleware/requireAuth";
+import type { SupervisorExamDetail } from "@azhura/shared";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../lib/errors";
 import { notifyExamListChanged } from "../lib/exam-events";
 import { createLogger } from "../lib/logger";
 
-const { exams, examGroups, examSessions, examSupervisors, questions, options } = schema;
+const { exams, examGroups, examSessions, examSupervisors, groups, questions, options } = schema;
 
 const log = createLogger("SupervisorQuestion");
 
@@ -120,6 +121,57 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
       ...r,
       isActive: r.isActive === 1,
     }));
+  })
+
+  /**
+   * GET /api/supervisor/exams/:examId
+   *
+   * Read-only exam context for the supervisor question page (#141): title,
+   * duration, passing grade, status, expiry, allowed group names, and question
+   * count. The access token is deliberately NOT included — supervisors must not
+   * see it. Guarded by `assertAssigned`, so a supervisor not assigned to the
+   * exam gets 403 (and a missing exam gets 404).
+   */
+  .get("/exams/:examId", async ({ params, user }): Promise<SupervisorExamDetail> => {
+    await assertAssigned(params.examId, user.userId);
+
+    const exam = await db.query.exams.findFirst({
+      columns: {
+        id: true,
+        title: true,
+        durationMinutes: true,
+        isActive: true,
+        expiredAt: true,
+        passingGrade: true,
+      },
+      where: eq(exams.id, params.examId),
+    });
+    // assertAssigned already guarantees the exam exists; this satisfies the type
+    // narrowing and guards against a delete racing between the two queries.
+    if (!exam) throw new NotFoundError("Ujian tidak ditemukan.");
+
+    const groupRows = await db
+      .select({ name: groups.name })
+      .from(examGroups)
+      .innerJoin(groups, eq(groups.id, examGroups.groupId))
+      .where(eq(examGroups.examId, params.examId))
+      .orderBy(asc(groups.name));
+
+    const [questionCountRow] = await db
+      .select({ value: count() })
+      .from(questions)
+      .where(eq(questions.examId, params.examId));
+
+    return {
+      id: exam.id,
+      title: exam.title,
+      durationMinutes: exam.durationMinutes,
+      isActive: exam.isActive === 1,
+      expiredAt: exam.expiredAt.getTime(),
+      passingGrade: exam.passingGrade,
+      allowedGroupNames: groupRows.map((g) => g.name),
+      questionCount: questionCountRow?.value ?? 0,
+    };
   })
 
   /**
