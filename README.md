@@ -127,7 +127,7 @@ bun run dev          # atau: bun run tauri:dev untuk frame desktop
 
 ### 3. Event Real-time Pengawas
 
-Event pengawas (`alert-message`, `force-submit`, `kick`) dikirim oleh server Socket.io di `backend/src/socket.ts`. _(Catatan: lapisan mock MSW & `window.mockSocket` dari versi lama sudah dihapus — kini selalu memakai backend asli.)_
+Event pengawas (`alert-message`, `force-submit`, `kick`) dikirim oleh server Socket.io di `backend/src/socket.ts`.
 
 ---
 
@@ -162,7 +162,6 @@ Salin `apps/student/.env.example` → `apps/student/.env.local`. Backend punya e
 | Variabel | Deskripsi | Default Dev | Produksi |
 | :--- | :--- | :--- | :--- |
 | `VITE_API_BASE_URL` | Endpoint HTTP API; URL Socket.io diturunkan dari origin-nya (`/ws`). | `http://localhost:3000/api` | `https://api.sekolah.sch.id/api` |
-| `VITE_USE_MOCK` | **Legacy** — MSW sudah dihapus, kini no-op. | `true` | `false` |
 | `VITE_ANTI_CHEAT_ENABLED` | Master anti-cheat. | `false` | `true` |
 | `VITE_ANTI_CHEAT_FULLSCREEN` | Memaksa fullscreen. | `false` | `true` |
 | `VITE_ANTI_CHEAT_BLOCK_SHORTCUTS` | Memblokir devtools, refresh, klik kanan. | `false` | `true` |

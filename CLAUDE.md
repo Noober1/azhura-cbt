@@ -111,7 +111,7 @@ Domain models (`User`, `Question`, `QuestionOption`, `ExamAnswer`, `ExamSession`
 
 1. **Offline-First Storage**: Answers persist to SQLite (native) or localStorage (web) before syncing to the server. The `connectivity` store manages background syncing on reconnect.
 2. **Hybrid Storage Abstraction** (`storage.ts`): Detects Tauri context, uses SQLite if available, else falls back to localStorage — seamless web/desktop compatibility.
-3. **Real Backend (Elysia)**: The client talks to the `backend` API over HTTP (`lib/api.ts`) and Socket.io (`lib/socket.ts`). _(The old MSW mock layer has been removed; `VITE_USE_MOCK` in `.env.example` is legacy and currently a no-op — run `bun run backend:dev` for data.)_
+3. **Real Backend (Elysia)**: The client talks to the `backend` API over HTTP (`lib/api.ts`) and Socket.io (`lib/socket.ts`). _(Run `bun run backend:dev` for data.)_
 4. **Protected Routes**: `routes/index.tsx` defines a `<ProtectedRoute>` wrapper redirecting unauthenticated users to `/login`.
 5. **Real-time Events via Socket.io**: The `socket` store subscribes to supervisor events (`alert-message`, `force-submit`, `kick`) from `backend/src/socket.ts`.
 6. **Anti-Cheat Engine**: Configurable via `.env`. Monitors keyboard shortcuts (F12, Ctrl+R, …), fullscreen state, focus loss (Alt+Tab), and optionally multi-monitor. OS-level lockdown (kiosk window, low-level keyboard hook) is planned in epic #24.
@@ -134,7 +134,6 @@ Student (`apps/student`) key variables:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `VITE_API_BASE_URL` | `http://localhost:3000/api` | HTTP API endpoint; Socket.io URL is derived from its origin (`/ws`) |
-| `VITE_USE_MOCK` | `true` | **Legacy** — MSW was removed; currently a no-op |
 | `VITE_ANTI_CHEAT_ENABLED` | `false` | Activate anti-cheat engine |
 | `VITE_ANTI_CHEAT_FULLSCREEN` | `false` | Enforce fullscreen mode |
 | `VITE_ANTI_CHEAT_BLOCK_SHORTCUTS` | `false` | Block keyboard shortcuts (F12, refresh, etc.) |
