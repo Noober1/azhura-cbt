@@ -293,6 +293,8 @@ export interface SupervisorExamDetail {
   allowedGroupNames: string[];
   /** Number of questions currently in the exam. */
   questionCount: number;
+}
+
 /** A supervisor user account as returned by the admin supervisor CRUD routes (#139). Never includes the password hash. */
 export interface SupervisorAccount {
   id: string;
