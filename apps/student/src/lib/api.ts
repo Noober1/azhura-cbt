@@ -15,6 +15,7 @@ import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { createLogger } from "./logger";
 import { toErrorContext } from "./errors";
+import { toast } from "sonner";
 
 const log = createLogger("API");
 
@@ -57,8 +58,23 @@ api.interceptors.response.use(
     const status = axios.isAxiosError(error) ? error.response?.status : undefined;
 
     if (status === 401) {
+      // A 401 on the login request itself is just wrong credentials (handled
+      // inline by the login form). Only surface a "session expired" notice when
+      // the user WAS authenticated and a later request was rejected (idle > TTL),
+      // so the redirect doesn't feel like a silent bug (#147).
+      const requestUrl = axios.isAxiosError(error) ? error.config?.url ?? "" : "";
+      const wasAuthenticated = Boolean(useAuthStore.getState().token);
+      const isLoginAttempt = requestUrl.includes("/auth/login");
+
       log.warn("Unauthorized response — logging out", toErrorContext(error));
       await useAuthStore.getState().logout();
+
+      if (wasAuthenticated && !isLoginAttempt) {
+        toast.error(
+          "Sesi berakhir karena tidak aktif terlalu lama. Silakan masuk kembali.",
+          { id: "session-expired" }
+        );
+      }
       if (typeof window !== "undefined") window.location.hash = "/login";
     } else {
       log.error("Request failed", error, toErrorContext(error));
