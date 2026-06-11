@@ -21,6 +21,7 @@ import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { IconButton } from "../ui/IconButton";
 import { ExamFormModal } from "./ExamFormModal";
 import { SupervisorAssignModal } from "./SupervisorAssignModal";
 import { QuestionContentRenderer } from "../supervisor/QuestionContentRenderer";
@@ -334,32 +335,19 @@ export function ExamDetailPage() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <button
+                  <IconButton
+                    icon={<PencilIcon className="size-4" />}
+                    label={`Edit soal ${index + 1}`}
+                    disabled={isLocked}
                     onClick={isLocked ? undefined : () => navigate(`/exams/${examId}/questions/${q.id}/edit`)}
+                  />
+                  <IconButton
+                    icon={<TrashIcon className="size-4" />}
+                    label={`Hapus soal ${index + 1}`}
+                    variant="danger"
                     disabled={isLocked}
-                    aria-label={`Edit soal ${index + 1}`}
-                    aria-disabled={isLocked}
-                    className={`focus-ring rounded-md p-2 transition-colors ${
-                      isLocked
-                        ? "cursor-not-allowed text-faint/40"
-                        : "text-faint hover:bg-canvas hover:text-ink"
-                    }`}
-                  >
-                    <PencilIcon className="size-4" />
-                  </button>
-                  <button
                     onClick={isLocked ? undefined : () => setDeletingQuestion(q)}
-                    disabled={isLocked}
-                    aria-label={`Hapus soal ${index + 1}`}
-                    aria-disabled={isLocked}
-                    className={`focus-ring rounded-md p-2 transition-colors ${
-                      isLocked
-                        ? "cursor-not-allowed text-faint/40"
-                        : "text-faint hover:bg-danger-wash hover:text-danger"
-                    }`}
-                  >
-                    <TrashIcon className="size-4" />
-                  </button>
+                  />
                 </div>
               </div>
 
