@@ -343,3 +343,13 @@ export const EyeIcon = svg(
     <circle cx="12" cy="12" r="3" />
   </>
 );
+
+export const HelpCircleIcon = svg(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+    <path d="M12 17h.01" />
+  </>
+);
+
+export const PlayIcon = svg(<path d="M6 4v16l14-8-14-8Z" />);

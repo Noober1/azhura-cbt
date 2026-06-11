@@ -20,6 +20,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { IconButton } from "../ui/IconButton";
 import { GroupFormModal } from "./GroupFormModal";
 import { GroupImportModal } from "./GroupImportModal";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import {
   PlusIcon,
   SearchIcon,
@@ -118,7 +119,10 @@ export function GroupListPage() {
             {total > 0 ? `${total} group` : "Belum ada group"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <PageHelpButton topic="groups" />
+          {/* Divider separates the help affordance from the action buttons. */}
+          <span className="h-6 w-px bg-line-soft" aria-hidden="true" />
           <Button
             variant="secondary"
             onClick={() => setImportOpen(true)}

@@ -14,12 +14,15 @@ import { studentsImportApi } from "../../lib/students-import-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
 import { saveBlob } from "../../lib/download";
+import { IMPORT_MODE_COPY, COPY } from "../../lib/copy";
 import type { StudentImportPreview, StudentImportConfirmResult } from "../../types";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { Spinner } from "../ui/Spinner";
-import { UploadIcon, DownloadIcon, FileTextIcon } from "../ui/icons";
+import { Tooltip } from "../ui/Tooltip";
+import { HelpDialog } from "../ui/HelpDialog";
+import { UploadIcon, DownloadIcon, FileTextIcon, HelpCircleIcon } from "../ui/icons";
 
 type Step = "idle" | "loading" | "preview" | "confirming" | "done";
 type RowFilter = "all" | "error" | "new" | "update";
@@ -38,6 +41,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
   const [result, setResult] = useState<StudentImportConfirmResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rowFilter, setRowFilter] = useState<RowFilter>("all");
+  const [helpOpen, setHelpOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function reset() {
@@ -47,6 +51,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
     setError(null);
     setDragOver(false);
     setRowFilter("all");
+    setHelpOpen(false);
   }
 
   function handleClose() {
@@ -56,7 +61,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
 
   async function runDryRun(file: File) {
     if (!file.name.match(/\.(xlsx|csv)$/i)) {
-      setError("Format tidak didukung. Gunakan file .xlsx atau .csv.");
+      setError(COPY.unsupportedFile);
       return;
     }
     setError(null);
@@ -94,7 +99,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
       if (res.inserted > 0) parts.push(`${res.inserted} siswa baru`);
       if (res.updated > 0) parts.push(`${res.updated} diperbarui`);
       if (res.deleted > 0) parts.push(`${res.deleted} dihapus`);
-      toast.success(`Import selesai: ${parts.join(", ") || "tidak ada perubahan"}.`);
+      toast.success(`Selesai: ${parts.join(", ") || "tidak ada perubahan"}.`);
     } catch (err) {
       toast.error(getErrorMessage(err, "Gagal mengeksekusi import."));
       setStep("preview");
@@ -127,12 +132,26 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
     : [];
 
   return (
+    <>
     <Modal
       open={open}
-      title="Import Siswa dari file"
-      description="Upload file .xlsx atau .csv dengan kolom: nis, nama, grup (kode grup), batch (opsional, 1–10, default 1)"
+      title="Tambah Peserta dari File"
+      description="Gunakan file Excel (.xlsx) atau file daftar (.csv) dengan kolom: nis, nama, grup (kode grup), batch (opsional, 1–10, default 1)."
       onClose={handleClose}
       size="lg"
+      headerAction={
+        <Tooltip label="Bantuan cara menambah peserta">
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            aria-label="Bantuan: cara menambah peserta dari file"
+            aria-haspopup="dialog"
+            className="focus-ring rounded-md border-2 border-[var(--nb-ink)] bg-surface p-1 text-ink transition-colors hover:bg-canvas"
+          >
+            <HelpCircleIcon className="size-5" />
+          </button>
+        </Tooltip>
+      }
       footer={
         step === "idle" ? (
           <Button variant="secondary" onClick={handleClose}>
@@ -145,7 +164,9 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
             </Button>
             {preview && preview.validCount > 0 && (
               <Button onClick={handleConfirm}>
-                {mode === "sync" ? "Jalankan Sync" : `Import ${preview.validCount} Siswa Valid`}
+                {mode === "sync"
+                  ? "Samakan sekarang"
+                  : `Simpan ${preview.validCount} peserta`}
               </Button>
             )}
           </>
@@ -173,35 +194,41 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
             </p>
           )}
 
-          {/* Mode toggle */}
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-ink">Mode:</span>
-            <div className="flex rounded-[var(--radius-field)] border border-line bg-canvas">
-              {(["import", "sync"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={`px-3 py-1.5 text-sm font-medium transition-colors first:rounded-l-[var(--radius-field)] last:rounded-r-[var(--radius-field)] ${
-                    mode === m
-                      ? "bg-accent text-white"
-                      : "text-faint hover:text-ink"
-                  }`}
-                >
-                  {m === "import" ? "Import" : "Sync"}
-                </button>
-              ))}
+          {/* Mode toggle — plain labels, with a short explanation of the active mode. */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-medium text-ink">Mode:</span>
+              <div className="flex rounded-[var(--radius-field)] border border-line bg-canvas">
+                {(["import", "sync"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    aria-pressed={mode === m}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors first:rounded-l-[var(--radius-field)] last:rounded-r-[var(--radius-field)] ${
+                      mode === m
+                        ? "bg-accent text-white"
+                        : "text-faint hover:text-ink"
+                    }`}
+                  >
+                    {IMPORT_MODE_COPY[m].label}
+                  </button>
+                ))}
+              </div>
             </div>
-            {mode === "sync" && (
-              <p className="text-xs text-faint">
-                Sync juga <strong>menghapus</strong> siswa yang tidak ada di file (kecuali yang
-                punya riwayat ujian).
-              </p>
-            )}
+            <p
+              className={`text-xs ${
+                mode === "sync"
+                  ? "rounded-md border-2 border-[var(--nb-ink)] bg-warn-wash px-3 py-2 font-medium text-ink"
+                  : "text-faint"
+              }`}
+            >
+              {IMPORT_MODE_COPY[mode].hint}
+            </p>
           </div>
 
-          {/* Template download */}
+          {/* Example file download */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-faint">Download template:</span>
+            <span className="text-sm text-faint">{COPY.downloadExampleFile}:</span>
             <Button
               variant="ghost"
               size="sm"
@@ -260,7 +287,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
         <div className="flex flex-col items-center gap-3 py-10">
           <Spinner className="size-8 text-accent" />
           <p className="text-sm text-faint">
-            Memvalidasi file{mode === "sync" ? " dan menyiapkan data sync" : ""}…
+            Memeriksa file{mode === "sync" ? " dan menyiapkan daftar peserta" : ""}…
           </p>
           <p className="text-xs text-faint">
             Proses ini dapat memakan beberapa detik untuk file besar.
@@ -410,7 +437,7 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
             <div className="flex items-center gap-2 text-sm text-faint">
               <Spinner className="size-4 text-accent" />
               <span>
-                {preview.mode === "sync" ? "Menjalankan sync…" : "Mengimpor siswa…"}
+                {preview.mode === "sync" ? "Menyamakan daftar peserta…" : "Menyimpan peserta…"}
               </span>
             </div>
           )}
@@ -441,10 +468,13 @@ export function StudentImportModal({ open, onClose, onImported }: StudentImportM
           )}
           <div className="flex items-center gap-2 text-sm text-faint">
             <FileTextIcon className="size-4" />
-            <span>Import selesai.</span>
+            <span>Selesai.</span>
           </div>
         </div>
       )}
     </Modal>
+
+    <HelpDialog open={helpOpen} topic="import" onClose={() => setHelpOpen(false)} />
+    </>
   );
 }

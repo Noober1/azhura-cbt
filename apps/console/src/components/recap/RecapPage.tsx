@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { PerPaketTab } from "./PerPaketTab";
 import { PerSiswaTab } from "./PerSiswaTab";
+import { PageHelpButton } from "../ui/PageHelpButton";
 
 type Tab = "paket" | "siswa";
 
@@ -23,11 +24,14 @@ export function RecapPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Rekap Nilai</h1>
-        <p className="mt-1 text-sm text-faint">
-          Rekap hasil ujian per paket dan riwayat nilai per siswa.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Rekap Nilai</h1>
+          <p className="mt-1 text-sm text-faint">
+            Rekap hasil ujian per paket dan riwayat nilai per siswa.
+          </p>
+        </div>
+        <PageHelpButton topic="recap" />
       </div>
 
       {/* Tabs */}

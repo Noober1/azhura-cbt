@@ -14,6 +14,7 @@ import { MediaCard } from "./MediaCard";
 import { MediaUploadZone } from "./MediaUploadZone";
 import { MediaPreviewModal } from "./MediaPreviewModal";
 import { Pagination } from "../ui/Pagination";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import { Tooltip } from "../ui/Tooltip";
 import { UploadIcon, SearchIcon, ImageIcon, AudioIcon, VideoIcon, TrashIcon, XIcon } from "../ui/icons";
 
@@ -145,13 +146,18 @@ export function MediaGalleryPage() {
           <h1 className="text-xl font-semibold text-ink">Media</h1>
           <p className="mt-0.5 text-sm text-faint">{total} file tersimpan</p>
         </div>
-        <Button
-          variant={uploadOpen ? "secondary" : "primary"}
-          leadingIcon={<UploadIcon className="size-4" />}
-          onClick={() => setUploadOpen((v) => !v)}
-        >
-          Upload
-        </Button>
+        <div className="flex items-center gap-2">
+          <PageHelpButton topic="media" />
+          {/* Divider separates the help affordance from the action button. */}
+          <span className="h-6 w-px bg-line-soft" aria-hidden="true" />
+          <Button
+            variant={uploadOpen ? "secondary" : "primary"}
+            leadingIcon={<UploadIcon className="size-4" />}
+            onClick={() => setUploadOpen((v) => !v)}
+          >
+            Upload
+          </Button>
+        </div>
       </div>
 
       {uploadOpen && (

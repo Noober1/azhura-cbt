@@ -18,6 +18,7 @@ import { Field, Input, Checkbox } from "../ui/Field";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { Modal } from "../ui/Modal";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import { SettingsIcon } from "../ui/icons";
 
 /** A settings section card with a title and consistent padding. */
@@ -204,11 +205,14 @@ export function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl">
       {/* Page header */}
-      <div className="mb-8">
-        <h1 className="text-xl font-semibold text-ink">Pengaturan Sistem</h1>
-        <p className="mt-1 text-sm text-faint">
-          Konfigurasi global aplikasi. Perubahan berlaku segera setelah disimpan.
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-ink">Pengaturan Sistem</h1>
+          <p className="mt-1 text-sm text-faint">
+            Konfigurasi global aplikasi. Perubahan berlaku segera setelah disimpan.
+          </p>
+        </div>
+        <PageHelpButton topic="settings" />
       </div>
 
       <div className="flex flex-col gap-6">
