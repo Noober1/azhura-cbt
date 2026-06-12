@@ -50,6 +50,23 @@ describe("HELP_CONTENT registry", () => {
     expect(HELP_CONTENT[topic]).toBeDefined();
     expect(HELP_CONTENT[topic].title.trim()).not.toBe("");
   });
+
+  it.each(Object.entries(HELP_CONTENT))(
+    "entry %s has well-formed tutorial steps when a tutorial is present (#180)",
+    (_topic, entry) => {
+      if (!entry.tutorial) return;
+      expect(entry.tutorial.length).toBeGreaterThan(0);
+      for (const step of entry.tutorial) {
+        // Assets live at src/assets/help/<topic>/<step>.webp. The image must
+        // be the animated asset — posters (.poster.webp) are derived by
+        // pickHelpImage and must never be referenced directly.
+        expect(step.image).toMatch(/^[\w-]+\/[\w.-]+\.webp$/);
+        expect(step.image).not.toMatch(/\.poster\.webp$/);
+        expect(step.title.trim()).not.toBe("");
+        expect(step.description.trim()).not.toBe("");
+      }
+    }
+  );
 });
 
 describe("page wiring — target pages render a help button for their topic", () => {
