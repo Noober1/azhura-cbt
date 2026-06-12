@@ -301,3 +301,61 @@ describe("Option imageUrl — admin CRUD round-trip (DB integration)", () => {
     }
   );
 });
+
+describe("Stem media — must be local /uploads (DB integration)", () => {
+  it.skipIf(!dbReady)("accepts a stem embedding a local /uploads image (201)", async () => {
+    const [status] = await request(
+      adminToken,
+      "POST",
+      `/admin/exams/${examId}/questions`,
+      {
+        text: `<p>Perhatikan:</p><img src="${IMG_A}" alt="bagan">`,
+        options: [{ text: "<p>A</p>" }, { text: "<p>B</p>" }],
+        correctOptionIndex: 0,
+      }
+    );
+    expect(status).toBe(201);
+  });
+
+  it.skipIf(!dbReady)(
+    "rejects a stem embedding an external image (400)",
+    async () => {
+      const [status] = await request(
+        adminToken,
+        "POST",
+        `/admin/exams/${examId}/questions`,
+        {
+          text: '<p>x</p><img src="https://evil.example.com/track.gif">',
+          options: [{ text: "<p>A</p>" }, { text: "<p>B</p>" }],
+          correctOptionIndex: 0,
+        }
+      );
+      expect(status).toBe(400);
+    }
+  );
+
+  it.skipIf(!dbReady)(
+    "rejects updating a stem to an external image (400)",
+    async () => {
+      const [createStatus, created] = await request(
+        adminToken,
+        "POST",
+        `/admin/exams/${examId}/questions`,
+        {
+          text: "<p>Soal awal bersih.</p>",
+          options: [{ text: "<p>A</p>" }, { text: "<p>B</p>" }],
+          correctOptionIndex: 0,
+        }
+      );
+      expect(createStatus).toBe(201);
+
+      const [status] = await request(
+        adminToken,
+        "PATCH",
+        `/admin/exams/${examId}/questions/${created.id}`,
+        { text: '<p>diubah</p><img src="https://evil.example.com/x.png">' }
+      );
+      expect(status).toBe(400);
+    }
+  );
+});

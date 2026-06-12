@@ -23,6 +23,7 @@ import { Elysia, t } from "elysia";
 import { randomUUID } from "crypto";
 import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import { db, schema } from "../../db";
+import { findExternalMediaSrc } from "../../lib/question-content";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors";
@@ -156,6 +157,15 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       const qType = body.type ?? "multiple_choice";
       const questionId = randomUUID();
 
+      const externalSrc = findExternalMediaSrc(body.text);
+      // `!== null` (not truthiness): an empty `src=""` is a non-/uploads value
+      // that must also be rejected, and the empty string is falsy.
+      if (externalSrc !== null) {
+        throw new BadRequestError(
+          "Media pada soal harus diunggah ke pustaka media; URL eksternal tidak diizinkan."
+        );
+      }
+
       await db.transaction(async (tx) => {
         const [active] = await tx
           .select({ id: examSessions.id })
@@ -281,6 +291,12 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           imageUrl: o.imageUrl ?? null,
         }));
         newCorrectOptionId = newOptionRows[body.correctOptionIndex].id;
+      }
+
+      if (body.text !== undefined && findExternalMediaSrc(body.text) !== null) {
+        throw new BadRequestError(
+          "Media pada soal harus diunggah ke pustaka media; URL eksternal tidak diizinkan."
+        );
       }
 
       const patch: Partial<typeof questions.$inferInsert> = {};

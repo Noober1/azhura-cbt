@@ -22,6 +22,7 @@ import { authPlugin } from "../middleware/requireAuth";
 import type { JwtPayload } from "../middleware/requireAuth";
 import type { SupervisorExamDetail } from "@azhura/shared";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../lib/errors";
+import { findExternalMediaSrc } from "../lib/question-content";
 import { notifyExamListChanged } from "../lib/exam-events";
 import { createLogger } from "../lib/logger";
 
@@ -241,6 +242,14 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
       const qType = body.type ?? "multiple_choice";
       const questionId = randomUUID();
 
+      // `!== null` (not truthiness): an empty `src=""` is a non-/uploads value
+      // that must also be rejected, and the empty string is falsy.
+      if (findExternalMediaSrc(body.text) !== null) {
+        throw new BadRequestError(
+          "Media pada soal harus diunggah ke pustaka media; URL eksternal tidak diizinkan."
+        );
+      }
+
       await db.transaction(async (tx) => {
         const [active] = await tx
           .select({ id: examSessions.id })
@@ -326,6 +335,13 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
       if (!existing) throw new NotFoundError("Soal tidak ditemukan.");
 
       const qType = existing.type ?? "multiple_choice";
+
+      // `!== null`: reject an empty `src=""` too (the empty string is falsy).
+      if (findExternalMediaSrc(body.text) !== null) {
+        throw new BadRequestError(
+          "Media pada soal harus diunggah ke pustaka media; URL eksternal tidak diizinkan."
+        );
+      }
 
       await db.transaction(async (tx) => {
         const [active] = await tx

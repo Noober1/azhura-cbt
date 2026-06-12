@@ -2,6 +2,7 @@ import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/core";
 import { AlignLeftIcon, AlignCenterIcon, AlignRightIcon, TrashIcon } from "../ui/icons";
 import { Tooltip } from "../ui/Tooltip";
+import { resolveMediaUrl } from "../../lib/format";
 
 interface MediaAttrs {
   src: string;
@@ -28,6 +29,11 @@ const WIDTH_PRESETS: { label: string; value: string | null }[] = [
 export function MediaEmbedView({ node, updateAttributes, deleteNode, selected }: NodeViewProps) {
   const { src, mediaType, alt, width, align } = node.attrs as MediaAttrs;
 
+  // Node attrs store the RELATIVE `/uploads/...` path; the in-editor preview
+  // needs an absolute URL because the console runs on a different origin than
+  // the backend that serves uploads.
+  const displaySrc = resolveMediaUrl(src);
+
   const isAudio = mediaType === "audio";
   const isVideo = mediaType === "video";
 
@@ -47,13 +53,13 @@ export function MediaEmbedView({ node, updateAttributes, deleteNode, selected }:
       {/* Media */}
       <div style={containerStyle}>
         {mediaType === "image" && (
-          <img src={src} alt={alt ?? ""} style={mediaStyle} draggable={false} />
+          <img src={displaySrc} alt={alt ?? ""} style={mediaStyle} draggable={false} />
         )}
         {mediaType === "audio" && (
-          <audio src={src} controls style={{ display: "inline-block" }} />
+          <audio src={displaySrc} controls style={{ display: "inline-block" }} />
         )}
         {mediaType === "video" && (
-          <video src={src} controls style={mediaStyle} />
+          <video src={displaySrc} controls style={mediaStyle} />
         )}
       </div>
 
