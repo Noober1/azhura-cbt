@@ -30,7 +30,9 @@ const WORKFLOW = [
 export function TutorialDialog({ open, onClose }: TutorialDialogProps) {
   function handleReplay() {
     onClose();
-    replayTour();
+    // This dialog is only mounted for admins (AppShell gates it), so replay
+    // the admin variant of the tour.
+    replayTour("admin");
   }
 
   return (

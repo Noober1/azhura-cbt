@@ -13,7 +13,8 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useAuthStore } from "../../stores/auth";
 import { Button } from "../ui/Button";
 import { Tooltip } from "../ui/Tooltip";
-import { FileTextIcon, PenLineIcon, ShieldIcon, LogOutIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon, BarChartIcon, LayoutDashboardIcon, ImageIcon, HelpCircleIcon } from "../ui/icons";
+import { FileTextIcon, PenLineIcon, ShieldIcon, UsersIcon, LayersIcon, ActivityIcon, SettingsIcon, ScrollTextIcon, BarChartIcon, LayoutDashboardIcon, ImageIcon, HelpCircleIcon } from "../ui/icons";
+import { LogoutButton } from "./LogoutButton";
 import { ChatLauncher } from "../chat/ChatLauncher";
 import { TutorialDialog } from "../help/TutorialDialog";
 import { pageTransition, pageVariants } from "../../lib/motion";
@@ -32,16 +33,16 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: <LayoutDashboardIcon className="size-[18px]" />, adminOnly: true },
+  { to: "/dashboard", label: "Dashboard", icon: <LayoutDashboardIcon className="size-[18px]" />, adminOnly: true, tourId: "dashboard" },
   { to: "/groups", label: "Grup", icon: <LayersIcon className="size-[18px]" />, adminOnly: true, tourId: "groups" },
   { to: "/students", label: "Peserta", icon: <UsersIcon className="size-[18px]" />, adminOnly: true, tourId: "students" },
-  { to: "/supervisors", label: "Pengawas", icon: <ShieldIcon className="size-[18px]" />, adminOnly: true },
+  { to: "/supervisors", label: "Pengawas", icon: <ShieldIcon className="size-[18px]" />, adminOnly: true, tourId: "supervisors" },
   { to: "/exams", label: "Ujian & Soal", icon: <FileTextIcon className="size-[18px]" />, adminOnly: true, tourId: "exams" },
   { to: "/media", label: "Media", icon: <ImageIcon className="size-[18px]" />, tourId: "media" },
-  { to: "/supervisor/exams", label: "Soal Ujian", icon: <PenLineIcon className="size-[18px]" />, supervisorOnly: true },
+  { to: "/supervisor/exams", label: "Soal Ujian", icon: <PenLineIcon className="size-[18px]" />, supervisorOnly: true, tourId: "supervisor-exams" },
   { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon className="size-[18px]" />, tourId: "monitoring" },
   { to: "/recap", label: "Rekap Nilai", icon: <BarChartIcon className="size-[18px]" />, adminOnly: true, tourId: "recap" },
-  { to: "/logs", label: "Log", icon: <ScrollTextIcon className="size-[18px]" />, adminOnly: true },
+  { to: "/logs", label: "Log", icon: <ScrollTextIcon className="size-[18px]" />, adminOnly: true, tourId: "logs" },
   { to: "/settings", label: "Pengaturan", icon: <SettingsIcon className="size-[18px]" />, adminOnly: true, tourId: "settings" },
 ];
 
@@ -165,14 +166,8 @@ export function AppShell() {
                 <span className="h-6 w-px bg-line-soft" aria-hidden="true" />
               </>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              leadingIcon={<LogOutIcon className="size-4" />}
-            >
-              Keluar
-            </Button>
+            {/* Bordered like its siblings, destructive-tinted, confirm-gated (#181). */}
+            <LogoutButton onLogout={handleLogout} />
           </div>
         </header>
 
