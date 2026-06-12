@@ -10,14 +10,17 @@ import {
   detectMultiMonitor,
 } from "../../lib/anti-cheat-config";
 import { isEnforcementActive, runExamTourIfSafe } from "../../lib/tour";
+import { getExamHelpVisibility } from "../../lib/exam-help";
+import { useExamShortcuts } from "../../hooks/useExamShortcuts";
 import { Button } from "../ui/button";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, PlayCircle } from "lucide-react";
 import { QuestionRenderer } from "./QuestionRenderer";
 import { ExamSidebar } from "./ExamSidebar";
 import { NavigationPanel } from "./NavigationPanel";
 import { TimerDisplay } from "./TimerDisplay";
 import { SubmitConfirmation } from "./SubmitConfirmation";
 import { ProcessingOverlay } from "./ProcessingOverlay";
+import { ExamHelpDialog } from "./ExamHelpDialog";
 import { toast } from "sonner";
 import api from "../../lib/api";
 import { createLogger } from "../../lib/logger";
@@ -52,12 +55,20 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
   const { isOnline } = useConnectivityStore();
   const { isConnected } = useSocketStore();
   const config = useConfigStore((s) => s.antiCheat);
-  // When lockdown enforcement is active, the in-exam help button is hidden so a
-  // tour overlay can never appear over a fullscreen/focus-monitored exam (#145).
+  // Under lockdown the tour replay is hidden (a driver.js overlay must never
+  // cover a fullscreen/focus-monitored exam, #145) but the static help dialog
+  // stays available — it is the student's only in-exam help there (#166).
   const enforcementActive = isEnforcementActive(config);
+  const helpVisibility = getExamHelpVisibility(enforcementActive);
 
   const [isLoading, setIsLoading] = useState(true);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showHelpDialog, setShowHelpDialog] = useState(false);
+
+  // Keyboard shortcuts (#178) — suspended while any blocking layer is open.
+  useExamShortcuts({
+    overlayOpen: showSubmitModal || showHelpDialog || isSubmitting || finalizing,
+  });
 
   // 1. Initial configuration, data fetching and socket mapping
   useEffect(() => {
@@ -171,13 +182,29 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
 
           {/* Right Status Widgets */}
           <div className="flex items-center gap-3">
-            {/* Exam-session help (#145) — SAFE-CONTEXT ONLY. Hidden whenever
+            {/* Static help dialog (#166) — ALWAYS available, including under
+                lockdown: it is a plain controlled Dialog (no driver.js overlay),
+                so it cannot fight fullscreen or look like a focus-loss violation. */}
+            {helpVisibility.staticHelp && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowHelpDialog(true)}
+                aria-label="Buka bantuan cara mengerjakan ujian"
+                className="font-semibold rounded-lg"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Bantuan</span>
+              </Button>
+            )}
+
+            {/* Tour replay (#145) — SAFE-CONTEXT ONLY. Hidden whenever
                 anti-cheat enforcement is active (fullscreen / focus-loss /
                 OS keyboard lock), so a tour overlay never appears during a
                 locked-down exam. When shown, the driver.js overlay stays inside
                 the window and never moves focus out. The full panduan is also
                 available before the exam from the start-exam dialog. */}
-            {!enforcementActive && (
+            {helpVisibility.tourReplay && (
               <Button
                 variant="outline"
                 size="sm"
@@ -185,7 +212,7 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
                 aria-label="Lihat panduan cara mengerjakan ujian"
                 className="font-semibold rounded-lg"
               >
-                <HelpCircle className="w-3.5 h-3.5" />
+                <PlayCircle className="w-3.5 h-3.5" />
                 <span className="hidden md:inline">Lihat panduan</span>
               </Button>
             )}
@@ -249,6 +276,9 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
         </div>
 
       </main>
+
+      {/* Static Help Dialog (#166) — lockdown-safe, hosts the shortcut legend (#178) */}
+      <ExamHelpDialog open={showHelpDialog} onOpenChange={setShowHelpDialog} />
 
       {/* Submit Confirmation Dialog */}
       <SubmitConfirmation
