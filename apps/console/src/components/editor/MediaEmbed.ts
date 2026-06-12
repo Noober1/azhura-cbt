@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { MediaEmbedView } from "./MediaEmbedView";
+import { relativizeMediaUrl } from "../../lib/format";
 
 export const MediaEmbed = Node.create({
   name: "mediaEmbed",
@@ -25,8 +26,12 @@ export const MediaEmbed = Node.create({
         tag: "img[data-tiptap-media]",
         getAttrs: (el) => {
           const e = el as HTMLImageElement;
+          const raw = e.getAttribute("src");
           return {
-            src:       e.getAttribute("src"),
+            // Re-relativize legacy stems saved with an absolute self-origin URL
+            // so a re-save passes the server-side `^/uploads/` guard. External
+            // URLs stay absolute (and are rejected on save — by design).
+            src:       raw === null ? null : relativizeMediaUrl(raw),
             mediaType: "image",
             alt:       e.getAttribute("alt") ?? "",
             width:     e.getAttribute("data-width"),
@@ -36,20 +41,24 @@ export const MediaEmbed = Node.create({
       },
       {
         tag: "audio[data-tiptap-media]",
-        getAttrs: (el) => ({
-          src:       (el as HTMLAudioElement).getAttribute("src"),
+        getAttrs: (el) => {
+          const raw = (el as HTMLAudioElement).getAttribute("src");
+          return {
+          src:       raw === null ? null : relativizeMediaUrl(raw),
           mediaType: "audio",
           alt:       "",
           width:     null,
           align:     (el as HTMLElement).getAttribute("data-align") ?? "center",
-        }),
+          };
+        },
       },
       {
         tag: "video[data-tiptap-media]",
         getAttrs: (el) => {
           const e = el as HTMLVideoElement;
+          const raw = e.getAttribute("src");
           return {
-            src:       e.getAttribute("src"),
+            src:       raw === null ? null : relativizeMediaUrl(raw),
             mediaType: "video",
             alt:       "",
             width:     e.getAttribute("data-width"),

@@ -34,7 +34,6 @@ import {
   ImagePlusIcon,
 } from "../ui/icons";
 import { Tooltip } from "../ui/Tooltip";
-import { resolveMediaUrl } from "../../lib/format";
 
 type ListFn = (
   params: { type?: string; q?: string; page?: number; limit?: number },
@@ -133,7 +132,11 @@ export function RichTextEditor({
       .insertContent({
         type: "mediaEmbed",
         attrs: {
-          src: resolveMediaUrl(file.url),
+          // Store the RELATIVE `/uploads/...` path (matching how option images
+          // are persisted). The server-side stem guard only accepts `/uploads/`,
+          // and MediaEmbedView resolves it to an absolute URL for in-editor
+          // display. Storing the absolute URL here would fail that guard.
+          src: file.url,
           mediaType: file.type,
           alt: file.originalName,
         },

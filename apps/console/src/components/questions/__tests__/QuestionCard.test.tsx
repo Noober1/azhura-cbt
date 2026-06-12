@@ -33,9 +33,9 @@ function makeQuestion(overrides: Partial<AdminQuestion> = {}): AdminQuestion {
     orderIndex: 0,
     correctOptionId: "opt-b",
     options: [
-      { id: "opt-a", text: "Bandung" },
-      { id: "opt-b", text: "Jakarta" },
-      { id: "opt-c", text: "Surabaya" },
+      { id: "opt-a", text: "Bandung", imageUrl: null },
+      { id: "opt-b", text: "Jakarta", imageUrl: null },
+      { id: "opt-c", text: "Surabaya", imageUrl: null },
     ],
     ...overrides,
   };

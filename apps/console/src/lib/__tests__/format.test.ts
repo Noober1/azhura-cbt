@@ -7,6 +7,7 @@ import {
   isPast,
   formatBytes,
   resolveMediaUrl,
+  relativizeMediaUrl,
 } from "../format";
 
 describe("formatDuration", () => {
@@ -145,5 +146,46 @@ describe("resolveMediaUrl", () => {
     const resolved = resolveMediaUrl("/uploads/images/uuid.jpg");
     expect(resolved.endsWith("/uploads/images/uuid.jpg")).toBe(true);
     expect(resolved).not.toContain("/api/uploads");
+  });
+});
+
+describe("relativizeMediaUrl", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("strips OUR backend origin from a self-origin absolute upload URL", () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://localhost:3000/api");
+    expect(relativizeMediaUrl("http://localhost:3000/uploads/images/x.webp")).toBe(
+      "/uploads/images/x.webp"
+    );
+  });
+
+  it("leaves a foreign absolute upload URL untouched (so the guard rejects it)", () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://localhost:3000/api");
+    const evil = "https://evil.com/uploads/x.webp";
+    expect(relativizeMediaUrl(evil)).toBe(evil);
+  });
+
+  it("leaves an already-relative path untouched", () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://localhost:3000/api");
+    expect(relativizeMediaUrl("/uploads/images/x.webp")).toBe(
+      "/uploads/images/x.webp"
+    );
+  });
+
+  it("leaves an unrelated origin's non-upload absolute URL untouched", () => {
+    vi.stubEnv("VITE_API_BASE_URL", "http://localhost:3000/api");
+    // Same origin but not under /uploads/ → not a media path we manage.
+    expect(relativizeMediaUrl("http://localhost:3000/static/x.webp")).toBe(
+      "http://localhost:3000/static/x.webp"
+    );
+  });
+
+  it("returns the URL as-is when no backend origin is configured", () => {
+    // No VITE_API_BASE_URL → origin "" → nothing to strip (same-origin build).
+    expect(relativizeMediaUrl("/uploads/images/x.webp")).toBe(
+      "/uploads/images/x.webp"
+    );
   });
 });
