@@ -20,6 +20,7 @@ import { Button } from "../ui/Button";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { IconButton } from "../ui/IconButton";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import { ExamFormModal } from "./ExamFormModal";
 import { ExamContextCard } from "./ExamContextCard";
 import { SupervisorAssignModal } from "./SupervisorAssignModal";
@@ -177,6 +178,9 @@ export function ExamDetailPage() {
           allowedGroupNames={exam.allowedGroups.map((g) => g.name)}
           actions={
             <>
+              <PageHelpButton topic="examDetail" />
+              {/* Divider separates the help affordance from the action buttons. */}
+              <span className="h-6 w-px bg-line-soft" aria-hidden="true" />
               <Button
                 variant="secondary"
                 onClick={() => navigate(`/exams/${examId}/sessions`)}

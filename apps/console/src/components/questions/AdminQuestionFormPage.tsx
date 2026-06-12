@@ -18,6 +18,7 @@ import { InlineEditor } from "../editor/InlineEditor";
 import { Button } from "../ui/Button";
 import { Spinner } from "../ui/Spinner";
 import { Tooltip } from "../ui/Tooltip";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import { ChevronLeftIcon, EyeIcon, PlusIcon, TrashIcon } from "../ui/icons";
 import { QuestionPreviewModal } from "../supervisor/QuestionPreviewModal";
 import { FillInBlankForm } from "./FillInBlankForm";
@@ -227,6 +228,9 @@ export function AdminQuestionFormPage() {
         <h1 className="text-lg font-semibold text-ink">
           {isEdit ? "Edit Soal" : "Tambah Soal"}
         </h1>
+        <div className="ml-auto">
+          <PageHelpButton topic="questionForm" />
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
