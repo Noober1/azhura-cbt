@@ -99,6 +99,13 @@
       "when": 1780999883785,
       "tag": "0013_solid_susan_delgado",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1781260492453,
+      "tag": "0014_slow_serpent_society",
+      "breakpoints": true
     }
   ]
 }

@@ -35,11 +35,23 @@ import { QuestionPreviewModal } from "../supervisor/QuestionPreviewModal";
 import { FillInBlankForm } from "./FillInBlankForm";
 import { MatchingForm } from "./MatchingForm";
 import { SortingForm } from "./SortingForm";
+import { OptionImagePicker } from "./OptionImagePicker";
+import {
+  type McOptionDraft,
+  adjustCorrectIndexAfterRemove,
+  appendOption,
+  clearOptionImage,
+  createDefaultOptions,
+  hydrateOptions,
+  removeOptionAt,
+  setOptionImage,
+  toOptionPayload,
+  updateOptionText,
+} from "../../lib/mc-options";
 
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
-const DEFAULT_OPTIONS = ["<p></p>", "<p></p>", "<p></p>", "<p></p>"];
 
 const TYPE_LABELS: Record<QuestionType, string> = {
   multiple_choice: "Pilihan Ganda",
@@ -68,7 +80,7 @@ export function AdminQuestionFormPage() {
   const [loadingQuestion, setLoadingQuestion] = useState(isEdit);
   const [questionType, setQuestionType] = useState<QuestionType>("multiple_choice");
   const [questionText, setQuestionText] = useState("<p></p>");
-  const [options, setOptions] = useState<string[]>(DEFAULT_OPTIONS);
+  const [options, setOptions] = useState<McOptionDraft[]>(createDefaultOptions);
   const [correctIndex, setCorrectIndex] = useState(0);
   const [fillInBlankConfig, setFillInBlankConfig] = useState<FillInBlankConfig>(DEFAULT_FILL_IN_BLANK);
   const [matchingConfig, setMatchingConfig] = useState<MatchingConfig>(DEFAULT_MATCHING);
@@ -110,9 +122,8 @@ export function AdminQuestionFormPage() {
     const type = q.type ?? "multiple_choice";
     setQuestionType(type);
     if (type === "multiple_choice") {
-      const opts = q.options.slice(0, MAX_OPTIONS);
-      while (opts.length < MIN_OPTIONS) opts.push({ id: "", text: "<p></p>" });
-      setOptions(opts.map((o) => o.text || "<p></p>"));
+      const opts = hydrateOptions(q.options, MIN_OPTIONS, MAX_OPTIONS);
+      setOptions(opts);
       const idx = q.options.findIndex((o) => o.id === q.correctOptionId);
       setCorrectIndex(idx >= 0 ? Math.min(idx, opts.length - 1) : 0);
     } else if (type === "fill_in_blank" && q.config) {
@@ -143,7 +154,7 @@ export function AdminQuestionFormPage() {
     if (newType === "matching") setMatchingConfig(DEFAULT_MATCHING);
     if (newType === "sorting") setSortingConfig(DEFAULT_SORTING);
     if (newType === "multiple_choice") {
-      setOptions(DEFAULT_OPTIONS);
+      setOptions(createDefaultOptions());
       setCorrectIndex(0);
     }
   }
@@ -159,30 +170,34 @@ export function AdminQuestionFormPage() {
   }
 
   function updateOption(idx: number, val: string) {
-    setOptions((prev) => prev.map((o, i) => (i === idx ? val : o)));
+    setOptions((prev) => updateOptionText(prev, idx, val));
+  }
+
+  function attachOptionImage(idx: number, url: string) {
+    setOptions((prev) => setOptionImage(prev, idx, url));
+  }
+
+  function removeOptionImage(idx: number) {
+    setOptions((prev) => clearOptionImage(prev, idx));
   }
 
   function addOption() {
-    setOptions((prev) => (prev.length >= MAX_OPTIONS ? prev : [...prev, "<p></p>"]));
+    setOptions((prev) => appendOption(prev, MAX_OPTIONS));
   }
 
   function removeOption(idx: number) {
-    setOptions((prev) => {
-      if (prev.length <= MIN_OPTIONS) return prev;
-      return prev.filter((_, i) => i !== idx);
-    });
-    setCorrectIndex((ci) => {
-      if (idx === ci) return 0;
-      return idx < ci ? ci - 1 : ci;
-    });
+    setOptions((prev) => removeOptionAt(prev, idx, MIN_OPTIONS));
+    setCorrectIndex((ci) => adjustCorrectIndexAfterRemove(ci, idx));
   }
 
   function validate(): string | null {
     if (!questionText.replace(/<[^>]*>/g, "").trim()) return "Teks soal tidak boleh kosong.";
     if (questionType === "multiple_choice") {
       for (let i = 0; i < options.length; i++) {
-        if (!options[i].replace(/<[^>]*>/g, "").trim())
-          return `Opsi ${OPTION_LABELS[i]} tidak boleh kosong.`;
+        // An option with an attached image may have empty text ("pilih gambar
+        // yang benar" questions) — only reject when BOTH are missing.
+        if (!options[i].text.replace(/<[^>]*>/g, "").trim() && !options[i].imageUrl)
+          return `Opsi ${OPTION_LABELS[i]} harus memiliki teks atau gambar.`;
       }
     } else if (questionType === "fill_in_blank") {
       const candidates = fillInBlankConfig.answers?.length
@@ -215,7 +230,7 @@ export function AdminQuestionFormPage() {
     const base = { text: questionText, type: questionType };
     const input =
       questionType === "multiple_choice"
-        ? { ...base, options: options.map((o) => ({ text: o })), correctOptionIndex: correctIndex }
+        ? { ...base, options: toOptionPayload(options), correctOptionIndex: correctIndex }
         : questionType === "fill_in_blank"
         ? { ...base, config: fillInBlankConfig }
         : questionType === "matching"
@@ -348,10 +363,19 @@ export function AdminQuestionFormPage() {
                 </label>
                 <div className="flex-1">
                   <InlineEditor
-                    value={opt}
+                    value={opt.text}
                     onChange={(val) => updateOption(idx, val)}
                     placeholder={`Teks opsi ${OPTION_LABELS[idx]}…`}
                     disabled={busy}
+                  />
+                  <OptionImagePicker
+                    imageUrl={opt.imageUrl}
+                    onSelect={(url) => attachOptionImage(idx, url)}
+                    onClear={() => removeOptionImage(idx)}
+                    disabled={busy}
+                    optionLabel={OPTION_LABELS[idx]}
+                    listFn={mediaApi.list}
+                    uploadFn={mediaApi.upload}
                   />
                 </div>
                 {options.length > MIN_OPTIONS && (

@@ -27,6 +27,14 @@ export interface User {
 export interface QuestionOption {
   id: string;
   text: string;
+  /**
+   * Optional image attached to the option (#163), as a media-library URL path
+   * (e.g. `/uploads/images/abc123.jpg` — same `/uploads` form as stem media).
+   * Stored relative so it stays valid across deployments; clients resolve it
+   * against the API origin at render time. Null/absent when the option has no
+   * image.
+   */
+  imageUrl?: string | null;
 }
 
 // ── Question types (#90) ──────────────────────────────────────────────────────

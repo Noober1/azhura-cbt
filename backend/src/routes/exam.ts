@@ -250,15 +250,23 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     }
 
     const optionRows = await db
-      .select({ id: options.id, questionId: options.questionId, text: options.text })
+      .select({
+        id: options.id,
+        questionId: options.questionId,
+        text: options.text,
+        imageUrl: options.imageUrl,
+      })
       .from(options)
       .where(inArray(options.questionId, canonicalIds))
       .orderBy(asc(options.orderIndex));
 
-    const optionsByQuestion = new Map<string, { id: string; text: string }[]>();
+    const optionsByQuestion = new Map<
+      string,
+      { id: string; text: string; imageUrl: string | null }[]
+    >();
     for (const o of optionRows) {
       const bucket = optionsByQuestion.get(o.questionId) ?? [];
-      bucket.push({ id: o.id, text: o.text });
+      bucket.push({ id: o.id, text: o.text, imageUrl: o.imageUrl });
       optionsByQuestion.set(o.questionId, bucket);
     }
 

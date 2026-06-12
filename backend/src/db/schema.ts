@@ -173,6 +173,12 @@ export const options = mysqlTable("options", {
     .references(() => questions.id, { onDelete: "cascade" }),
   text: text("text").notNull(),
   orderIndex: int("order_index").notNull().default(0),
+  /**
+   * Optional image attached to the option (#163): a media-library URL path
+   * (e.g. `/uploads/images/abc123.jpg`, mirrors `media.url`). Null when the
+   * option is text-only.
+   */
+  imageUrl: varchar("image_url", { length: 500 }),
 });
 
 /** A single student's timed attempt at an exam. */

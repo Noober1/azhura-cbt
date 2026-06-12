@@ -15,7 +15,7 @@ export interface SupervisorQuestionInput {
   orderIndex?: number;
   type?: import("@azhura/shared").QuestionType;
   config?: import("@azhura/shared").QuestionConfig;
-  options?: { text: string }[];
+  options?: { text: string; imageUrl?: string | null }[];
   correctOptionIndex?: number;
 }
 
