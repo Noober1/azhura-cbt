@@ -28,6 +28,23 @@ export type HelpTopic =
   | "settings"
   | "import";
 
+/**
+ * One step of a visual tutorial (#180): a short demo animation plus a plain
+ * Indonesian title and description.
+ */
+export interface TutorialStep {
+  /**
+   * Asset path relative to `src/assets/help/`, e.g. `"groups/1.webp"`.
+   * The file is an animated WebP (<10s). A reduced-motion fallback frame may
+   * sit next to it as `<name>.poster.webp` (see `lib/help-assets.ts`).
+   */
+  image: string;
+  /** Short step title — also used as the visual's alt text. */
+  title: string;
+  /** One or two plain sentences explaining what the animation shows. */
+  description: string;
+}
+
 /** One self-contained help entry for a topic. */
 export interface HelpEntry {
   /** Dialog title. */
@@ -36,6 +53,12 @@ export interface HelpEntry {
   body: string[];
   /** Optional ordered "how to" steps shown as a numbered list. */
   steps?: string[];
+  /**
+   * Optional visual step-by-step tutorial (#180). When present (non-empty),
+   * the help dialog switches to the visual carousel; `body`/`steps` stay as
+   * the text fallback for topics whose recordings don't exist yet.
+   */
+  tutorial?: TutorialStep[];
 }
 
 export const HELP_CONTENT: Record<HelpTopic, HelpEntry> = {

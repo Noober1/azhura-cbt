@@ -1,14 +1,20 @@
 /**
- * Azhura CBT Console — Help dialog (#134 / #137).
+ * Azhura CBT Console — Help dialog (#134 / #137 / #180).
  *
- * Presentational dialog that renders one help entry (title + plain-language
- * paragraphs + optional numbered steps) from `help-content.ts`. Reused by the
- * per-page help button and the import-flow help button so help looks the same
- * everywhere. Built on the shared <Modal/>.
+ * Presentational dialog for one help entry from `help-content.ts`. Reused by
+ * the per-page help button and the import-flow help button so help looks the
+ * same everywhere.
+ *
+ * Two modes, chosen automatically per topic:
+ *  - entry has a `tutorial` → the visual step-by-step carousel
+ *    (<TutorialCarouselDialog/>, #180);
+ *  - otherwise → the classic text dialog (paragraphs + numbered steps), which
+ *    stays as the fallback for topics whose recordings don't exist yet.
  */
 
 import { Modal } from "./Modal";
 import { Button } from "./Button";
+import { TutorialCarouselDialog } from "./TutorialCarouselDialog";
 import { HELP_CONTENT, type HelpTopic } from "../../lib/help-content";
 
 interface HelpDialogProps {
@@ -19,6 +25,17 @@ interface HelpDialogProps {
 
 export function HelpDialog({ open, topic, onClose }: HelpDialogProps) {
   const entry = HELP_CONTENT[topic];
+
+  if (entry.tutorial && entry.tutorial.length > 0) {
+    return (
+      <TutorialCarouselDialog
+        open={open}
+        topicTitle={entry.title}
+        steps={entry.tutorial}
+        onClose={onClose}
+      />
+    );
+  }
 
   return (
     <Modal

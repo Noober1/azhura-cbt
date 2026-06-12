@@ -6,7 +6,7 @@
  * (no border/shadow) for low-emphasis actions.
  */
 
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 type Variant = "primary" | "secondary" | "highlight" | "ghost" | "danger" | "danger-outline";
 type Size = "sm" | "md";
@@ -16,6 +16,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
   busy?: boolean;
   leadingIcon?: ReactNode;
+  /** React 19 ref-as-prop; forwarded to the underlying <button> via the spread. */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 /* Shared neobrutalist chrome for every bordered variant. */
