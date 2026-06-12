@@ -3,6 +3,7 @@ import { useExamStore } from "../../stores/exam";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Label } from "../ui/label";
 import { RichContent } from "./RichContent";
+import { resolveMediaUrl } from "../../lib/media";
 import { FillInBlankQuestion } from "./FillInBlankQuestion";
 import { MatchingQuestion } from "./MatchingQuestion";
 import { SortingQuestion } from "./SortingQuestion";
@@ -95,10 +96,17 @@ function MultipleChoiceQuestion({ question, questionNumber }: QuestionRendererPr
                 >
                   {optionLetter}
                 </span>
-                <RichContent
-                  html={option.text}
-                  className="question-html flex-1 pt-0.5"
-                />
+                <div className="flex-1 flex flex-col gap-2 pt-0.5">
+                  <RichContent html={option.text} className="question-html" />
+                  {option.imageUrl && (
+                    <img
+                      src={resolveMediaUrl(option.imageUrl)}
+                      alt={`Gambar opsi ${optionLetter}`}
+                      loading="lazy"
+                      className="max-h-48 max-w-full self-start rounded-lg border-2 border-[var(--nb-ink)] object-contain bg-white"
+                    />
+                  )}
+                </div>
               </Label>
             </div>
           );

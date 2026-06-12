@@ -1,14 +1,21 @@
 import { useState } from "react";
 import { Modal } from "../ui/Modal";
 import { QuestionContentRenderer } from "./QuestionContentRenderer";
+import { resolveMediaUrl } from "../../lib/format";
 
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
+
+/** One previewable option: inline HTML plus an optional attached image (#163). */
+interface PreviewOption {
+  text: string;
+  imageUrl?: string | null;
+}
 
 interface QuestionPreviewModalProps {
   open: boolean;
   onClose: () => void;
   questionText: string;
-  options: string[];
+  options: PreviewOption[];
   correctIndex: number;
 }
 
@@ -46,7 +53,7 @@ export function QuestionPreviewModal({
 
         {/* Options */}
         <div className="space-y-2">
-          {options.map((optHtml, idx) => {
+          {options.map((opt, idx) => {
             const isCorrect = idx === correctIndex;
             const highlight = showAnswer && isCorrect;
             return (
@@ -67,10 +74,20 @@ export function QuestionPreviewModal({
                 >
                   {OPTION_LABELS[idx]}
                 </span>
-                <QuestionContentRenderer
-                  html={optHtml}
-                  className={`flex-1 text-sm ${highlight ? "text-positive font-medium" : "text-ink"}`}
-                />
+                <div className="flex-1 space-y-2">
+                  <QuestionContentRenderer
+                    html={opt.text}
+                    className={`text-sm ${highlight ? "text-positive font-medium" : "text-ink"}`}
+                  />
+                  {opt.imageUrl && (
+                    <img
+                      src={resolveMediaUrl(opt.imageUrl)}
+                      alt={`Gambar opsi ${OPTION_LABELS[idx]}`}
+                      loading="lazy"
+                      className="max-h-40 max-w-full rounded-md border border-line object-contain"
+                    />
+                  )}
+                </div>
                 {highlight && (
                   <svg
                     className="mt-0.5 size-4 shrink-0 text-positive"

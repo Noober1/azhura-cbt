@@ -62,7 +62,7 @@ async function getQuestionDetail(examId: string, questionId: string) {
   if (!question) throw new NotFoundError("Soal tidak ditemukan.");
 
   const optionRows = await db
-    .select({ id: options.id, text: options.text })
+    .select({ id: options.id, text: options.text, imageUrl: options.imageUrl })
     .from(options)
     .where(eq(options.questionId, questionId))
     .orderBy(asc(options.orderIndex));
@@ -110,6 +110,7 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
             id: options.id,
             questionId: options.questionId,
             text: options.text,
+            imageUrl: options.imageUrl,
           })
           .from(options)
           .where(
@@ -121,10 +122,10 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           .orderBy(asc(options.orderIndex))
       : [];
 
-    const byQuestion = new Map<string, { id: string; text: string }[]>();
+    const byQuestion = new Map<string, { id: string; text: string; imageUrl: string | null }[]>();
     for (const o of optionRows) {
       const bucket = byQuestion.get(o.questionId) ?? [];
-      bucket.push({ id: o.id, text: o.text });
+      bucket.push({ id: o.id, text: o.text, imageUrl: o.imageUrl });
       byQuestion.set(o.questionId, bucket);
     }
 
@@ -178,6 +179,7 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
             questionId,
             text: o.text,
             orderIndex: index,
+            imageUrl: o.imageUrl ?? null,
           }));
           const correctOptionId = optionRows[body.correctOptionIndex].id;
           await tx.insert(questions).values({
@@ -218,7 +220,14 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           t.Literal("sorting"),
         ])),
         // minItems omitted here; runtime handler validates count per type.
-        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }))),
+        options: t.Optional(
+          t.Array(
+            t.Object({
+              text: t.String({ minLength: 1 }),
+              imageUrl: t.Optional(t.Nullable(t.String({ maxLength: 500, pattern: "^/uploads/" }))),
+            })
+          )
+        ),
         correctOptionIndex: t.Optional(t.Integer({ minimum: 0 })),
         // Use Record to accept any plain object (avoids exact-mirror coercion issues with t.Any).
         config: t.Optional(t.Record(t.String(), t.Unknown())),
@@ -244,7 +253,13 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       if (!existing) throw new NotFoundError("Soal tidak ditemukan.");
 
       const replacingOptions = body.options !== undefined;
-      let newOptionRows: { id: string; questionId: string; text: string; orderIndex: number }[] = [];
+      let newOptionRows: {
+        id: string;
+        questionId: string;
+        text: string;
+        orderIndex: number;
+        imageUrl: string | null;
+      }[] = [];
       let newCorrectOptionId: string | undefined;
 
       if (replacingOptions) {
@@ -263,6 +278,7 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           questionId: qid,
           text: o.text,
           orderIndex: index,
+          imageUrl: o.imageUrl ?? null,
         }));
         newCorrectOptionId = newOptionRows[body.correctOptionIndex].id;
       }
@@ -306,7 +322,14 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           t.Literal("sorting"),
         ])),
         config: t.Optional(t.Record(t.String(), t.Unknown())),
-        options: t.Optional(t.Array(t.Object({ text: t.String({ minLength: 1 }) }))),
+        options: t.Optional(
+          t.Array(
+            t.Object({
+              text: t.String({ minLength: 1 }),
+              imageUrl: t.Optional(t.Nullable(t.String({ maxLength: 500, pattern: "^/uploads/" }))),
+            })
+          )
+        ),
         correctOptionIndex: t.Optional(t.Integer({ minimum: 0 })),
       }),
     }

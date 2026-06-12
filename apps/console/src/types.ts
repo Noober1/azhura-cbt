@@ -47,6 +47,12 @@ export interface ExamListResponse {
 export interface AdminOption {
   id: string;
   text: string;
+  /**
+   * Optional option image (#163): a media-library URL path (`/uploads/...`).
+   * Resolve against the backend origin (`resolveMediaUrl`) before rendering.
+   * Null when the option is text-only.
+   */
+  imageUrl: string | null;
 }
 
 export interface AdminQuestion {
@@ -109,7 +115,7 @@ export interface QuestionCreateInput {
   /** Required when type is not multiple_choice. */
   config?: import("@azhura/shared").QuestionConfig;
   /** Required when type is multiple_choice or omitted. */
-  options?: { text: string }[];
+  options?: { text: string; imageUrl?: string | null }[];
   correctOptionIndex?: number;
 }
 
@@ -119,7 +125,7 @@ export interface QuestionUpdateInput {
   orderIndex?: number;
   type?: import("@azhura/shared").QuestionType;
   config?: import("@azhura/shared").QuestionConfig;
-  options?: { text: string }[];
+  options?: { text: string; imageUrl?: string | null }[];
   correctOptionIndex?: number;
 }
 
