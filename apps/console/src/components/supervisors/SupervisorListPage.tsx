@@ -23,6 +23,7 @@ import { Input } from "../ui/Field";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { IconButton } from "../ui/IconButton";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import { SupervisorFormModal } from "./SupervisorFormModal";
 import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, KeyIcon, ShieldIcon } from "../ui/icons";
 
@@ -109,7 +110,10 @@ export function SupervisorListPage() {
               : "Belum ada akun pengawas"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <PageHelpButton topic="supervisors" />
+          {/* Divider separates the help affordance from the action buttons. */}
+          <span className="h-6 w-px bg-line-soft" aria-hidden="true" />
           <Button onClick={openCreate} leadingIcon={<PlusIcon className="size-4" />}>
             Buat akun pengawas
           </Button>

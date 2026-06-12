@@ -18,6 +18,10 @@ export type HelpTopic =
   | "groups"
   | "students"
   | "exams"
+  | "examDetail"
+  | "examSessions"
+  | "questionForm"
+  | "supervisors"
   | "media"
   | "monitoring"
   | "recap"
@@ -82,6 +86,63 @@ export const HELP_CONTENT: Record<HelpTopic, HelpEntry> = {
       "Buka ujian tersebut, lalu tambahkan soal dan pilihan jawabannya.",
       "Tugaskan ujian ke grup peserta yang sesuai.",
       "Bagikan kode masuk ujian ke peserta saat hari ujian.",
+    ],
+  },
+  examDetail: {
+    title: "Tentang Detail Ujian",
+    body: [
+      "Halaman ini menampilkan satu paket ujian secara lengkap: informasi ujian (kode masuk, durasi, batas waktu), pengawas yang ditugaskan, dan daftar soalnya.",
+      "Dari sini Anda bisa mengubah pengaturan ujian lewat \"Edit ujian\", menambah atau melepas pengawas lewat \"Kelola pengawas\", serta menambah, mengubah, dan menghapus soal.",
+      "Tombol \"Status peserta\" membuka daftar peserta yang pernah atau sedang mengerjakan ujian ini.",
+      "Saat ada peserta yang sedang mengerjakan, soal dikunci sementara — tambah, edit, dan hapus soal tidak tersedia sampai mereka selesai. Ini menjaga keadilan penilaian.",
+    ],
+    steps: [
+      "Klik \"Tambah soal\" untuk membuat soal baru, atau ikon pensil untuk mengubah soal yang ada.",
+      "Klik \"Kelola pengawas\" untuk memilih siapa yang memantau ujian ini.",
+      "Klik \"Edit ujian\" untuk mengubah judul, durasi, atau batas waktu.",
+      "Klik \"Status peserta\" untuk melihat siapa saja yang sudah mengerjakan.",
+    ],
+  },
+  examSessions: {
+    title: "Tentang Status Peserta",
+    body: [
+      "Halaman ini berisi daftar peserta yang pernah atau sedang mengerjakan ujian ini, lengkap dengan statusnya: Mengerjakan, Selesai, atau Kedaluwarsa.",
+      "Daftar diperbarui otomatis secara berkala, jadi Anda bisa memantau tanpa perlu memuat ulang halaman.",
+      "Peserta berstatus \"Selesai\" bisa direset agar dapat mengerjakan lagi — misalnya saat peserta tidak sengaja menekan tombol selesai. Jawaban yang sudah diisi tetap tersimpan, dan waktu pengerjaan kembali penuh.",
+    ],
+    steps: [
+      "Cari peserta yang ingin dibantu pada daftar.",
+      "Klik \"Reset\" di baris peserta berstatus Selesai.",
+      "Konfirmasi. Peserta bisa langsung masuk lagi dan melanjutkan dari jawaban terakhirnya.",
+    ],
+  },
+  questionForm: {
+    title: "Cara Menyusun Soal",
+    body: [
+      "Di halaman ini Anda menulis satu soal beserta jawabannya. Ada empat jenis soal: Pilihan Ganda, Isi Jawaban, Pasangkan, dan Urutkan.",
+      "Jenis soal hanya bisa dipilih saat membuat soal baru — setelah disimpan, jenisnya tidak bisa diubah lagi.",
+      "Teks soal bisa diberi gambar, audio, atau video. Gunakan tombol media pada kotak penulisan untuk menyisipkannya.",
+      "Khusus soal Pilihan Ganda, tersedia tombol \"Preview\" untuk melihat tampilan soal persis seperti yang dilihat peserta. Jenis soal lain belum memiliki preview.",
+    ],
+    steps: [
+      "Pilih jenis soal di bagian atas.",
+      "Tulis teks soal pada kotak penulisan.",
+      "Isi jawabannya: tandai pilihan yang benar (Pilihan Ganda), tulis jawaban benar (Isi Jawaban), lengkapi pasangan (Pasangkan), atau susun urutan yang benar (Urutkan).",
+      "Tekan \"Simpan Soal\" (atau \"Perbarui Soal\" saat mengedit). Anda akan kembali ke daftar soal ujian.",
+    ],
+  },
+  supervisors: {
+    title: "Tentang Pengawas",
+    body: [
+      "Pengawas adalah akun untuk guru atau petugas yang memantau jalannya ujian. Setiap pengawas masuk dengan NIS (nomor induk atau username) dan password-nya sendiri.",
+      "Pengawas hanya bisa melihat ujian yang ditugaskan kepadanya. Penugasan dilakukan dari halaman detail ujian lewat \"Kelola pengawas\".",
+      "Jika pengawas lupa password, gunakan ikon kunci di baris akunnya untuk membuat password baru.",
+      "Menghapus akun pengawas juga melepasnya dari semua ujian yang ditugaskan. Tindakan ini tidak bisa dibatalkan.",
+    ],
+    steps: [
+      "Klik \"Buat akun pengawas\" lalu isi NIS, nama, dan password.",
+      "Buka halaman ujian yang ingin dipantau, lalu tugaskan pengawas lewat \"Kelola pengawas\".",
+      "Bagikan info login ke pengawas sebelum hari ujian.",
     ],
   },
   media: {

@@ -42,7 +42,7 @@ export function FillInBlankForm({ config, onChange, disabled }: Props) {
   }
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" data-tour-form="fib-answers">
       <div className="flex items-center justify-between">
         <label className="block text-sm font-medium text-ink">
           Jawaban Benar <span className="text-danger">*</span>
@@ -89,6 +89,7 @@ export function FillInBlankForm({ config, onChange, disabled }: Props) {
         type="button"
         onClick={addAnswer}
         disabled={disabled}
+        data-tour-form="fib-add-answer"
         className="focus-ring inline-flex items-center gap-1.5 rounded-[var(--radius-field)] px-2 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent-wash disabled:opacity-40"
       >
         <PlusIcon className="size-4" />

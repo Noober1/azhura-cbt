@@ -18,6 +18,7 @@ import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { PageHelpButton } from "../ui/PageHelpButton";
 import { ChevronLeftIcon } from "../ui/icons";
 
 const SESSION_STATUS: Record<SessionStatus, { tone: "accent" | "positive" | "neutral"; label: string }> = {
@@ -133,11 +134,14 @@ export function ExamSessionsPage() {
         Kelola soal
       </Button>
 
-      <div className="mt-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Status peserta</h1>
-        <p className="mt-1 text-sm text-faint">
-          {exam.title} — {sessions.length > 0 ? `${sessions.length} sesi tercatat` : "belum ada peserta"}
-        </p>
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Status peserta</h1>
+          <p className="mt-1 text-sm text-faint">
+            {exam.title} — {sessions.length > 0 ? `${sessions.length} sesi tercatat` : "belum ada peserta"}
+          </p>
+        </div>
+        <PageHelpButton topic="examSessions" />
       </div>
 
       {sessions.length === 0 ? (
