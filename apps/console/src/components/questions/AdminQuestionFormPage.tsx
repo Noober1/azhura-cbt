@@ -419,8 +419,8 @@ export function AdminQuestionFormPage() {
           </p>
         )}
 
-        <div className="flex items-center gap-3 border-t border-line pt-4" data-tour-form="actions">
-          <Button type="submit" busy={busy}>
+        <div className="flex items-center gap-3 border-t border-line pt-4">
+          <Button type="submit" busy={busy} data-tour-form="actions">
             {isEdit ? "Perbarui Soal" : "Simpan Soal"}
           </Button>
           {questionType === "multiple_choice" && (
