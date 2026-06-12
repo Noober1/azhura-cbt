@@ -353,3 +353,11 @@ export const HelpCircleIcon = svg(
 );
 
 export const PlayIcon = svg(<path d="M6 4v16l14-8-14-8Z" />);
+
+export const ListChecksIcon = svg(
+  <>
+    <path d="m3 17 2 2 4-4" />
+    <path d="m3 7 2 2 4-4" />
+    <path d="M13 6h8M13 12h8M13 18h8" />
+  </>
+);

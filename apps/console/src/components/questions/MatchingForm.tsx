@@ -28,7 +28,7 @@ export function MatchingForm({ config, onChange, disabled }: Props) {
   }
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" data-tour-form="matching-pairs">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-ink">
           Pasangan Jawaban <span className="text-danger">*</span>
@@ -82,6 +82,7 @@ export function MatchingForm({ config, onChange, disabled }: Props) {
         type="button"
         onClick={addPair}
         disabled={disabled}
+        data-tour-form="matching-add-pair"
         className="focus-ring inline-flex items-center gap-1.5 rounded-[var(--radius-field)] px-2 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent-wash disabled:opacity-40"
       >
         <PlusIcon className="size-4" />

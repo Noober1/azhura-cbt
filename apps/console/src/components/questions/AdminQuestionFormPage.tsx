@@ -19,7 +19,18 @@ import { Button } from "../ui/Button";
 import { Spinner } from "../ui/Spinner";
 import { Tooltip } from "../ui/Tooltip";
 import { PageHelpButton } from "../ui/PageHelpButton";
-import { ChevronLeftIcon, EyeIcon, PlusIcon, TrashIcon } from "../ui/icons";
+import {
+  ChevronLeftIcon,
+  EyeIcon,
+  PlusIcon,
+  TrashIcon,
+  ListChecksIcon,
+  PenLineIcon,
+  LinkIcon,
+  ListOrderedIcon,
+} from "../ui/icons";
+import { QUESTION_TYPE_TOURS, runQuestionTypeTour } from "../../lib/question-type-tours";
+import { destroyActivePageTour } from "../../lib/page-tours";
 import { QuestionPreviewModal } from "../supervisor/QuestionPreviewModal";
 import { FillInBlankForm } from "./FillInBlankForm";
 import { MatchingForm } from "./MatchingForm";
@@ -35,6 +46,14 @@ const TYPE_LABELS: Record<QuestionType, string> = {
   fill_in_blank: "Isi Jawaban",
   matching: "Pasangkan",
   sorting: "Urutkan",
+};
+
+/** Icon per question type for the adaptive "Apa itu …?" tour trigger. */
+const TYPE_TOUR_ICONS: Record<QuestionType, (props: { className?: string }) => React.ReactNode> = {
+  multiple_choice: ListChecksIcon,
+  fill_in_blank: PenLineIcon,
+  matching: LinkIcon,
+  sorting: ListOrderedIcon,
 };
 
 const DEFAULT_FILL_IN_BLANK: FillInBlankConfig = { answer: "" };
@@ -82,6 +101,10 @@ export function AdminQuestionFormPage() {
     if (isEdit) loadQuestion();
   }, [isEdit, loadQuestion]);
 
+  // The tour overlay lives on document.body and survives React unmounts, so
+  // tear it down when the operator navigates away mid-tour.
+  useEffect(() => () => destroyActivePageTour(), []);
+
   function hydrate(q: AdminQuestion) {
     setQuestionText(q.text || "<p></p>");
     const type = q.type ?? "multiple_choice";
@@ -123,6 +146,16 @@ export function AdminQuestionFormPage() {
       setOptions(DEFAULT_OPTIONS);
       setCorrectIndex(0);
     }
+  }
+
+  /**
+   * Starts the guided tour for the question type that is currently active.
+   * Because the trigger always mirrors the active type, every field the tour
+   * highlights is already on screen — including in edit mode, where the type
+   * is locked to the question being edited.
+   */
+  function startActiveTypeTour() {
+    void runQuestionTypeTour(questionType);
   }
 
   function updateOption(idx: number, val: string) {
@@ -214,6 +247,9 @@ export function AdminQuestionFormPage() {
     );
   }
 
+  // The tour trigger's icon + label adapt to whichever type is active.
+  const ActiveTourIcon = TYPE_TOUR_ICONS[questionType];
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
@@ -234,10 +270,11 @@ export function AdminQuestionFormPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Type selector */}
-        <section className="space-y-2">
+        {/* Type selector — plus ONE adaptive "Apa itu …?" tour trigger that
+            always mirrors the active type (label + icon change with it). */}
+        <section className="space-y-2" data-tour-form="question-type">
           <label className="block text-sm font-medium text-ink">Tipe Soal</label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {(Object.keys(TYPE_LABELS) as QuestionType[]).map((t) => (
               <button
                 key={t}
@@ -253,6 +290,15 @@ export function AdminQuestionFormPage() {
                 {TYPE_LABELS[t]}
               </button>
             ))}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={startActiveTypeTour}
+              className="focus-ring inline-flex items-center gap-1.5 rounded-[var(--radius-field)] px-2 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent-wash disabled:opacity-40"
+            >
+              <ActiveTourIcon className="size-4" />
+              {QUESTION_TYPE_TOURS[questionType].buttonLabel}
+            </button>
           </div>
           {isEdit && (
             <p className="text-xs text-faint">Tipe soal tidak dapat diubah setelah dibuat.</p>
@@ -260,7 +306,7 @@ export function AdminQuestionFormPage() {
         </section>
 
         {/* Question text */}
-        <section className="space-y-2">
+        <section className="space-y-2" data-tour-form="question-text">
           <label className="block text-sm font-medium text-ink">
             Teks Soal <span className="text-danger">*</span>
           </label>
@@ -276,7 +322,7 @@ export function AdminQuestionFormPage() {
 
         {/* Type-specific section */}
         {questionType === "multiple_choice" && (
-          <section className="space-y-3">
+          <section className="space-y-3" data-tour-form="mc-options">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-ink">
                 Opsi Jawaban <span className="text-danger">*</span>
@@ -324,17 +370,18 @@ export function AdminQuestionFormPage() {
               </div>
             ))}
 
-            {options.length < MAX_OPTIONS && (
-              <button
-                type="button"
-                onClick={addOption}
-                disabled={busy}
-                className="focus-ring inline-flex items-center gap-1.5 rounded-[var(--radius-field)] px-2 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent-wash disabled:opacity-40"
-              >
-                <PlusIcon className="size-4" />
-                Tambah opsi
-              </button>
-            )}
+            {/* Always rendered (disabled at the cap) so the tour anchor
+                `mc-add-option` is always in the DOM. */}
+            <button
+              type="button"
+              onClick={addOption}
+              disabled={busy || options.length >= MAX_OPTIONS}
+              data-tour-form="mc-add-option"
+              className="focus-ring inline-flex items-center gap-1.5 rounded-[var(--radius-field)] px-2 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent-wash disabled:opacity-40"
+            >
+              <PlusIcon className="size-4" />
+              Tambah opsi
+            </button>
 
             <p className="text-xs text-faint">
               Pilih radio button di kiri untuk menandai jawaban yang benar.
@@ -372,7 +419,7 @@ export function AdminQuestionFormPage() {
           </p>
         )}
 
-        <div className="flex items-center gap-3 border-t border-line pt-4">
+        <div className="flex items-center gap-3 border-t border-line pt-4" data-tour-form="actions">
           <Button type="submit" busy={busy}>
             {isEdit ? "Perbarui Soal" : "Simpan Soal"}
           </Button>
@@ -383,6 +430,7 @@ export function AdminQuestionFormPage() {
               disabled={busy}
               leadingIcon={<EyeIcon className="size-4" />}
               onClick={() => setPreviewOpen(true)}
+              data-tour-form="mc-preview"
             >
               Preview
             </Button>

@@ -21,6 +21,8 @@ import { Spinner, CenterState } from "../ui/Spinner";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { IconButton } from "../ui/IconButton";
 import { PageHelpButton } from "../ui/PageHelpButton";
+import { runExamDetailTour } from "../../lib/exam-detail-tour";
+import { destroyActivePageTour } from "../../lib/page-tours";
 import { ExamFormModal } from "./ExamFormModal";
 import { ExamContextCard } from "./ExamContextCard";
 import { SupervisorAssignModal } from "./SupervisorAssignModal";
@@ -34,6 +36,7 @@ import {
   AlertIcon,
   UsersIcon,
   ShieldIcon,
+  PlayIcon,
 } from "../ui/icons";
 
 function parseConfig<T>(raw: unknown): T | null {
@@ -104,6 +107,10 @@ export function ExamDetailPage() {
     return () => clearInterval(id);
   }, [refresh]);
 
+  // The tour overlay lives on document.body and survives React unmounts, so
+  // tear it down when the operator navigates away mid-tour.
+  useEffect(() => () => destroyActivePageTour(), []);
+
   async function confirmDeleteQuestion() {
     if (!deletingQuestion) return;
     try {
@@ -164,7 +171,7 @@ export function ExamDetailPage() {
       </Button>
 
       {/* Exam header card */}
-      <div className="mt-3">
+      <div className="mt-3" data-tour-page="exam-info">
         <ExamContextCard
           title={exam.title}
           durationMinutes={exam.durationMinutes}
@@ -178,13 +185,22 @@ export function ExamDetailPage() {
           allowedGroupNames={exam.allowedGroups.map((g) => g.name)}
           actions={
             <>
+              <Button
+                variant="secondary"
+                onClick={() => void runExamDetailTour()}
+                leadingIcon={<PlayIcon className="size-4" />}
+                aria-label="Mulai tur halaman detail ujian"
+              >
+                Tur halaman
+              </Button>
               <PageHelpButton topic="examDetail" />
-              {/* Divider separates the help affordance from the action buttons. */}
+              {/* Divider separates the help affordances from the action buttons. */}
               <span className="h-6 w-px bg-line-soft" aria-hidden="true" />
               <Button
                 variant="secondary"
                 onClick={() => navigate(`/exams/${examId}/sessions`)}
                 leadingIcon={<UsersIcon className="size-4" />}
+                data-tour-page="sessions-button"
               >
                 Status peserta
               </Button>
@@ -192,6 +208,7 @@ export function ExamDetailPage() {
                 variant="secondary"
                 onClick={() => setExamFormOpen(true)}
                 leadingIcon={<PencilIcon className="size-4" />}
+                data-tour-page="edit-exam"
               >
                 Edit ujian
               </Button>
@@ -201,7 +218,7 @@ export function ExamDetailPage() {
       </div>
 
       {/* Supervisors */}
-      <div className="mt-8 flex items-end justify-between">
+      <div className="mt-8 flex items-end justify-between" data-tour-page="supervisors">
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-ink">Pengawas</h2>
           <p className="mt-0.5 text-sm text-faint">
@@ -235,7 +252,7 @@ export function ExamDetailPage() {
       )}
 
       {/* Questions */}
-      <div className="mt-8 flex items-end justify-between">
+      <div className="mt-8 flex items-end justify-between" data-tour-page="questions">
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-ink">Soal</h2>
           <p className="mt-0.5 text-sm text-faint">
@@ -248,6 +265,7 @@ export function ExamDetailPage() {
           onClick={() => navigate(`/exams/${examId}/questions/new`)}
           disabled={isLocked}
           leadingIcon={<PlusIcon className="size-4" />}
+          data-tour-page="add-question"
         >
           Tambah soal
         </Button>

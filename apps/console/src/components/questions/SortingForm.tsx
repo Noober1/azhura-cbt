@@ -46,7 +46,7 @@ export function SortingForm({ config, onChange, disabled }: Props) {
   }
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" data-tour-form="sorting-items">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-ink">
           Item Urutan (Jawaban Benar) <span className="text-danger">*</span>
@@ -111,6 +111,7 @@ export function SortingForm({ config, onChange, disabled }: Props) {
         type="button"
         onClick={addItem}
         disabled={disabled}
+        data-tour-form="sorting-add-item"
         className="focus-ring inline-flex items-center gap-1.5 rounded-[var(--radius-field)] px-2 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent-wash disabled:opacity-40"
       >
         <PlusIcon className="size-4" />
