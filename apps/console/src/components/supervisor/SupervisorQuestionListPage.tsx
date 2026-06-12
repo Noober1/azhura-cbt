@@ -63,7 +63,9 @@ export function SupervisorQuestionListPage() {
   }
 
   return (
-    <div className="space-y-4">
+    // Same reading-width container as the admin exam detail page, so the
+    // shared QuestionCard renders at an identical width on both surfaces.
+    <div className="mx-auto max-w-4xl space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link
