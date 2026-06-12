@@ -8,7 +8,7 @@
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-type Variant = "primary" | "secondary" | "highlight" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "highlight" | "ghost" | "danger" | "danger-outline";
 type Size = "sm" | "md";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -32,6 +32,10 @@ const VARIANTS: Record<Variant, string> = {
   highlight: `bg-highlight text-ink ${NB}`,
   ghost: "text-ink-soft hover:text-ink hover:bg-canvas transition-colors",
   danger: `bg-danger text-white ${NB}`,
+  // Bordered like secondary, but with a light destructive accent — for
+  // "leave"-type actions (e.g. logout) that deserve the full neobrutalist
+  // chrome without shouting like full danger red.
+  "danger-outline": `bg-surface text-danger hover:bg-danger-wash ${NB}`,
 };
 
 const SIZES: Record<Size, string> = {

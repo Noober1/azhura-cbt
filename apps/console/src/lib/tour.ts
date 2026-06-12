@@ -26,15 +26,32 @@ export const ONBOARDING_DONE_KEY = "azhura_console_onboarding_done";
 
 /** Stable ids used both here (as selectors) and on the nav items (`data-tour`). */
 export type TourAnchor =
+  | "dashboard"
   | "groups"
   | "students"
+  | "supervisors"
   | "exams"
+  | "supervisor-exams"
   | "media"
   | "monitoring"
   | "recap"
+  | "logs"
   | "settings";
 
+/** Console roles that can take the tour (students never see the console). */
+export type TourRole = "admin" | "supervisor";
+
 interface TourStepDef {
+  anchor: TourAnchor;
+  /** Title WITHOUT the step number — numbering is applied per-role, after filtering. */
+  title: string;
+  description: string;
+  /** Roles whose nav rail shows this item (mirrors the NAV gating in AppShell). */
+  roles: readonly TourRole[];
+}
+
+/** A role-filtered, numbered tour step, ready to feed driver.js. */
+export interface NumberedTourStep {
   anchor: TourAnchor;
   title: string;
   description: string;
@@ -42,52 +59,104 @@ interface TourStepDef {
 
 /**
  * The first-run navigation tour, in the order an operator naturally works:
- * set up grup → peserta → ujian & soal → media → monitoring → rekap → pengaturan.
+ * dashboard → grup → peserta → pengawas → ujian & soal → media → monitoring →
+ * rekap → log → pengaturan. Supervisors get a much shorter walk (soal ujian →
+ * media → monitoring) because their rail only shows those items; the `roles`
+ * field keeps each step aligned with the NAV gating in AppShell, and step
+ * numbers are assigned AFTER filtering so both roles see "1..n" with no gaps.
  */
-const TOUR_STEPS: TourStepDef[] = [
+const TOUR_STEPS: readonly TourStepDef[] = [
+  {
+    anchor: "dashboard",
+    title: "Dashboard",
+    roles: ["admin"],
+    description:
+      "Halaman ringkasan. Lihat sekilas jumlah peserta, ujian yang sedang berjalan, dan hasil terbaru — tempat Anda mendarat setiap kali masuk.",
+  },
   {
     anchor: "groups",
-    title: "1. Grup",
+    title: "Grup",
+    roles: ["admin"],
     description:
       "Mulai di sini. Buat grup untuk mengelompokkan peserta, misalnya per kelas. Setiap ujian nanti ditugaskan ke grup.",
   },
   {
     anchor: "students",
-    title: "2. Peserta",
+    title: "Peserta",
+    roles: ["admin"],
     description:
       "Tambahkan peserta ujian, satu per satu atau banyak sekaligus dari sebuah file. Masukkan setiap peserta ke grupnya.",
   },
   {
+    anchor: "supervisors",
+    title: "Pengawas",
+    roles: ["admin"],
+    description:
+      "Kelola akun pengawas di sini. Merekalah yang nanti memantau jalannya ujian dan membantu peserta yang bermasalah.",
+  },
+  {
     anchor: "exams",
-    title: "3. Ujian & Soal",
+    title: "Ujian & Soal",
+    roles: ["admin"],
     description:
       "Buat paket ujian, susun soalnya, lalu tentukan grup mana yang boleh mengerjakan dan siapa pengawasnya.",
   },
   {
+    anchor: "supervisor-exams",
+    title: "Soal Ujian",
+    roles: ["supervisor"],
+    description:
+      "Lihat paket ujian yang Anda awasi beserta soal-soalnya, supaya Anda tahu apa yang dikerjakan peserta.",
+  },
+  {
     anchor: "media",
-    title: "4. Media",
+    title: "Media",
+    roles: ["admin", "supervisor"],
     description:
       "Simpan gambar, audio, atau video di sini lebih dulu, supaya bisa Anda sisipkan ke dalam soal.",
   },
   {
     anchor: "monitoring",
-    title: "5. Monitoring",
+    title: "Monitoring",
+    roles: ["admin", "supervisor"],
     description:
       "Saat ujian berlangsung, pantau peserta secara langsung: lihat sisa waktu, kirim pesan, atau bantu peserta yang bermasalah.",
   },
   {
     anchor: "recap",
-    title: "6. Rekap Nilai",
+    title: "Rekap Nilai",
+    roles: ["admin"],
     description:
       "Setelah ujian selesai, lihat hasil dan nilai peserta di sini — per ujian maupun per peserta.",
   },
   {
+    anchor: "logs",
+    title: "Log",
+    roles: ["admin"],
+    description:
+      "Catatan aktivitas sistem: siapa masuk, kapan ujian dimulai, dan kejadian penting lainnya. Berguna saat menelusuri masalah.",
+  },
+  {
     anchor: "settings",
-    title: "7. Pengaturan",
+    title: "Pengaturan",
+    roles: ["admin"],
     description:
       "Atur identitas sekolah dan nilai bawaan ujian. Tur ini bisa Anda putar ulang kapan saja lewat tombol bantuan (?) di kanan atas.",
   },
 ];
+
+/**
+ * Returns the tour steps visible to `role`, renumbered 1..n after filtering so
+ * the progression never shows gaps. Exposed (and unit-tested) so the step list
+ * stays the single source of truth for what each role is shown.
+ */
+export function getTourSteps(role: TourRole): NumberedTourStep[] {
+  return TOUR_STEPS.filter((step) => step.roles.includes(role)).map((step, i) => ({
+    anchor: step.anchor,
+    title: `${i + 1}. ${step.title}`,
+    description: step.description,
+  }));
+}
 
 const isBrowser = typeof window !== "undefined";
 
@@ -119,8 +188,8 @@ export function markOnboardingSeen(): void {
   }
 }
 
-function toDriveSteps(): DriveStep[] {
-  return TOUR_STEPS.map((step) => ({
+function toDriveSteps(role: TourRole): DriveStep[] {
+  return getTourSteps(role).map((step) => ({
     element: `[data-tour="${step.anchor}"]`,
     popover: {
       title: step.title,
@@ -132,10 +201,11 @@ function toDriveSteps(): DriveStep[] {
 }
 
 /**
- * Runs the product tour. driver.js (and its CSS) is imported lazily so it only
- * loads on demand. `onDone` fires once the tour is closed (skipped or finished).
+ * Runs the product tour for `role` (only the nav items that role can see are
+ * highlighted). driver.js (and its CSS) is imported lazily so it only loads on
+ * demand. `onDone` fires once the tour is closed (skipped or finished).
  */
-export async function runTour(onDone?: () => void): Promise<void> {
+export async function runTour(role: TourRole, onDone?: () => void): Promise<void> {
   if (!isBrowser) return;
 
   let driverFactory: typeof import("driver.js")["driver"];
@@ -163,7 +233,7 @@ export async function runTour(onDone?: () => void): Promise<void> {
     prevBtnText: "Kembali",
     doneBtnText: "Selesai",
     progressText: "Langkah {{current}} dari {{total}}",
-    steps: toDriveSteps(),
+    steps: toDriveSteps(role),
     // Fires once the tour is closed (skip, close, or final "Selesai"). It is the
     // correct hook here because we do NOT define `onDestroyStarted` — driver.js
     // only short-circuits before `onDestroyed` when that hook is present.
@@ -181,18 +251,18 @@ export async function runTour(onDone?: () => void): Promise<void> {
  * Marks it seen immediately so a refresh mid-tour does not replay it. Safe to
  * call on every dashboard mount — it is a no-op once the flag is set.
  */
-export function maybeAutoRunTour(): void {
+export function maybeAutoRunTour(role: TourRole): void {
   if (!isBrowser || hasSeenOnboarding()) return;
   markOnboardingSeen();
   // Defer one frame so the dashboard paints before the overlay appears — the
   // nav rail (which carries the [data-tour] anchors) is already mounted by the
   // time this runs.
   requestAnimationFrame(() => {
-    void runTour();
+    void runTour(role);
   });
 }
 
 /** Replays the tour on demand (e.g. from the header tutorial dialog). */
-export function replayTour(): void {
-  void runTour();
+export function replayTour(role: TourRole): void {
+  void runTour(role);
 }

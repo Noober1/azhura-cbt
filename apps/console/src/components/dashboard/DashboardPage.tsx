@@ -47,9 +47,11 @@ export function DashboardPage() {
   // First-run product tour (#132): auto-runs once when the admin first reaches
   // the dashboard after setup/login — only after the page content has loaded so
   // the tour does not start over a spinner. No-op on every subsequent visit.
+  // The dashboard route is admin-only (see NAV in AppShell), so the admin
+  // variant of the tour is the right one here.
   const dashboardReady = !loading && !error && snapshot !== null;
   useEffect(() => {
-    if (dashboardReady) maybeAutoRunTour();
+    if (dashboardReady) maybeAutoRunTour("admin");
   }, [dashboardReady]);
 
   if (loading) {
