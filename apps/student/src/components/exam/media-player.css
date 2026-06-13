@@ -1,0 +1,203 @@
+/**
+ * Neobrutalist styling for the exam media player (#164).
+ * Reuses the design tokens from `src/index.css` (--nb-ink, --nb-bw, shadows,
+ * accent colors). Compositor-friendly transitions only; all motion is dropped
+ * under prefers-reduced-motion.
+ */
+
+/* Placeholder span that a player portals into (replaces native <audio>/<video>). */
+.nb-media-mount {
+  display: block;
+  margin: 0.625rem 0;
+}
+
+.nb-media-player {
+  display: block;
+  width: 100%;
+  max-width: 36rem;
+  border: var(--nb-bw) solid var(--nb-ink);
+  border-radius: var(--radius-2xl);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  /* Vidstack's base stylesheet pins the player to the video's 16/9 box. Our
+     controls bar lives BELOW the video, so that box clips it — leaving the
+     controls visually present but outside the hit-test area (a real click
+     falls through; only scripted clicks land). Let the player grow to fit the
+     video + controls instead. (#164) */
+  aspect-ratio: auto;
+}
+
+.nb-media-player[data-view-type="audio"],
+.nb-media-player--audio {
+  max-width: 30rem;
+}
+
+/* The Vidstack-rendered media element. Hidden for audio (controls only), shown
+   for video. base.css already normalizes the provider; we just size it. */
+.nb-media-player video {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #000;
+}
+.nb-media-player--audio audio {
+  display: none;
+}
+
+.nb-media-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  flex-wrap: wrap;
+}
+
+.nb-media-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border: var(--nb-bw) solid var(--nb-ink);
+  border-radius: var(--radius-xl);
+  background: var(--indigo);
+  color: #fff;
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.nb-media-btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-sm);
+}
+.nb-media-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.nb-media-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 45%, transparent);
+}
+.nb-media-btn:disabled {
+  background: #d9d4c9;
+  color: var(--muted-foreground);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.nb-media-btn--mute {
+  width: 2rem;
+  height: 2rem;
+  background: #fff;
+  color: var(--nb-ink);
+}
+
+.nb-media-time {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Read-only timeline (seek locked). */
+.nb-media-track {
+  position: relative;
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  height: 0.75rem;
+  border: var(--nb-bw) solid var(--nb-ink);
+  border-radius: 999px;
+  background: #efe9db;
+  overflow: hidden;
+}
+.nb-media-track-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  background: var(--indigo);
+}
+.nb-media-track--locked .nb-media-lock {
+  position: absolute;
+  right: 0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--nb-ink);
+  opacity: 0.55;
+}
+
+.nb-media-seek-wrap {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  display: flex;
+  align-items: center;
+}
+
+/* Native range inputs, styled neobrutalist + keyboard accessible. */
+.nb-media-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 0.75rem;
+  border: var(--nb-bw) solid var(--nb-ink);
+  border-radius: 999px;
+  background: #efe9db;
+  cursor: pointer;
+}
+.nb-media-range--volume {
+  width: 4.5rem;
+  flex: 0 0 auto;
+}
+.nb-media-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: var(--nb-bw) solid var(--nb-ink);
+  border-radius: 999px;
+  background: var(--amber);
+}
+.nb-media-range::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border: var(--nb-bw) solid var(--nb-ink);
+  border-radius: 999px;
+  background: var(--amber);
+}
+.nb-media-range:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 45%, transparent);
+}
+
+.nb-media-volume {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.nb-media-plays {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.2rem 0.5rem;
+  border: 2px solid var(--nb-ink);
+  border-radius: 999px;
+  background: var(--amber);
+  color: var(--nb-ink);
+  white-space: nowrap;
+}
+.nb-media-plays--done {
+  background: #ff5a4d;
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-media-btn {
+    transition: none;
+  }
+  .nb-media-btn:hover:not(:disabled),
+  .nb-media-btn:active:not(:disabled) {
+    transform: none;
+  }
+}

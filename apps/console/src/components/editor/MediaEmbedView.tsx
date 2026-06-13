@@ -1,6 +1,6 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/core";
-import { AlignLeftIcon, AlignCenterIcon, AlignRightIcon, TrashIcon } from "../ui/icons";
+import { AlignLeftIcon, AlignCenterIcon, AlignRightIcon, TrashIcon, RedoIcon, ClockIcon, ShieldIcon } from "../ui/icons";
 import { Tooltip } from "../ui/Tooltip";
 import { resolveMediaUrl } from "../../lib/format";
 
@@ -10,7 +10,19 @@ interface MediaAttrs {
   alt: string;
   width: string | null;
   align: "left" | "center" | "right";
+  /** Exam-integrity (#164), audio/video only. null = unlimited plays. */
+  maxPlays: number | null;
+  /** Exam-integrity (#164), audio/video only. true = timeline locked. */
+  noSeek: boolean;
 }
+
+/** Play-count presets shown in the toolbar (null = unlimited). */
+const MAX_PLAYS_PRESETS: { label: string; value: number | null }[] = [
+  { label: "∞", value: null },
+  { label: "1×", value: 1 },
+  { label: "2×", value: 2 },
+  { label: "3×", value: 3 },
+];
 
 const ALIGN_OPTIONS: { value: MediaAttrs["align"]; title: string; icon: React.ReactNode }[] = [
   { value: "left",   title: "Rata kiri",  icon: <AlignLeftIcon   className="size-3.5" /> },
@@ -27,7 +39,7 @@ const WIDTH_PRESETS: { label: string; value: string | null }[] = [
 ];
 
 export function MediaEmbedView({ node, updateAttributes, deleteNode, selected }: NodeViewProps) {
-  const { src, mediaType, alt, width, align } = node.attrs as MediaAttrs;
+  const { src, mediaType, alt, width, align, maxPlays, noSeek } = node.attrs as MediaAttrs;
 
   // Node attrs store the RELATIVE `/uploads/...` path; the in-editor preview
   // needs an absolute URL because the console runs on a different origin than
@@ -36,6 +48,12 @@ export function MediaEmbedView({ node, updateAttributes, deleteNode, selected }:
 
   const isAudio = mediaType === "audio";
   const isVideo = mediaType === "video";
+  const isPlayable = isAudio || isVideo;
+
+  // Human-readable summary of the integrity controls students will get (#164).
+  const integrityLabel = isPlayable
+    ? [maxPlays ? `maks ${maxPlays}×` : null, noSeek ? "tanpa seek" : null].filter(Boolean).join(" • ")
+    : "";
 
   const containerStyle: React.CSSProperties = {
     textAlign: isAudio ? "left" : (align ?? "center"),
@@ -62,6 +80,19 @@ export function MediaEmbedView({ node, updateAttributes, deleteNode, selected }:
           <video src={displaySrc} controls style={mediaStyle} />
         )}
       </div>
+
+      {/* Integrity summary — the editor preview keeps native controls, but this
+          chip shows the author what the student's locked-down player enforces. */}
+      {integrityLabel && (
+        <div
+          contentEditable={false}
+          className="mt-1 flex items-center gap-1 text-[0.625rem] font-medium text-accent"
+          style={{ textAlign: "left" }}
+        >
+          <ShieldIcon className="size-3" />
+          <span>Integritas ujian: {integrityLabel}</span>
+        </div>
+      )}
 
       {/* Inline toolbar — shown when node is selected */}
       {selected && (
@@ -107,6 +138,53 @@ export function MediaEmbedView({ node, updateAttributes, deleteNode, selected }:
                     {preset.label}
                   </button>
                 ))}
+
+                <span className="mx-1 h-4 w-px bg-line" />
+              </>
+            )}
+
+            {/* Exam-integrity controls (#164) — audio/video only */}
+            {isPlayable && (
+              <>
+                <Tooltip label="Batas jumlah putar">
+                  <span className="inline-flex items-center text-ink-soft" aria-hidden>
+                    <RedoIcon className="size-3.5" />
+                  </span>
+                </Tooltip>
+                {MAX_PLAYS_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    title={preset.value ? `Maks ${preset.value} kali putar` : "Putar tanpa batas"}
+                    aria-pressed={(maxPlays ?? null) === preset.value}
+                    onClick={() => updateAttributes({ maxPlays: preset.value })}
+                    className={`focus-ring rounded px-1.5 py-0.5 text-[0.625rem] font-medium transition-colors ${
+                      (maxPlays ?? null) === preset.value
+                        ? "bg-accent/15 text-accent"
+                        : "text-ink-soft hover:bg-canvas hover:text-ink"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+
+                <span className="mx-1 h-4 w-px bg-line" />
+
+                <Tooltip label={noSeek ? "Seek dikunci (klik untuk buka)" : "Kunci seek (tanpa scrub)"}>
+                  <button
+                    type="button"
+                    aria-label="Kunci seek"
+                    aria-pressed={noSeek}
+                    onClick={() => updateAttributes({ noSeek: !noSeek })}
+                    className={`focus-ring inline-flex size-6 items-center justify-center rounded transition-colors ${
+                      noSeek
+                        ? "bg-accent/15 text-accent"
+                        : "text-ink-soft hover:bg-canvas hover:text-ink"
+                    }`}
+                  >
+                    <ClockIcon className="size-3.5" />
+                  </button>
+                </Tooltip>
 
                 <span className="mx-1 h-4 w-px bg-line" />
               </>
