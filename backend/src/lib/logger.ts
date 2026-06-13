@@ -12,8 +12,6 @@
  * `debug` outside production and `info` in production.
  */
 
-import { writeErrorLog, writeWarnLog } from "./log-files";
-
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 const LEVEL_PRIORITY: Record<LogLevel, number> = {
@@ -33,6 +31,27 @@ const MIN_LEVEL = resolveMinLevel();
 
 /** Structured, JSON-serializable context attached to a log line. */
 export type LogContext = Record<string, unknown>;
+
+/** A persistence sink for warn/error lines (writes to a `.log` file + the DB). */
+type LogSink = (message: string, fields?: LogContext) => void;
+
+// Persistence sinks are *injected* (see setLogSinks) rather than imported, so
+// this module never imports `log-files`. That deliberately breaks the import
+// cycle `logger → log-files → log-store → db → logger`, which otherwise caused
+// `createLogger`/`getDbConfig`/`dbConfig` temporal-dead-zone errors depending on
+// the bun-test module load order. Until `log-files` registers its sinks, warn/
+// error still print to the console — only file/DB persistence is deferred.
+let warnSink: LogSink | null = null;
+let errorSink: LogSink | null = null;
+
+/**
+ * Registers the warn/error persistence sinks. Called once by `log-files` at its
+ * module init, inverting the dependency so `logger` stays cycle-free.
+ */
+export function setLogSinks(sinks: { warn: LogSink; error: LogSink }): void {
+  warnSink = sinks.warn;
+  errorSink = sinks.error;
+}
 
 /** A namespaced logger returned by {@link createLogger}. */
 export interface Logger {
@@ -87,7 +106,7 @@ export function createLogger(scope: string): Logger {
     if (context) sink(line(level, message), context);
     else sink(line(level, message));
     // Persist warnings to warn.log (console output above is unchanged).
-    if (level === "warn") writeWarnLog(`${prefix} ${message}`, context);
+    if (level === "warn") warnSink?.(`${prefix} ${message}`, context);
   };
 
   return {
@@ -100,7 +119,7 @@ export function createLogger(scope: string): Logger {
       if (error !== undefined) payload.error = serializeError(error);
       console.error(line("error", message), payload);
       // Persist errors to errors.log (console output above is unchanged).
-      writeErrorLog(`${prefix} ${message}`, payload);
+      errorSink?.(`${prefix} ${message}`, payload);
     },
   };
 }

@@ -23,6 +23,7 @@ import winston from "winston";
 import type { LogBroadcast, LogStream } from "@azhura/shared";
 import { redactFields } from "./redact";
 import { insertLog } from "./log-store";
+import { setLogSinks } from "./logger";
 
 const { combine, timestamp, json } = winston.format;
 
@@ -165,6 +166,13 @@ export const writeErrorLog = (message: string, fields?: LogFields): void => {
   appFileLogger.error(message, fields);
   record("error", message, fields);
 };
+
+// Inject the file/DB persistence sinks into the logger. This module imports the
+// logger (one-way); the logger does NOT import this file, which keeps the
+// `logger → log-files → log-store → db → logger` import cycle broken. Importing
+// `log-files` anywhere (the server does at startup) wires up warn/error
+// persistence; before that, the logger degrades gracefully to console-only.
+setLogSinks({ warn: writeWarnLog, error: writeErrorLog });
 
 /**
  * Records a semantic application event (#18) — login, exam start/submit,
