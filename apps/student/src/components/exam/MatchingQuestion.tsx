@@ -128,6 +128,7 @@ export function MatchingQuestion({ question, questionNumber }: Props) {
 
       <RichContent
         html={question.text}
+        questionId={question.id}
         className="question-html text-lg font-medium text-foreground leading-relaxed"
       />
 

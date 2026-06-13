@@ -43,6 +43,13 @@ interface ExamState {
   currentQuestionIndex: number;
   answers: Record<string, ExamAnswer>;
   flaggedQuestions: Record<string, boolean>;
+  /**
+   * Media play counts for exam-integrity gating (#164), keyed by
+   * `${questionId}:${mediaSrc}`. Persisted to localStorage so a student cannot
+   * reset a "max plays" budget by navigating away from the question or
+   * refreshing the app. Reset only when a new exam session starts.
+   */
+  mediaPlays: Record<string, number>;
   startTime: number | null;
   endTime: number | null;
   /**
@@ -74,6 +81,12 @@ interface ExamState {
   setCurrentQuestionIndex: (index: number) => void;
   submitAnswer: (questionId: string, selectedOptionId: string | null, answerValue?: string | null) => Promise<void>;
   toggleFlagQuestion: (questionId: string) => Promise<void>;
+  /**
+   * Records one completed playback of a media clip (#164), incrementing the
+   * count for `key` (`${questionId}:${mediaSrc}`) and persisting it. Idempotent
+   * per call: each invocation counts exactly one play.
+   */
+  recordMediaPlay: (key: string) => void;
   setTimeRemaining: (time: number | ((prev: number) => number)) => void;
   submitExam: () => Promise<ExamResult | null>;
   /**
@@ -126,7 +139,17 @@ const SESSION_KEYS = [
   "cbt_exam_start_time",
   "cbt_exam_end_time",
   "cbt_server_time_offset",
+  "cbt_media_plays",
 ] as const;
+
+/** localStorage key for the media play-count map (#164). */
+const MEDIA_PLAYS_KEY = "cbt_media_plays";
+
+/** Reads the persisted media play-count map, defaulting to empty. */
+const readMediaPlays = (): Record<string, number> =>
+  isBrowser
+    ? safeJsonParse<Record<string, number>>(localStorage.getItem(MEDIA_PLAYS_KEY), {}, MEDIA_PLAYS_KEY)
+    : {};
 
 export const useExamStore = create<ExamState>((set, get) => {
   /**
@@ -174,6 +197,7 @@ export const useExamStore = create<ExamState>((set, get) => {
   currentQuestionIndex: readNumber("cbt_current_question_index"),
   answers: {},
   flaggedQuestions: {},
+  mediaPlays: readMediaPlays(),
   startTime: isBrowser ? readNumber("cbt_exam_start_time") || null : null,
   endTime: storedEndTime,
   serverTimeOffset: storedOffset,
@@ -191,6 +215,10 @@ export const useExamStore = create<ExamState>((set, get) => {
     const storedSessionId = isBrowser ? localStorage.getItem("cbt_exam_session_id") : null;
     if (storedSessionId !== session.id) {
       await clearLocalDbAnswers();
+      // A different session means a fresh attempt — drop any media play counts
+      // so the new session starts with full play budgets (#164).
+      if (isBrowser) localStorage.removeItem(MEDIA_PLAYS_KEY);
+      set({ mediaPlays: {} });
     }
 
     // Capture clock skew from the server's clock at session creation so the
@@ -281,6 +309,14 @@ export const useExamStore = create<ExamState>((set, get) => {
       set((state) => ({ answers: { ...state.answers, [questionId]: updatedAnswer } }));
       await saveAnswerToLocalDb(updatedAnswer);
     }
+  },
+
+  recordMediaPlay: (key) => {
+    set((state) => {
+      const next = { ...state.mediaPlays, [key]: (state.mediaPlays[key] ?? 0) + 1 };
+      if (isBrowser) localStorage.setItem(MEDIA_PLAYS_KEY, JSON.stringify(next));
+      return { mediaPlays: next };
+    });
   },
 
   setTimeRemaining: (time) => {
@@ -395,6 +431,7 @@ export const useExamStore = create<ExamState>((set, get) => {
       currentQuestionIndex: 0,
       answers: {},
       flaggedQuestions: {},
+      mediaPlays: {},
       startTime: null,
       endTime: null,
       serverTimeOffset: 0,
@@ -430,6 +467,7 @@ export const useExamStore = create<ExamState>((set, get) => {
       endTime,
       serverTimeOffset: offset,
       timeRemaining: secondsUntil(endTime, offset),
+      mediaPlays: readMediaPlays(),
     });
   },
   };

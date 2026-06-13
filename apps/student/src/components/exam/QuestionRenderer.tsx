@@ -55,6 +55,7 @@ function MultipleChoiceQuestion({ question, questionNumber }: QuestionRendererPr
 
       <RichContent
         html={question.text}
+        questionId={question.id}
         className="question-html text-lg font-medium text-foreground leading-relaxed"
       />
 
@@ -97,7 +98,7 @@ function MultipleChoiceQuestion({ question, questionNumber }: QuestionRendererPr
                   {optionLetter}
                 </span>
                 <div className="flex-1 flex flex-col gap-2 pt-0.5">
-                  <RichContent html={option.text} className="question-html" />
+                  <RichContent html={option.text} questionId={question.id} className="question-html" />
                   {option.imageUrl && (
                     <img
                       src={resolveMediaUrl(option.imageUrl)}
