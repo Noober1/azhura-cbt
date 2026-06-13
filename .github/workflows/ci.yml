@@ -150,6 +150,24 @@ jobs:
           echo "MariaDB did not become ready in time." >&2
           exit 1
 
+      # MariaDB 11's default server collation differs from the migration target
+      # (migration 0007 does `chat_messages CONVERT TO ... utf8mb4_unicode_ci`).
+      # The schema otherwise omits an explicit charset, so tables inherit the DB
+      # default. Pin the database to utf8mb4/utf8mb4_unicode_ci BEFORE migrate so
+      # `users` and `chat_messages` share one collation — otherwise the CONVERT
+      # breaks the chat_messages.user_id → users.id foreign-key collation parity
+      # and the migration aborts. (mysql2 is already installed; no client needed.)
+      - name: Pin database charset (utf8mb4) before migrate
+        working-directory: backend
+        run: |
+          bun --eval '
+            import mysql from "mysql2/promise";
+            const c = await mysql.createConnection({ host: "127.0.0.1", port: 3306, user: "root", password: "ci_root_pw" });
+            await c.query("ALTER DATABASE `azhura_cbt` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            await c.end();
+            console.log("Database charset pinned to utf8mb4 / utf8mb4_unicode_ci.");
+          '
+
       - name: Apply migrations
         working-directory: backend
         run: bun run migrate
