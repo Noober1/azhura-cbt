@@ -25,7 +25,7 @@
    - **L1 — Keyboard Shortcut Blocker** — memblokir F12, refresh, copy-paste, klik kanan, dll.
    - **L2 — Kiosk Window (Tauri)** — fullscreen paksa, always-on-top, force-refocus, blokir close.
    - **L3 — OS Keyboard Hook (Windows)** — `WH_KEYBOARD_LL` menelan Alt+Tab, Alt+Esc, Win, Ctrl+Esc, dan PrintScreen di level OS selama aplikasi berjalan — aktif app-wide seperti L2, lepas hanya saat toggle dimatikan atau aplikasi ditutup (`VITE_ANTI_CHEAT_BLOCK_OS_KEYBOARD`).
-   - ⚠️ **Batasan by-design**: Ctrl+Alt+Del / Task Manager adalah _Secure Attention Sequence_ yang ditangani kernel Windows — **tidak bisa** diblokir aplikasi user-mode mana pun. Mitigasi: kebijakan lab (Assigned Access / Group Policy) + pengawasan. _Code signing installer_ (#28) menyusul.
+   - ⚠️ **Batasan by-design**: Ctrl+Alt+Del / Task Manager adalah _Secure Attention Sequence_ yang ditangani kernel Windows — **tidak bisa** diblokir aplikasi user-mode mana pun. Mitigasi: kebijakan lab (Assigned Access / Group Policy) + pengawasan — lihat [`docs/security/windows-lockdown-provisioning.md`](docs/security/windows-lockdown-provisioning.md) (#127). _Code signing installer_ (#28) menyusul.
 6. **Cakupan per Kelas (Group Scoping)**: Siswa hanya melihat & dapat memulai ujian yang diperuntukkan bagi kelasnya (`exam_groups`); grup dibawa pada JWT.
 
 ---
