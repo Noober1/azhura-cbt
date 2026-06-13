@@ -27,6 +27,12 @@ import { chatMuteRegistry } from "./lib/chat-mute";
 import { sanitizeChatContent } from "./lib/chat-content";
 import { readSettings } from "./lib/settings-service";
 import { setDashboardBroadcaster, notifyDashboardStats, setOnlineStudentCountGetter } from "./routes/admin/dashboard";
+import {
+  parseEventType,
+  buildViolationPayload,
+  insertCheatLog,
+  createBurstThrottle,
+} from "./lib/cheat-log-store";
 import type {
   BroadcastTarget,
   ChatPresenceMember,
@@ -52,6 +58,15 @@ const chatLimiter = createChatRateLimiter(chatConfig);
  * flag (not a countdown) for supervisor mutes, so the exact value is cosmetic.
  */
 const INDEFINITE_MUTE_MS = 1000 * 60 * 60 * 24 * 365;
+
+/**
+ * Anti-cheat realtime push (#126): damp bursty client violations so a repeating
+ * event (e.g. rapid Alt+Tab focus loss) can't flood the supervisor fan-out or
+ * the `cheat_logs` audit. Keyed per `(socketId, eventType)`, cleared on
+ * disconnect so the map stays bounded by the number of live sockets.
+ */
+const ANTI_CHEAT_MIN_INTERVAL_MS = 1000;
+const antiCheatThrottle = createBurstThrottle(ANTI_CHEAT_MIN_INTERVAL_MS);
 
 /**
  * Collects the distinct **students** currently in the chat room — the @mention
@@ -330,6 +345,35 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       }
     });
 
+    // Anti-cheat violation push (#126). The student client emits this when its
+    // anti-cheat engine detects a violation. Trust boundary: only students may
+    // send, the event type must be known, and a per-(socket,type) throttle damps
+    // bursts. Identity/session are taken from the JWT-derived socket.data — never
+    // the client — so a tampered payload can't impersonate another student.
+    socket.on("anti-cheat-violation", (raw: unknown) => {
+      try {
+        if (role !== "student") return;
+        const event = (raw ?? {}) as { eventType?: unknown };
+        const eventType = parseEventType(event.eventType);
+        if (!eventType) return;
+        if (!antiCheatThrottle.allow(`${socket.id}:${eventType}`, Date.now())) return;
+
+        const payload = buildViolationPayload(socket.data, raw as object, eventType);
+        io.to("supervisors").emit("anti-cheat-violation", payload);
+        insertCheatLog({
+          sessionId: payload.sessionId,
+          eventType: payload.eventType,
+          details: payload.details ?? null,
+          occurredAt: payload.timestamp,
+        });
+      } catch (error) {
+        log.warn("Anti-cheat violation handler failed", {
+          nis,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
     // Single-session liveness (#5): bind this socket to the student's active
     // session and keep its Redis TTL refreshed while connected. Only a genuine
     // `heartbeat:pong` (below) extends the key, so a dead socket/crashed server
@@ -449,6 +493,9 @@ export function initSocket(httpServer: HttpServer): SocketServer {
         clearInterval(heartbeat);
         heartbeat = null;
       }
+      // Anti-cheat (#126): drop this socket's throttle entries so the per-socket
+      // map can't grow unbounded across the server's lifetime.
+      antiCheatThrottle.reset(socket.id);
       // Chat (#17): the socket has already left its rooms by now, so refresh the
       // remaining members' presence/mention list. No-op when the room is empty.
       void emitChatPresence().catch(() => {});

@@ -14,6 +14,7 @@
 import { io, Socket } from "socket.io-client";
 import type {
   ActiveSessionResponse,
+  AntiCheatEvent,
   ChatConfigEvent,
   ChatErrorEvent,
   ChatHistoryEvent,
@@ -220,6 +221,24 @@ export const connectSocket = (token: string): void => {
  */
 export const sendChat = (content: string): void => {
   socket?.emit("chat:send", { content });
+};
+
+/** The raw anti-cheat violation payload a student client emits (#126). */
+export interface AntiCheatViolationEmit {
+  eventType: AntiCheatEvent["eventType"];
+  details?: string;
+  timestamp: number;
+}
+
+/**
+ * Pushes an anti-cheat violation to the supervisor dashboard in real time
+ * (#126). No-op when the socket is down (the student may be mid-exam offline);
+ * the in-memory store still keeps the local audit, so nothing is lost from the
+ * student's own log. The server is the trust boundary — it re-derives identity
+ * and session from the authenticated handshake, so we only send the raw event.
+ */
+export const emitAntiCheatViolation = (event: AntiCheatViolationEmit): void => {
+  socket?.emit("anti-cheat-violation", event);
 };
 
 /** Closes the realtime connection and releases the singleton. */

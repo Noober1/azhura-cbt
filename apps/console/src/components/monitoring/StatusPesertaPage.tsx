@@ -14,8 +14,9 @@
  */
 
 import { useMemo, useState } from "react";
-import type { RosterConnection, RosterParticipant } from "@azhura/shared";
+import type { AntiCheatViolation, RosterConnection, RosterParticipant } from "@azhura/shared";
 import { useRoster } from "./useRoster";
+import { useAntiCheatFeed } from "./useAntiCheatFeed";
 import { monitoringApi } from "../../lib/monitoring-api";
 import { getErrorMessage } from "../../lib/errors";
 import { toast } from "../../stores/toast";
@@ -89,10 +90,40 @@ function RemainingTime({
   );
 }
 
-function IdentityCells({ p }: { p: RosterParticipant }) {
+/** Human-readable Indonesian labels for each anti-cheat event type (#126). */
+const VIOLATION_LABEL: Record<AntiCheatViolation["eventType"], string> = {
+  focus_loss: "Pindah fokus",
+  fullscreen_exit: "Keluar layar penuh",
+  shortcut_attempt: "Pintasan keyboard",
+  multi_monitor: "Monitor ganda",
+  clipboard_blocked: "Clipboard diblokir",
+  force_refocus: "Fokus dipaksa",
+  window_close_blocked: "Tutup jendela diblokir",
+  os_shortcut_blocked: "Pintasan OS diblokir",
+};
+
+/** A small red pill showing a participant's live anti-cheat violation count. */
+function ViolationBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span title={`${count} pelanggaran anti-cheat terdeteksi`}>
+      <Badge tone="danger">
+        <AlertIcon className="size-3" aria-hidden="true" />
+        {count}
+      </Badge>
+    </span>
+  );
+}
+
+function IdentityCells({ p, violationCount }: { p: RosterParticipant; violationCount: number }) {
   return (
     <>
-      <td className="px-4 py-3 font-medium text-ink">{p.name}</td>
+      <td className="px-4 py-3 font-medium text-ink">
+        <span className="flex items-center gap-2">
+          {p.name}
+          <ViolationBadge count={violationCount} />
+        </span>
+      </td>
       <td className="tabular px-4 py-3 text-ink-soft">{p.nis}</td>
       <td className="hidden px-4 py-3 md:table-cell">
         {p.groupName ? <Badge tone="accent">{p.groupName}</Badge> : <span className="text-faint">—</span>}
@@ -102,6 +133,15 @@ function IdentityCells({ p }: { p: RosterParticipant }) {
       </td>
     </>
   );
+}
+
+/** Formats a violation timestamp as HH:MM:SS for the compact feed. */
+function formatViolationTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 function SectionHeader({ title, count, action }: { title: string; count: number; action?: React.ReactNode }) {
@@ -118,6 +158,9 @@ function SectionHeader({ title, count, action }: { title: string; count: number;
 
 export function StatusPesertaPage() {
   const { participants, loading, error, wsConnected, reload, remainingMs } = useRoster();
+  // Live anti-cheat feed (#126): per-student counts drive the row badges and the
+  // newest events feed the compact panel below the roster.
+  const { violations, byStudent, clear: clearViolations } = useAntiCheatFeed(true);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -301,7 +344,7 @@ export function StatusPesertaPage() {
                 <tbody>
                   {dashboard.map((p) => (
                     <tr key={p.userId} className="border-b-[1.5px] border-line-soft transition-colors last:border-0 hover:bg-canvas">
-                      <IdentityCells p={p} />
+                      <IdentityCells p={p} violationCount={byStudent.get(p.userId) ?? 0} />
                       <td className="px-4 py-3 text-right">
                         <Button
                           variant="ghost"
@@ -338,7 +381,7 @@ export function StatusPesertaPage() {
                 <tbody>
                   {rows.map((p) => (
                     <tr key={p.userId} className="border-b-[1.5px] border-line-soft transition-colors last:border-0 hover:bg-canvas">
-                      <IdentityCells p={p} />
+                      <IdentityCells p={p} violationCount={byStudent.get(p.userId) ?? 0} />
                       <td className="px-4 py-3">
                         {p.exam && (
                           <RemainingTime
@@ -384,6 +427,41 @@ export function StatusPesertaPage() {
             </section>
           ))}
         </div>
+      )}
+
+      {/* Anti-cheat live feed (#126): a compact, newest-first list of detected
+          violations across all participants, with a clear action. Hidden until
+          the first violation arrives so it doesn't clutter a clean exam. */}
+      {violations.length > 0 && (
+        <section className="mt-5 overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
+          <SectionHeader
+            title="Aktivitas anti-cheat"
+            count={violations.length}
+            action={
+              <Button variant="ghost" size="sm" onClick={clearViolations}>
+                Bersihkan
+              </Button>
+            }
+          />
+          <ul className="max-h-72 divide-y divide-line-soft overflow-y-auto border-t border-line text-sm">
+            {violations.map((v) => (
+              <li
+                key={`${v.studentId}-${v.timestamp}-${v.eventType}`}
+                className="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <AlertIcon className="size-4 shrink-0 text-danger" aria-hidden="true" />
+                  <span className="truncate font-medium text-ink">{v.name || v.nis}</span>
+                  <span className="text-faint">·</span>
+                  <span className="truncate text-ink-soft">{VIOLATION_LABEL[v.eventType]}</span>
+                </div>
+                <span className="tabular shrink-0 text-xs text-faint">
+                  {formatViolationTime(v.timestamp)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <ConfirmDialog
