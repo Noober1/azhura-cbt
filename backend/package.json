@@ -9,6 +9,7 @@
     "test": "bun test",
     "seed": "bun run src/seed.ts",
     "seed:demo": "bun run src/seed-demo.ts",
+    "scrub:media": "bun run src/scripts/scrub-external-media.ts",
     "migrate": "bun run src/migrate.ts",
     "db:generate": "bunx dotenv-cli -e .env.local -- drizzle-kit generate",
     "db:push": "bunx dotenv-cli -e .env.local -- drizzle-kit push",

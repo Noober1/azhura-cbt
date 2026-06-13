@@ -14,13 +14,18 @@
 
 import "./editor.css";
 import { useEditor, EditorContent } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import { Mathematics } from "@tiptap/extension-mathematics";
 import { MediaEmbed } from "./MediaEmbed";
 import { MediaPickerModal } from "./MediaPickerModal";
-import { useEffect, useState } from "react";
+import { imageFilesFromClipboard, externalImageSrcs } from "./paste-media";
+import { useEffect, useRef, useState } from "react";
 import type { MediaFile, MediaListResponse } from "../../types";
+import { relativizeMediaUrl } from "../../lib/format";
+import { getErrorMessage } from "../../lib/errors";
+import { toast } from "../../stores/toast";
 import {
   BoldIcon,
   ItalicIcon,
@@ -42,6 +47,9 @@ type ListFn = (
 
 type UploadFn = (file: File, onProgress?: (pct: number) => void) => Promise<MediaFile>;
 
+/** Rehosts a remote image URL into the media library (#190). */
+type FromUrlFn = (url: string) => Promise<MediaFile>;
+
 interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
@@ -49,6 +57,17 @@ interface RichTextEditorProps {
   disabled?: boolean;
   mediaListFn: ListFn;
   mediaUploadFn: UploadFn;
+  /**
+   * Optional: when provided, pasting an image from the web rehosts it onto our
+   * backend instead of leaving an external `src` (which the stem guard rejects).
+   * Omit to disable URL rehosting for callers without a `from-url` endpoint.
+   */
+  mediaFromUrlFn?: FromUrlFn;
+}
+
+/** A pasted `src` is external when it stays absolute http(s) after stripping our own origin. */
+function isExternalMediaSrc(src: string): boolean {
+  return /^https?:\/\//i.test(relativizeMediaUrl(src));
 }
 
 interface ToolbarButtonProps {
@@ -96,8 +115,69 @@ export function RichTextEditor({
   disabled,
   mediaListFn,
   mediaUploadFn,
+  mediaFromUrlFn,
 }: RichTextEditorProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  // editorProps.handlePaste is bound once at creation, before `editor` exists,
+  // so the paste handlers reach the live instance through this ref.
+  const editorRef = useRef<Editor | null>(null);
+
+  /** Inserts a library media file (uploaded or rehosted) at the current selection. */
+  function insertMediaFile(file: MediaFile): void {
+    editorRef.current
+      ?.chain()
+      .focus()
+      .insertContent({
+        type: "mediaEmbed",
+        attrs: { src: file.url, mediaType: file.type, alt: file.originalName },
+      })
+      .run();
+  }
+
+  /** Uploads pasted image files (e.g. a screenshot) and inserts each on success. */
+  async function uploadPastedImages(files: File[]): Promise<void> {
+    for (const file of files) {
+      try {
+        insertMediaFile(await mediaUploadFn(file));
+      } catch (err) {
+        toast.error(getErrorMessage(err, "Gagal mengunggah gambar yang ditempel."));
+      }
+    }
+  }
+
+  /** Rehosts external image URLs from pasted HTML and inserts each local copy. */
+  async function rehostPastedImages(urls: string[], fromUrl: FromUrlFn): Promise<void> {
+    for (const url of urls) {
+      try {
+        insertMediaFile(await fromUrl(url));
+      } catch (err) {
+        toast.error(getErrorMessage(err, "Gagal mengambil gambar dari tautan."));
+      }
+    }
+  }
+
+  /**
+   * Intercepts pastes carrying images. Image *files* (screenshots) are fully
+   * handled here because TipTap would otherwise drop them. For pasted HTML we do
+   * NOT preventDefault — the text pastes normally and any external images are
+   * rehosted and appended — so pasted prose is never lost.
+   */
+  function handlePaste(event: ClipboardEvent): boolean {
+    if (disabled) return false;
+
+    const files = imageFilesFromClipboard(event.clipboardData);
+    if (files.length > 0) {
+      void uploadPastedImages(files);
+      return true;
+    }
+
+    if (mediaFromUrlFn) {
+      const html = event.clipboardData?.getData("text/html") ?? "";
+      const urls = externalImageSrcs(html, isExternalMediaSrc);
+      if (urls.length > 0) void rehostPastedImages(urls, mediaFromUrlFn);
+    }
+    return false;
+  }
 
   const editor = useEditor({
     extensions: [
@@ -112,8 +192,15 @@ export function RichTextEditor({
     ],
     content: value,
     editable: !disabled,
+    editorProps: {
+      handlePaste: (_view, event) => handlePaste(event),
+    },
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
   });
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   // Sync external value → editor only when value changes from outside (edit mode load,
   // form reset). useEffect ensures this never runs mid-render, avoiding infinite loops.

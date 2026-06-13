@@ -332,6 +332,7 @@ export function AdminQuestionFormPage() {
             disabled={busy}
             mediaListFn={mediaApi.list}
             mediaUploadFn={mediaApi.upload}
+            mediaFromUrlFn={mediaApi.fromUrl}
           />
         </section>
 
