@@ -16,6 +16,9 @@ import { swagger } from "@elysiajs/swagger";
 /** Path the interactive docs are served from when enabled. */
 export const API_DOCS_PATH = "/api/docs";
 
+/** Absolute path the OpenAPI JSON spec is served from (consumed by the Scalar UI). */
+export const API_DOCS_SPEC_PATH = `${API_DOCS_PATH}/json`;
+
 /** Any Elysia instance — the wrapper is schema-agnostic, so we don't constrain the generics. */
 type AnyElysia = Elysia<any, any, any, any, any, any, any>;
 
@@ -48,6 +51,11 @@ export function applyApiDocs<T extends AnyElysia>(
             "Event realtime (Socket.io) & invarian perilaku ada di API_CONTRACT.md.",
         },
       },
+      // The plugin defaults the Scalar spec URL to a *relative* path
+      // (`api/docs/json`), which the browser resolves against the page URL
+      // `/api/docs` into the broken `/api/api/docs/json` (500). Pin it to the
+      // absolute spec path so the multi-segment docs path loads correctly.
+      scalarConfig: { spec: { url: API_DOCS_SPEC_PATH } },
     })
   ) as unknown as T;
 }
