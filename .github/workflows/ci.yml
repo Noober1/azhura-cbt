@@ -7,8 +7,7 @@
 #           real MariaDB (assertDbConnection + real INSERT/DELETE), so this job
 #           spins up a MariaDB service, writes backend/.env, runs migrations,
 #           then tests. Redis is exercised via ioredis-mock, but a redis service
-#           is provided for safety. NON-BLOCKING for now (continue-on-error) until
-#           pre-existing backend migration drift + toEqual brittleness are fixed.
+#           is provided for safety. REQUIRED gate.
 #   Layer 3 (e2e): Playwright full-stack journeys. Too heavy / stateful for every
 #           PR, so it runs ONLY on manual dispatch or the nightly schedule and is
 #           NOT part of the PR-blocking path.
@@ -75,9 +74,9 @@ jobs:
   # ── Layer 2 ───────────────────────────────────────────────────────────────
   # Backend `bun test`. Provisions MariaDB (+ Redis), writes the backend/.env
   # that `bun test` reads (NOT .env.local), applies migrations, then runs the
-  # full backend suite. NON-BLOCKING (continue-on-error) for now — see below.
+  # full backend suite. REQUIRED gate.
   backend-tests:
-    name: "Backend tests (MariaDB) [non-blocking]"
+    name: Backend tests (MariaDB)
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
 
@@ -173,17 +172,8 @@ jobs:
         working-directory: backend
         run: bun run migrate
 
-      # NON-BLOCKING for now: the full suite surfaces two PRE-EXISTING backend
-      # issues unrelated to feature work — a migration drift where
-      # `users.initial_password` exists in schema.ts + the drizzle snapshot but no
-      # `.sql` migration adds it (dev DBs were built with db:push, never a clean
-      # `migrate`), and historical tests sensitive to bun's toEqual null-vs-missing
-      # semantics. continue-on-error keeps the job (and PR) green while still
-      # running + reporting the suite. Tracked in #198; remove this once fixed to
-      # restore Layer 2 to blocking.
       - name: Backend tests
         working-directory: backend
-        continue-on-error: true
         run: bun test
 
   # ── Layer 3 ───────────────────────────────────────────────────────────────

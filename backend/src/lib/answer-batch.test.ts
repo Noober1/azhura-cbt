@@ -9,11 +9,14 @@
 import { describe, it, expect } from "bun:test";
 import { dedupeAnswersByQuestion, type RawBatchAnswer } from "./answer-batch";
 
+// `dedupeAnswersByQuestion` normalizes every row to carry an explicit
+// `answerValue` (null when absent), so the expected objects must include it too.
 const answer = (
   questionId: string,
   selectedOptionId: string | null,
-  timestamp: number
-): RawBatchAnswer => ({ questionId, selectedOptionId, timestamp });
+  timestamp: number,
+  answerValue: string | null = null
+): RawBatchAnswer => ({ questionId, selectedOptionId, answerValue, timestamp });
 
 describe("dedupeAnswersByQuestion", () => {
   it("returns an empty array unchanged", () => {
