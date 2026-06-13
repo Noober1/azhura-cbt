@@ -728,3 +728,75 @@ export interface MediaFile {
   uploadedBy: string | null;
   createdAt: number;
 }
+
+// ── Anti-cheat realtime push (#126) ──────────────────────────────────────────
+
+/**
+ * One anti-cheat violation pushed from a student client to supervisors in real
+ * time (`anti-cheat-violation` socket event). The server enriches the raw client
+ * {@link AntiCheatEvent} with participant identity (from the authenticated
+ * socket) so supervisors can attribute it without a second lookup, and persists
+ * it to `cheat_logs` for post-exam audit.
+ */
+export interface AntiCheatViolation {
+  /** Student user id (UUID) the violation belongs to. */
+  studentId: string;
+  /** Student NIS, for human-readable attribution in the supervisor feed. */
+  nis: string;
+  /** Student display name when known; empty string otherwise. */
+  name: string;
+  /** Active exam session id (jti) the violation occurred in. */
+  sessionId: string;
+  /** Exam id when the session is bound to one; null otherwise. */
+  examId: string | null;
+  /** Reuses the client event taxonomy — never duplicate the literals. */
+  eventType: AntiCheatEvent["eventType"];
+  /** Optional human-readable detail copied from the client event. */
+  details?: string;
+  /** Epoch milliseconds when the violation was detected on the client. */
+  timestamp: number;
+}
+
+// ── Client error / bug telemetry (#168 epic, #169 ingest) ────────────────────
+
+/**
+ * How a {@link ClientErrorReport} was produced:
+ * - `auto`   — captured by the client ErrorBoundary / global handlers (#171).
+ * - `manual` — submitted by a user via the "report bug" form (#170).
+ */
+export type ClientErrorReportKind = "auto" | "manual";
+
+/**
+ * A client-originated error or bug report accepted by `POST /error-reports`
+ * (#169). Persisted through the shared log store as an `event`-stream entry
+ * (`client_error` / `bug_report`), so it surfaces in the existing admin log
+ * viewer (#172) and live tail. The endpoint never throws (fire-and-forget) and
+ * server-fills actor identity from the JWT, so client-supplied `userId`/`role`
+ * are advisory only.
+ */
+export interface ClientErrorReport {
+  kind: ClientErrorReportKind;
+  /** Short summary line (error message, or first line of a manual report). */
+  message: string;
+  /** Captured stack trace when available. */
+  stack?: string;
+  /** App route/hash the user was on (e.g. `/exam`). */
+  route?: string;
+  /** Component or subsystem that raised it, when known. */
+  component?: string;
+  /** Client app version (e.g. `VITE_APP_VERSION`). */
+  appVersion?: string;
+  /** Free-text description for manual reports (#170). */
+  description?: string;
+  /** Advisory actor id — the server overrides with the authenticated user. */
+  userId?: string;
+  /** Advisory actor role — the server overrides with the authenticated user. */
+  role?: string;
+  /** Epoch milliseconds captured on the client. */
+  timestamp: number;
+}
+
+/** Acknowledgement returned by `POST /error-reports` (#169). */
+export interface ClientErrorReportResponse {
+  accepted: boolean;
+}
