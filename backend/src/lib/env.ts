@@ -200,6 +200,14 @@ export interface ServerConfig {
    */
   heartbeatPingIntervalMs: number;
   heartbeatMaxMisses: number;
+  /**
+   * Whether to mount the interactive API docs (`GET /api/docs`, #177). **Off by
+   * default** — this is an exam system, and exposing the full API surface plus a
+   * "try it out" console widens the attack surface on a school server during a
+   * live exam. Enable only in dev/non-prod by setting `ENABLE_API_DOCS=true`;
+   * when false the docs route is never registered (404).
+   */
+  enableApiDocs: boolean;
 }
 
 let serverConfig: ServerConfig | null = null;
@@ -219,6 +227,7 @@ export function getServerConfig(): ServerConfig {
     pingTimeoutMs: numberEnv("SOCKET_PING_TIMEOUT_MS", 20000),
     heartbeatPingIntervalMs: numberEnv("HEARTBEAT_PING_INTERVAL_MS", 10000),
     heartbeatMaxMisses: numberEnv("HEARTBEAT_MAX_MISSES", 2),
+    enableApiDocs: optionalEnv("ENABLE_API_DOCS", "false").trim().toLowerCase() === "true",
   };
   log.debug("Server configuration loaded.", { ...serverConfig });
   return serverConfig;

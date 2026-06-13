@@ -34,7 +34,8 @@ import { infoRoutes } from "./routes/info";
 import { setupRoutes } from "./routes/setup";
 import { errorReportRoutes } from "./routes/error-reports";
 import { initSocket } from "./socket";
-import { getServerConfig } from "./lib/env";
+import { getServerConfig, getAppVersion } from "./lib/env";
+import { applyApiDocs } from "./lib/api-docs";
 import { assertDbConnection } from "./db";
 import { closeRedis } from "./lib/redis";
 import { AppError } from "./lib/errors";
@@ -103,7 +104,7 @@ interface AccessStore {
   requestStart: number;
 }
 
-const { port, corsOrigins } = getServerConfig();
+const { port, corsOrigins, enableApiDocs } = getServerConfig();
 
 // Fail fast if the database is unreachable.
 await assertDbConnection();
@@ -170,6 +171,10 @@ const app = new Elysia()
       .use(supervisorMediaRoutes)
       .use(errorReportRoutes)
   );
+
+// Interactive API docs (#177) — mounted only when ENABLE_API_DOCS is set, so
+// production exposes no docs surface (route stays 404). No-op otherwise.
+applyApiDocs(app, { enabled: enableApiDocs, version: getAppVersion() });
 
 // Compile Elysia routes before using .handle() outside of .listen().
 app.compile();
