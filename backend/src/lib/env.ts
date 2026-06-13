@@ -64,7 +64,7 @@ let dbConfig: DbConfig | null = null;
  * `DB_PASSWORD` is allowed to be empty (common for local MySQL/MariaDB), but
  * host/user/name are required so a typo cannot silently connect to the wrong DB.
  */
-export const getDbConfig = (): DbConfig => {
+export function getDbConfig(): DbConfig {
   if (dbConfig) return dbConfig;
   dbConfig = {
     host: requireEnv("DB_HOST"),
@@ -108,7 +108,7 @@ let jwtSecret: string | null = null;
  * only warns in development, so a fresh checkout still boots locally but a real
  * deploy with template values aborts instead of running with a guessable secret.
  */
-export const getJwtSecret = (): string => {
+export function getJwtSecret(): string {
   if (jwtSecret) return jwtSecret;
   const secret = requireEnv("JWT_SECRET");
 
@@ -149,7 +149,7 @@ let redisConfig: RedisConfig | null = null;
  * defaults to a local instance, so a fresh checkout boots without extra setup
  * while production can point at a managed Redis/Valkey.
  */
-export const getRedisConfig = (): RedisConfig => {
+export function getRedisConfig(): RedisConfig {
   if (redisConfig) return redisConfig;
   redisConfig = {
     url: optionalEnv("REDIS_URL", "redis://127.0.0.1:6379"),
@@ -166,14 +166,14 @@ let appVersion: string | null = null;
  * page) so a single source of truth feeds both the admin console and the student
  * client's connection wizard.
  */
-export const getAppVersion = (): string => {
+export function getAppVersion(): string {
   if (appVersion) return appVersion;
   appVersion = optionalEnv("APP_VERSION", "1.0.0");
   return appVersion;
 };
 
 /** Test-only: clears the memoized app version so env changes take effect. */
-export const _resetAppVersion = (): void => {
+export function _resetAppVersion(): void {
   appVersion = null;
 };
 
@@ -205,7 +205,7 @@ export interface ServerConfig {
 let serverConfig: ServerConfig | null = null;
 
 /** Returns validated server settings (port + CORS origins + socket ping tuning). */
-export const getServerConfig = (): ServerConfig => {
+export function getServerConfig(): ServerConfig {
   if (serverConfig) return serverConfig;
   const corsOrigins = optionalEnv("CORS_ORIGIN", "http://localhost:5173")
     .split(",")
@@ -245,7 +245,7 @@ let chatConfig: ChatConfig | null = null;
  * defaults so a fresh checkout boots without extra configuration; the global
  * on/off switch lives in admin settings (`chatEnabled`), not here.
  */
-export const getChatConfig = (): ChatConfig => {
+export function getChatConfig(): ChatConfig {
   if (chatConfig) return chatConfig;
   chatConfig = {
     windowMs: numberEnv("CHAT_RATE_WINDOW_MS", 5000),
