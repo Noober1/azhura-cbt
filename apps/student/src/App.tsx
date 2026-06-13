@@ -14,6 +14,7 @@ import {
 import { startInputHardening } from "./lib/anti-cheat-config";
 import { isResolutionSufficient } from "./lib/screen";
 import { ResolutionGuard } from "./components/setup/ResolutionGuard";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 /**
  * Key chord that opens the hidden settings panel: Ctrl+Shift+O, then Ctrl+Shift+S (within 2 s).
@@ -155,8 +156,12 @@ function App() {
 
   return (
     <>
-      {/* HashRouter Navigation structure */}
-      <AppRouterWrapper />
+      {/* HashRouter Navigation structure. Wrapped in an ErrorBoundary (#171) so
+          a render crash anywhere in the routed tree shows an in-page fallback
+          instead of a white screen — the Toaster/modals below stay mounted. */}
+      <ErrorBoundary>
+        <AppRouterWrapper />
+      </ErrorBoundary>
 
       {/* Toast notifications container */}
       <Toaster
