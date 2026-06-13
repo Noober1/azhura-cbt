@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "bun --filter azhura-student dev",
     "build": "bun --filter azhura-student build",
+    "typecheck": "bun --filter azhura-student typecheck && bun --filter azhura-console typecheck",
     "tauri:dev": "bun --filter azhura-student tauri:dev",
     "tauri:build": "bun --filter azhura-student tauri:build",
     "console:dev": "bun --filter azhura-console dev",
