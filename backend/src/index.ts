@@ -42,6 +42,7 @@ import { createLogger } from "./lib/logger";
 import { writeAccessLog, logDirectory } from "./lib/log-files";
 import { pruneOldLogs, LOG_RETENTION_DAYS } from "./lib/log-store";
 import { ensureUploadDirs, MIME_MAP } from "./lib/upload";
+import { parseByteRange } from "./lib/http-range";
 
 const log = createLogger("Server");
 
@@ -49,6 +50,11 @@ const log = createLogger("Server");
  * Streams a file from the `uploads/` directory to the response.
  * Runs before the Elysia bridge so large files are not buffered in-memory.
  * Rejects path traversal attempts with 403.
+ *
+ * Supports HTTP **Range** requests (`Accept-Ranges` + `206 Partial Content`),
+ * which browsers require to play `<video>` and to seek within media — without
+ * it Chrome refuses to start most MP4s (the cause of "video tidak bisa
+ * diputar"; small audio files tolerate a plain `200`). See #164.
  */
 async function serveUpload(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const urlPath = (req.url ?? "").replace(/^\/uploads\//, "");
@@ -65,11 +71,30 @@ async function serveUpload(req: IncomingMessage, res: ServerResponse): Promise<v
   }
   const contentType = MIME_MAP[extname(filePath).toLowerCase()] ?? "application/octet-stream";
   const { size } = statSync(filePath);
-  res.writeHead(200, {
+  const headers: Record<string, string | number> = {
     "Content-Type": contentType,
-    "Content-Length": size,
     "Cache-Control": "public, max-age=31536000, immutable",
-  });
+    "Accept-Ranges": "bytes",
+  };
+
+  // Honour a single byte-range request so browsers can play/seek <video>.
+  const range = parseByteRange(req.headers.range, size);
+  if (range === "unsatisfiable") {
+    res.writeHead(416, { "Content-Range": `bytes */${size}`, "Accept-Ranges": "bytes" });
+    res.end();
+    return;
+  }
+  if (range) {
+    res.writeHead(206, {
+      ...headers,
+      "Content-Range": `bytes ${range.start}-${range.end}/${size}`,
+      "Content-Length": range.end - range.start + 1,
+    });
+    createReadStream(filePath, { start: range.start, end: range.end }).pipe(res);
+    return;
+  }
+
+  res.writeHead(200, { ...headers, "Content-Length": size });
   createReadStream(filePath).pipe(res);
 }
 
