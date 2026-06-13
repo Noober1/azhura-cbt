@@ -1,0 +1,207 @@
+# Azhura CBT — CI quality gate (issue #173)
+#
+# Layered pipeline:
+#   Layer 1 (lint-typecheck-unit): fast, no services. Local-tsc typecheck of the
+#           two Vite apps + their pure (DB-less) vitest suites. REQUIRED gate.
+#   Layer 2 (backend-tests): `bun test` for the Elysia backend. Some specs hit a
+#           real MariaDB (assertDbConnection + real INSERT/DELETE), so this job
+#           spins up a MariaDB service, writes backend/.env, runs migrations,
+#           then tests. Redis is exercised via ioredis-mock, but a redis service
+#           is provided for safety. REQUIRED gate.
+#   Layer 3 (e2e): Playwright full-stack journeys. Too heavy / stateful for every
+#           PR, so it runs ONLY on manual dispatch or the nightly schedule and is
+#           NOT part of the PR-blocking path.
+#
+# Typecheck scope note:
+#   - azhura-student and azhura-console each ship a local typescript 5.8.3 and a
+#     `typecheck` script; `bun --filter <pkg> typecheck` resolves that local tsc.
+#   - @azhura/shared and azhura-exam-backend have NO local typescript compiler
+#     (backend runs on Bun's type-stripping; shared is consumed as raw TS source).
+#     Adding a `tsc` script to them would resolve to whatever global tsc the
+#     runner happens to have (or none), so we deliberately do NOT typecheck them
+#     standalone. @azhura/shared is type-checked transitively by the two apps that
+#     import from it, and the backend's types are exercised at runtime by
+#     `bun test` in Layer 2.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Layer 3 (E2E) only — never runs on PRs.
+  workflow_dispatch:
+  schedule:
+    # Nightly at 18:00 UTC (~01:00 WIB). E2E job is gated on this event below.
+    - cron: "0 18 * * *"
+
+# Cancel superseded runs on the same ref (PR pushes) to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Layer 1 ───────────────────────────────────────────────────────────────
+  # Required gate: typecheck the Vite apps with their local tsc + run pure unit
+  # tests. No DB, no network services.
+  lint-typecheck-unit:
+    name: Typecheck + unit tests
+    # Skip on scheduled/dispatch runs — those events exist only to trigger E2E.
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck (student + console, local tsc 5.8.3)
+        run: |
+          bun --filter azhura-student typecheck
+          bun --filter azhura-console typecheck
+
+      - name: Unit tests (student)
+        run: bun --filter azhura-student test
+
+      - name: Unit tests (console)
+        run: bun --filter azhura-console test
+
+  # ── Layer 2 ───────────────────────────────────────────────────────────────
+  # Backend `bun test`. Provisions MariaDB (+ Redis), writes the backend/.env
+  # that `bun test` reads (NOT .env.local), applies migrations, then runs the
+  # full backend suite. REQUIRED gate.
+  backend-tests:
+    name: Backend tests (MariaDB)
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: ci_root_pw
+          MARIADB_DATABASE: azhura_cbt
+        ports:
+          - 3306:3306
+        # Service-level health check; we still add an app-side wait loop below.
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # `bun test` loads backend/.env (NOT .env.local). Write CI values here.
+      # 127.0.0.1 forces a TCP connection to the mapped service port.
+      # JWT_SECRET is a throwaway CI value, >= 32 chars (server rejects short ones).
+      - name: Write backend/.env for CI
+        run: |
+          cat > backend/.env <<'EOF'
+          PORT=3000
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_USER=root
+          DB_PASSWORD=ci_root_pw
+          DB_NAME=azhura_cbt
+          JWT_SECRET=ci_jwt_secret_value_at_least_32_chars_long
+          REDIS_URL=redis://127.0.0.1:6379
+          CORS_ORIGIN=http://localhost:1420,http://localhost:1430
+          LOG_LEVEL=warn
+          EOF
+
+      # Service health checks usually suffice, but add an explicit TCP-ready wait
+      # so migrations never race the DB coming up.
+      - name: Wait for MariaDB
+        run: |
+          for i in $(seq 1 30); do
+            if mariadb-admin ping -h 127.0.0.1 -P 3306 -uroot -pci_root_pw --silent 2>/dev/null \
+              || mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -pci_root_pw --silent 2>/dev/null; then
+              echo "MariaDB is ready."
+              exit 0
+            fi
+            echo "Waiting for MariaDB... ($i/30)"
+            sleep 2
+          done
+          echo "MariaDB did not become ready in time." >&2
+          exit 1
+
+      # MariaDB 11's default server collation differs from the migration target
+      # (migration 0007 does `chat_messages CONVERT TO ... utf8mb4_unicode_ci`).
+      # The schema otherwise omits an explicit charset, so tables inherit the DB
+      # default. Pin the database to utf8mb4/utf8mb4_unicode_ci BEFORE migrate so
+      # `users` and `chat_messages` share one collation — otherwise the CONVERT
+      # breaks the chat_messages.user_id → users.id foreign-key collation parity
+      # and the migration aborts. (mysql2 is already installed; no client needed.)
+      - name: Pin database charset (utf8mb4) before migrate
+        working-directory: backend
+        run: |
+          bun --eval '
+            import mysql from "mysql2/promise";
+            const c = await mysql.createConnection({ host: "127.0.0.1", port: 3306, user: "root", password: "ci_root_pw" });
+            await c.query("ALTER DATABASE `azhura_cbt` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            await c.end();
+            console.log("Database charset pinned to utf8mb4 / utf8mb4_unicode_ci.");
+          '
+
+      - name: Apply migrations
+        working-directory: backend
+        run: bun run migrate
+
+      - name: Backend tests
+        working-directory: backend
+        run: bun test
+
+  # ── Layer 3 ───────────────────────────────────────────────────────────────
+  # NON-BLOCKING. E2E needs the full stack (backend + MariaDB + seed + browsers),
+  # which is too heavy/stateful for every PR. Runs ONLY on manual dispatch or the
+  # nightly schedule, never on pull_request/push, so it can never block a merge.
+  e2e:
+    name: "[WIP] E2E (manual / nightly only — browsers only, no tests yet)"
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bun --filter azhura-e2e install:browsers
+
+      # NOTE: the full E2E run additionally requires a running backend + MariaDB
+      # and a seeded DB (`bun --filter azhura-e2e seed`). Wiring those services
+      # and the seed step is tracked separately; this job currently provisions
+      # browsers and documents the remaining requirement so the suite stays out
+      # of the PR-blocking path until the full harness lands.
+      - name: E2E note
+        run: echo "E2E browsers installed. Full run requires backend + seeded MariaDB (see job comment)."
