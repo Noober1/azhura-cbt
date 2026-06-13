@@ -80,13 +80,6 @@ jobs:
     name: "Backend tests (MariaDB) [non-blocking]"
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    # NON-BLOCKING for now: the suite surfaces two PRE-EXISTING backend issues
-    # (unrelated to any feature) — a migration drift where `users.initial_password`
-    # exists in schema.ts + the drizzle snapshot but no `.sql` migration adds it
-    # (dev DBs were built with db:push, never a clean `migrate`), and historical
-    # tests sensitive to bun's toEqual null-vs-missing semantics. Tracked as a
-    # follow-up; flip back to blocking (remove continue-on-error) once fixed.
-    continue-on-error: true
 
     services:
       mariadb:
@@ -180,8 +173,17 @@ jobs:
         working-directory: backend
         run: bun run migrate
 
+      # NON-BLOCKING for now: the full suite surfaces two PRE-EXISTING backend
+      # issues unrelated to feature work — a migration drift where
+      # `users.initial_password` exists in schema.ts + the drizzle snapshot but no
+      # `.sql` migration adds it (dev DBs were built with db:push, never a clean
+      # `migrate`), and historical tests sensitive to bun's toEqual null-vs-missing
+      # semantics. continue-on-error keeps the job (and PR) green while still
+      # running + reporting the suite. Tracked in #198; remove this once fixed to
+      # restore Layer 2 to blocking.
       - name: Backend tests
         working-directory: backend
+        continue-on-error: true
         run: bun test
 
   # ── Layer 3 ───────────────────────────────────────────────────────────────
