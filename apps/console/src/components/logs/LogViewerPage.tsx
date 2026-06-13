@@ -45,6 +45,16 @@ interface Filters {
 
 const EMPTY_FILTERS: Filters = { stream: "", eventType: "", actorId: "" };
 
+/**
+ * One-click presets for client telemetry (#172). Each pins `stream=event` plus
+ * the eventType written by the ingest endpoint (#169), so admins can jump
+ * straight to crash reports or manual bug reports without typing.
+ */
+const TELEMETRY_PRESETS: { label: string; eventType: string }[] = [
+  { label: "Client error", eventType: "client_error" },
+  { label: "Bug report", eventType: "bug_report" },
+];
+
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleString("id-ID", {
     day: "2-digit",
@@ -197,6 +207,23 @@ export function LogViewerPage() {
     setPage(1);
   };
 
+  /**
+   * Applies a client-telemetry preset (#172): pins stream=event + the report's
+   * eventType and commits it immediately (no separate "Terapkan" click).
+   */
+  const applyPreset = (eventType: string) => {
+    const next: Filters = { stream: "event", eventType, actorId: "" };
+    setFilters(next);
+    setApplied(next);
+    setPage(1);
+  };
+
+  /** True when the given preset is the currently committed filter. */
+  const isPresetActive = (eventType: string) =>
+    applied.stream === "event" &&
+    applied.eventType === eventType &&
+    applied.actorId === "";
+
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -236,6 +263,22 @@ export function LogViewerPage() {
           </button>
         </div>
       </header>
+
+      {/* Quick filters for client telemetry (#172) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-neutral-500">Telemetri klien:</span>
+        {TELEMETRY_PRESETS.map((preset) => (
+          <Button
+            key={preset.eventType}
+            type="button"
+            variant={isPresetActive(preset.eventType) ? "primary" : "ghost"}
+            onClick={() => applyPreset(preset.eventType)}
+            aria-pressed={isPresetActive(preset.eventType)}
+          >
+            {preset.label}
+          </Button>
+        ))}
+      </div>
 
       {/* Filter bar */}
       <form
