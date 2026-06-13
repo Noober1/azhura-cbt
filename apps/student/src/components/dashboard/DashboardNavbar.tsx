@@ -1,17 +1,31 @@
-import { GraduationCap, LogOut, HelpCircle } from "lucide-react";
+import { useState } from "react";
+import { GraduationCap, LogOut, HelpCircle, Bug } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useConfigStore } from "../../stores/config";
+import { useExamStore } from "../../stores/exam";
 import { Button } from "../ui/button";
 import { replayDashboardTour } from "../../lib/tour";
+import { ReportBugDialog } from "./ReportBugDialog";
 
 /**
  * Main dashboard navigation bar. Shows the app brand on the left and the
- * signed-in student's full name plus help + logout actions on the right.
+ * signed-in student's full name plus help + report-bug + logout actions on the
+ * right.
  */
 export const DashboardNavbar = () => {
   const { user, logout, isLoading } = useAuthStore();
   // Prefer the configured school name at the branding slot when available (#148).
   const schoolName = useConfigStore((s) => s.schoolInfo?.schoolName);
+
+  const [reportOpen, setReportOpen] = useState(false);
+
+  // Hide the "Lapor bug" trigger during a live, in-progress exam: an exam is
+  // active when a session exists and no result has been recorded yet. The navbar
+  // normally only mounts on the dashboard, but this keeps the entry point from
+  // becoming a disruption if it is ever reused mid-exam under lockdown (#170).
+  const examActive = useExamStore(
+    (s) => Boolean(s.examSessionId) && s.examResult === null
+  );
 
   return (
     // Solid near-black band + thick ink bottom border — no blur (neobrutalist).
@@ -53,6 +67,18 @@ export const DashboardNavbar = () => {
             <HelpCircle className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Panduan</span>
           </Button>
+          {!examActive && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setReportOpen(true)}
+              aria-label="Laporkan bug atau masalah"
+              className="font-semibold rounded-lg"
+            >
+              <Bug className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Lapor</span>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -65,6 +91,9 @@ export const DashboardNavbar = () => {
           </Button>
         </div>
       </div>
+
+      {/* Manual bug report (#170) — controlled so the pattern is reusable. */}
+      <ReportBugDialog open={reportOpen} onClose={() => setReportOpen(false)} />
     </header>
   );
 };

@@ -32,6 +32,7 @@ import { supervisorQuestionRoutes } from "./routes/supervisor-questions";
 import { supervisorMediaRoutes } from "./routes/supervisor-media";
 import { infoRoutes } from "./routes/info";
 import { setupRoutes } from "./routes/setup";
+import { errorReportRoutes } from "./routes/error-reports";
 import { initSocket } from "./socket";
 import { getServerConfig } from "./lib/env";
 import { assertDbConnection } from "./db";
@@ -142,6 +143,7 @@ const app = new Elysia()
       .use(adminMediaRoutes)
       .use(supervisorQuestionRoutes)
       .use(supervisorMediaRoutes)
+      .use(errorReportRoutes)
   );
 
 // Compile Elysia routes before using .handle() outside of .listen().
@@ -151,17 +153,46 @@ app.compile();
  * Bridges a Node.js HTTP request to Elysia's Fetch API handler.
  * Converts IncomingMessage → Request, calls app.handle(), writes Response back.
  */
+/**
+ * Hard cap on a buffered request body. Guards every POST/PUT against unbounded
+ * in-memory buffering before Elysia's per-field `t.Object` limits apply — an
+ * authenticated client must not be able to exhaust memory with a giant body.
+ * Set to 64 MiB: comfortably above the largest legitimate payload (a 50 MiB
+ * video upload — see `lib/upload.ts` per-type caps — which this bridge buffers
+ * whole before the per-type size check), while still bounding the worst case.
+ * JSON endpoints stay far tighter via their own `t.Object` string limits.
+ */
+const MAX_BODY_BYTES = 64 * 1024 * 1024;
+
 async function handleWithElysia(req: IncomingMessage, res: ServerResponse): Promise<void> {
   // Read body for non-GET/HEAD requests.
   let body: Buffer | undefined;
   const method = (req.method ?? "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") {
-    body = await new Promise<Buffer>((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      req.on("data", (chunk: Buffer) => chunks.push(chunk));
-      req.on("end", () => resolve(Buffer.concat(chunks)));
-      req.on("error", reject);
-    });
+    try {
+      body = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        let total = 0;
+        req.on("data", (chunk: Buffer) => {
+          total += chunk.length;
+          if (total > MAX_BODY_BYTES) {
+            reject(new Error("PAYLOAD_TOO_LARGE"));
+            req.destroy();
+            return;
+          }
+          chunks.push(chunk);
+        });
+        req.on("end", () => resolve(Buffer.concat(chunks)));
+        req.on("error", reject);
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "PAYLOAD_TOO_LARGE") {
+        res.writeHead(413, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ message: "Payload terlalu besar.", code: "PAYLOAD_TOO_LARGE" }));
+        return;
+      }
+      throw err;
+    }
   }
 
   const headers = new Headers();

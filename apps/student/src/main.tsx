@@ -11,10 +11,15 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { useConfigStore } from "./stores/config";
 import { useAuthStore } from "./stores/auth";
+import { installGlobalErrorHandlers } from "./lib/error-reporter";
 import "./index.css";
 
 async function bootstrap() {
   await useConfigStore.getState().initialize();
+
+  // Capture uncaught errors + unhandled promise rejections app-wide (#171) and
+  // ship them to the backend ingest. Idempotent: repeated calls are no-ops.
+  installGlobalErrorHandlers();
 
   // Kick off encrypted-token hydration (#129). Deliberately NOT awaited: on
   // web it resolves instantly (sync localStorage hydration already happened, so
