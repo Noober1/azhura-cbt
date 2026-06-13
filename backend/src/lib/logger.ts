@@ -60,10 +60,18 @@ const serializeError = (error: unknown): Record<string, unknown> => {
 /**
  * Creates a logger bound to a specific scope (subsystem name).
  *
+ * Declared as a hoisted `function` (not a `const` arrow) on purpose: this module
+ * sits in a latent import cycle (`db → logger → log-files → log-store → db`), and
+ * `db/index.ts` calls `createLogger("DB")` at module top. A `const` binding is in
+ * the temporal dead zone until this module finishes evaluating, so a circular
+ * entry from `db` first would throw "Cannot access 'createLogger' before
+ * initialization" depending on `bun test` file order. A function declaration is
+ * hoisted, so it is callable even while the cycle is mid-evaluation.
+ *
  * @param scope Short subsystem identifier, e.g. "Server", "Auth", "DB".
  * @returns A {@link Logger} whose output is prefixed with `[scope]`.
  */
-export const createLogger = (scope: string): Logger => {
+export function createLogger(scope: string): Logger {
   const prefix = `[${scope}]`;
 
   const line = (level: LogLevel, message: string): string =>
@@ -95,4 +103,4 @@ export const createLogger = (scope: string): Logger => {
       writeErrorLog(`${prefix} ${message}`, payload);
     },
   };
-};
+}
