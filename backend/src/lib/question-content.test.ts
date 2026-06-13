@@ -1,5 +1,11 @@
 import { describe, it, expect } from "bun:test";
-import { findExternalMediaSrc } from "./question-content";
+import {
+  findExternalMediaSrc,
+  isLocalUploadPath,
+  rewriteEmbeddedMedia,
+  type MediaRewrite,
+  type MediaTokenKind,
+} from "./question-content";
 
 describe("findExternalMediaSrc", () => {
   it("accepts stems with no media", () => {
@@ -89,5 +95,112 @@ describe("findExternalMediaSrc", () => {
     expect(
       findExternalMediaSrc('<p style="background-image:url(/uploads/bg.webp)">x</p>')
     ).toBeNull();
+  });
+});
+
+describe("isLocalUploadPath", () => {
+  it("accepts a served /uploads/ path", () => {
+    expect(isLocalUploadPath("/uploads/images/x.webp")).toBe(true);
+  });
+
+  it("rejects absolute, protocol-relative, scheme, and empty values", () => {
+    expect(isLocalUploadPath("https://evil.example.com/uploads/x.webp")).toBe(false);
+    expect(isLocalUploadPath("//evil.example.com/x.png")).toBe(false);
+    expect(isLocalUploadPath("data:image/png;base64,AAAA")).toBe(false);
+    expect(isLocalUploadPath("")).toBe(false);
+  });
+});
+
+describe("rewriteEmbeddedMedia", () => {
+  /** A decide() that uppercases the offending value — proves which token was visited. */
+  const upperExternal = (value: string): MediaRewrite =>
+    isLocalUploadPath(value) ? "keep" : { replace: value.toUpperCase() };
+
+  it("leaves clean stems untouched", () => {
+    const html = '<p>Berapa 2 + 2?</p><img src="/uploads/ok.webp" alt="x">';
+    expect(rewriteEmbeddedMedia(html, upperExternal)).toBe(html);
+  });
+
+  it("returns the input string when there is no media at all", () => {
+    expect(rewriteEmbeddedMedia("<p>plain</p>", () => "drop")).toBe("<p>plain</p>");
+  });
+
+  it("replaces an external src while preserving the attribute name and double quotes", () => {
+    expect(
+      rewriteEmbeddedMedia('<img src="https://x/y.png" alt="a">', () => ({
+        replace: "/uploads/y.png",
+      }))
+    ).toBe('<img src="/uploads/y.png" alt="a">');
+  });
+
+  it("preserves single-quoted and bare value quoting on replace", () => {
+    expect(
+      rewriteEmbeddedMedia("<img src='https://x/y.png'>", () => ({ replace: "/uploads/y.png" }))
+    ).toBe("<img src='/uploads/y.png'>");
+    expect(
+      rewriteEmbeddedMedia("<img src=https://x/y.png>", () => ({ replace: "/uploads/y.png" }))
+    ).toBe("<img src=/uploads/y.png>");
+  });
+
+  it("preserves whitespace around the '=' on replace", () => {
+    expect(
+      rewriteEmbeddedMedia('<img src = "https://x/y.png">', () => ({ replace: "/uploads/y.png" }))
+    ).toBe('<img src = "/uploads/y.png">');
+  });
+
+  it("drops an external attribute entirely (whole name=value token removed)", () => {
+    expect(rewriteEmbeddedMedia('<img src="https://x/y.png" alt="a">', () => "drop")).toBe(
+      '<img  alt="a">'
+    );
+  });
+
+  it("relativizes a self-origin src but drops a genuinely external one in the same stem", () => {
+    const html =
+      '<img src="http://localhost:3000/uploads/a.png"><img src="https://evil/b.gif">';
+    const decide = (value: string): MediaRewrite => {
+      if (isLocalUploadPath(value)) return "keep";
+      const prefix = "http://localhost:3000/uploads/";
+      if (value.startsWith(prefix)) return { replace: value.slice("http://localhost:3000".length) };
+      return "drop";
+    };
+    expect(rewriteEmbeddedMedia(html, decide)).toBe('<img src="/uploads/a.png"><img >');
+  });
+
+  it("replaces an external CSS url() preserving the url() wrapper and quoting", () => {
+    expect(
+      rewriteEmbeddedMedia('<p style="background-image:url(https://x/bg.png)">x</p>', () => ({
+        replace: "/uploads/bg.png",
+      }))
+    ).toBe('<p style="background-image:url(/uploads/bg.png)">x</p>');
+    expect(
+      rewriteEmbeddedMedia("<p style=\"background:url('https://x/bg.png')\">x</p>", () => ({
+        replace: "/uploads/bg.png",
+      }))
+    ).toBe("<p style=\"background:url('/uploads/bg.png')\">x</p>");
+  });
+
+  it("turns a dropped CSS url() into the `none` keyword so the declaration stays valid", () => {
+    expect(
+      rewriteEmbeddedMedia('<p style="background-image:url(https://x/bg.png)">x</p>', () => "drop")
+    ).toBe('<p style="background-image:none">x</p>');
+  });
+
+  it("tags attribute vs css tokens via the kind argument", () => {
+    const kinds: MediaTokenKind[] = [];
+    rewriteEmbeddedMedia(
+      '<img src="https://x/a.png"><p style="background:url(https://x/b.png)">y</p>',
+      (_value, kind) => {
+        kinds.push(kind);
+        return "keep";
+      }
+    );
+    expect(kinds).toEqual(["attr", "css"]);
+  });
+
+  it("is idempotent: rewriting already-local media is a no-op", () => {
+    const cleaned = rewriteEmbeddedMedia('<img src="https://x/y.png">', () => ({
+      replace: "/uploads/y.png",
+    }));
+    expect(rewriteEmbeddedMedia(cleaned, upperExternal)).toBe(cleaned);
   });
 });

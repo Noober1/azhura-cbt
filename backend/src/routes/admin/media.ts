@@ -17,8 +17,9 @@ import { and, desc, eq, like, sql } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
-import { NotFoundError } from "../../lib/errors";
+import { BadRequestError, NotFoundError } from "../../lib/errors";
 import { validateAndSave, deleteUploadFile } from "../../lib/upload";
+import { rehostExternalUrl, type RehostFailureReason } from "../../lib/rehost-media";
 import { createLogger } from "../../lib/logger";
 import type { MediaType } from "@azhura/shared";
 
@@ -27,6 +28,29 @@ const { media } = schema;
 const log = createLogger("AdminMedia");
 
 const VALID_TYPES: MediaType[] = ["image", "audio", "video"];
+
+/** Strips any embedded credentials before a caller-supplied URL is logged. */
+function sanitizeUrlForLog(raw: string): string {
+  try {
+    const u = new URL(raw);
+    u.username = "";
+    u.password = "";
+    return u.toString();
+  } catch {
+    return "<invalid-url>";
+  }
+}
+
+/** Client-safe Indonesian messages for each rehost failure (no internal detail leaked). */
+const REHOST_FAILURE_MESSAGE: Record<RehostFailureReason, string> = {
+  "invalid-url": "URL media tidak valid.",
+  "blocked-scheme": "Skema URL tidak diizinkan — gunakan http atau https.",
+  "blocked-host": "Host tujuan diblokir (alamat privat/internal tidak diizinkan).",
+  "too-many-redirects": "Terlalu banyak pengalihan saat mengambil media.",
+  "fetch-failed": "Gagal mengambil media dari URL tersebut.",
+  "too-large": "Ukuran media melebihi batas yang diizinkan.",
+  "unsupported-type": "Tipe media tidak didukung. Gunakan JPEG, PNG, WebP, GIF, MP3, WAV, OGG, MP4, atau WebM.",
+};
 
 export const adminMediaRoutes = new Elysia({ prefix: "/admin" })
   .use(authPlugin)
@@ -63,6 +87,55 @@ export const adminMediaRoutes = new Elysia({ prefix: "/admin" })
     },
     {
       body: t.Object({ file: t.File() }),
+    }
+  )
+
+  /**
+   * POST /api/admin/media/from-url
+   *
+   * Rehosts a remote media asset into the library: downloads it, runs the same
+   * audit as a direct upload (magic-byte MIME + size caps), stores it under
+   * `/uploads/`, and records it. Lets authors paste an image from the web while
+   * keeping the locked-down exam client from ever fetching an external origin.
+   *
+   * SECURITY: this fetches a caller-supplied URL server-side. {@link rehostExternalUrl}
+   * enforces the SSRF guard (http(s) only, private/loopback/link-local hosts
+   * blocked, redirects re-validated, timeout + streamed size cap). Failures map
+   * to a 400 with a client-safe message.
+   */
+  .post(
+    "/media/from-url",
+    async ({ body, user, set }) => {
+      const result = await rehostExternalUrl(body.url, {
+        blockPrivateNetworks: true,
+        uploadedByUserId: user.userId,
+      });
+      if (!result.ok) {
+        log.warn("Rehost from-url ditolak", { url: sanitizeUrlForLog(body.url), reason: result.reason });
+        throw new BadRequestError(REHOST_FAILURE_MESSAGE[result.reason]);
+      }
+
+      const { saved } = result;
+      const id = randomUUID();
+      const createdAt = Date.now();
+      await db.insert(media).values({
+        id,
+        filename: saved.filename,
+        originalName: saved.originalName,
+        type: saved.type,
+        mimeType: saved.mimeType,
+        sizeBytes: saved.sizeBytes,
+        url: saved.url,
+        uploadedBy: user.userId,
+        createdAt,
+      });
+
+      log.info("Media rehosted from URL", { id, source: sanitizeUrlForLog(body.url), url: saved.url, userId: user.userId });
+      set.status = 201;
+      return { id, ...saved, uploadedBy: user.userId, createdAt };
+    },
+    {
+      body: t.Object({ url: t.String({ minLength: 1 }) }),
     }
   )
 

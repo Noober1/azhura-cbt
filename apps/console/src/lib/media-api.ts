@@ -35,6 +35,16 @@ export const mediaApi = {
     return data;
   },
 
+  /**
+   * Rehosts a remote image into the library (#190). The backend downloads the
+   * URL, audits it (magic-byte MIME + size caps), and stores it under `/uploads/`,
+   * so a pasted web image never leaves the exam client fetching an external origin.
+   */
+  async fromUrl(url: string): Promise<MediaFile> {
+    const { data } = await api.post<MediaFile>("/admin/media/from-url", { url });
+    return data;
+  },
+
   async remove(id: string): Promise<void> {
     await api.delete(`/admin/media/${id}`);
   },
