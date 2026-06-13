@@ -20,6 +20,12 @@
   background: #fff;
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  /* Vidstack's base stylesheet pins the player to the video's 16/9 box. Our
+     controls bar lives BELOW the video, so that box clips it — leaving the
+     controls visually present but outside the hit-test area (a real click
+     falls through; only scripted clicks land). Let the player grow to fit the
+     video + controls instead. (#164) */
+  aspect-ratio: auto;
 }
 
 .nb-media-player[data-view-type="audio"],
