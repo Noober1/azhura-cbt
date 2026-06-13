@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { SchoolInfo, AntiCheatConfig } from "@azhura/shared";
 import { appStoreGet, appStoreSet } from "../lib/app-store";
 import { hashPassphrase } from "../lib/crypto";
+import { buildExamCsp, applyCspMeta } from "../lib/csp";
 
 const DEFAULT_PASSPHRASE = "azhura";
 
@@ -81,11 +82,17 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       initialized: true,
       isSetupComplete: Boolean(resolvedUrl),
     });
+
+    // Apply the runtime CSP now that the backend origin is known. This narrows
+    // img/media/connect to the resolved origin as defense-in-depth (#191).
+    applyCspMeta(buildExamCsp(resolvedUrl));
   },
 
   setServerUrl: async (url) => {
     await appStoreSet("serverUrl", url);
     set({ serverUrl: url, isSetupComplete: Boolean(url) });
+    // Keep the CSP in sync when the configured origin changes (#191).
+    applyCspMeta(buildExamCsp(url));
   },
 
   setSchoolInfo: async (info) => {
