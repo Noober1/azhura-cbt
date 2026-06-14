@@ -89,6 +89,8 @@ const PLACEHOLDER_SECRET_MARKERS = [
   "ganti",
   "change_me",
   "changeme",
+  "change-me",
+  "change-this",
   "fallback",
   "your_secret",
   "your-secret",

@@ -18,6 +18,11 @@ dist-ssr
 # Env files dengan kredensial nyata — jangan di-commit
 *.local
 backend/.env
+# Production Docker secrets file (root .env, created from .env.docker.example).
+# Anchored + plain form so it is ignored at any depth, but keep the template tracked.
+.env
+/.env
+!.env.docker.example
 
 # Editor directories and files
 .vscode/*

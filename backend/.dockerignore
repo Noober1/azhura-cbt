@@ -1,0 +1,40 @@
+# NOTE: the backend image is built with the REPO ROOT as context (see
+# backend/Dockerfile header + docker-compose.yml). Docker resolves the
+# .dockerignore next to the Dockerfile referenced by the build, so keep this in
+# sync with apps/console/.dockerignore. Paths are matched against the context
+# root.
+
+# Dependencies — reinstalled inside the image from the frozen lockfile.
+node_modules
+**/node_modules
+
+# Secrets / local env — never bake into an image.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Uploaded media — provided at runtime via a Docker volume, never copied in.
+uploads
+backend/uploads
+**/uploads
+
+# Build output — produced inside the image.
+dist
+**/dist
+dist-ssr
+
+# VCS + logs + misc local noise.
+.git
+.gitignore
+**/*.log
+logs
+**/logs
+
+# Tauri native build artifacts (huge, irrelevant to the backend image).
+apps/student/src-tauri/target
+
+# Docker / CI files (not needed inside the image).
+docker-compose.yml
+**/Dockerfile
+**/.dockerignore

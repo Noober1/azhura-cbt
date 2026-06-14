@@ -1,0 +1,170 @@
+# =============================================================================
+# Azhura CBT — on-premise stack (issue #41)
+# =============================================================================
+# Five services: backend (API), mariadb (DB), redis (session registry), nginx
+# (admin/supervisor console SPA), watchtower (auto-update of :stable images).
+#
+# ── LAN-ONLY NETWORK MODEL (read this) ──────────────────────────────────────
+# This box is meant to sit on a school LAN with two NICs:
+#   • WAN/eth0  → internet (ONLY Watchtower needs this, to pull image updates)
+#   • LAN/eth1  → exam workstations + admin browser
+# The two host-published ports (backend :3000, console :80) are bound to the
+# LAN IP via ${LAN_IP}. Set LAN_IP in your .env to the server's LAN address
+# (e.g. 192.168.1.10) so the API/console are NOT reachable from the WAN side.
+# Defaulting to 0.0.0.0 is provided ONLY for single-NIC dev boxes — in
+# production you MUST set LAN_IP and ALSO firewall ports 3000 + 80 on the WAN
+# interface (see docs/DEPLOY.md). mariadb + redis publish NO host ports at all;
+# they are reachable only on the internal compose network.
+#
+# Env: copy .env.docker.example → .env, fill placeholders. `docker compose`
+# auto-loads .env for ${VAR} interpolation; the backend service also reads it
+# via env_file so the backend process sees DB_*/JWT_SECRET/etc.
+# =============================================================================
+
+services:
+  # ── API ───────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      # Context is the repo ROOT (workspace lockfile + @azhura/shared live here).
+      context: .
+      dockerfile: backend/Dockerfile
+    image: ghcr.io/noober1/azhura-backend:stable
+    restart: unless-stopped
+    # LAN-only binding. LAN_IP is REQUIRED (fail-fast) so `docker compose up`
+    # aborts instead of silently binding to 0.0.0.0 (all interfaces → WAN
+    # exposure). Set it in .env; never expose to the WAN NIC.
+    ports:
+      - "${LAN_IP:?LAN_IP must be set in .env (see docs/DEPLOY.md)}:3000:3000"
+    env_file:
+      - .env
+    environment:
+      # Service-discovery + sane container defaults. DB creds/JWT come from .env.
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      REDIS_URL: redis://redis:6379
+      PORT: "3000"
+    volumes:
+      # Persist uploaded media across container rebuilds. Path matches the
+      # backend image working dir (/app/backend → ./uploads).
+      - uploads_data:/app/backend/uploads
+      # Persist winston logs (image creates /app/backend/logs) so they survive
+      # container recreation.
+      - logs_data:/app/backend/logs
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Backend exposes an unauthenticated GET /health (src/index.ts).
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    labels:
+      # Auto-update this service when a new :stable image is published.
+      com.centurylinklabs.watchtower.enable: "true"
+    networks:
+      - azhura
+
+  # ── Database ───────────────────────────────────────────────────────────────
+  mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    # No host port published — internal network only. (If you must inspect from
+    # the host, bind to 127.0.0.1 explicitly, never to LAN/WAN.)
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set MARIADB_ROOT_PASSWORD in .env}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:?set MARIADB_DATABASE in .env}
+      MARIADB_USER: ${MARIADB_USER:?set MARIADB_USER in .env}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?set MARIADB_PASSWORD in .env}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      # mariadb:11 ships healthcheck.sh; --connect verifies the server accepts
+      # connections, not just that the port is open.
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - azhura
+
+  # ── Session registry (multi-login protection, heartbeat) ───────────────────
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # Internal only. appendonly persistence so the session registry survives a
+    # restart without a full re-login storm.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - azhura
+
+  # ── Admin/supervisor console (static SPA) ──────────────────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: apps/console/Dockerfile
+      args:
+        # Bake the backend's LAN origin into the SPA bundle at build time. The
+        # console reads VITE_API_BASE_URL via import.meta.env (build-time), so it
+        # MUST be set here to the school's LAN IP — the GHCR :stable image uses a
+        # placeholder and is dev/preview only. See docs/DEPLOY.md.
+        VITE_API_BASE_URL: "http://${LAN_IP:?LAN_IP must be set in .env}:3000/api"
+    image: ghcr.io/noober1/azhura-console:stable
+    restart: unless-stopped
+    # LAN-only binding, same fail-fast rationale as backend.
+    ports:
+      - "${LAN_IP:?LAN_IP must be set in .env (see docs/DEPLOY.md)}:80:80"
+    depends_on:
+      - backend
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    networks:
+      - azhura
+
+  # ── Auto-updater ───────────────────────────────────────────────────────────
+  # Watchtower polls the registry and redeploys updated images. CRITICAL: it is
+  # configured with --label-enable so it ONLY touches services that carry the
+  # `com.centurylinklabs.watchtower.enable=true` label (backend, nginx). Those
+  # images are pinned to the `:stable` tag above — Watchtower never tracks
+  # :latest or :edge. CI publishes :edge on every push; promotion :edge → :rc →
+  # :stable is a MANUAL step (issue #174). So this box only ever picks up
+  # changes a human has explicitly promoted to :stable.
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    restart: unless-stopped
+    command:
+      - --label-enable
+      - --cleanup
+      - --interval
+      - "${WATCHTOWER_POLL_INTERVAL:-3600}"
+    volumes:
+      # Docker socket. NOTE: `:ro` only restricts the bind-mount PATH on the
+      # filesystem — it does NOT restrict the Docker API. Watchtower still has
+      # full daemon control (it can create/destroy any container) via the
+      # socket. The real guardrails are `--label-enable` (only services carrying
+      # the watchtower.enable label are managed) and network isolation, NOT this
+      # flag.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - azhura
+
+volumes:
+  db_data:
+  redis_data:
+  uploads_data:
+  logs_data:
+
+networks:
+  azhura:
+    driver: bridge

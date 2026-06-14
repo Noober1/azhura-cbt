@@ -1,0 +1,26 @@
+# Root .dockerignore — applies to BOTH images (backend + console) since each
+# uses the repo root as build context. Keeps secrets, build artifacts, and
+# heavy/irrelevant trees out of the build context. Per-directory .dockerignore
+# files (backend/, apps/console/) still apply on top of this.
+
+# Dependencies — reinstalled inside the image from the lockfile.
+node_modules
+**/node_modules
+
+# VCS metadata.
+.git
+
+# Secrets — never ship env files into an image.
+.env
+.env.*
+
+# Build outputs.
+**/dist
+apps/student/src-tauri/target
+
+# Logs.
+*.log
+**/*.log
+
+# Uploaded media (persisted via a Docker volume, not baked into the image).
+backend/uploads
