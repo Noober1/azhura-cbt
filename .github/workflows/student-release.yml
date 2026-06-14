@@ -48,6 +48,11 @@ jobs:
     # added to this workflow don't inherit `contents: write`.
     permissions:
       contents: write
+    # Hoist the signing secret to JOB-LEVEL env. Job-level env IS reliably
+    # available inside step-level `if:` expressions across runner versions
+    # (step-level env is not), so the signing steps' guards read it here.
+    env:
+      WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
     strategy:
       # Windows is the required deliverable; a Linux hiccup must not cancel it.
       fail-fast: false
@@ -111,30 +116,63 @@ jobs:
       - name: Install workspace dependencies
         run: bun install --frozen-lockfile
 
-      # ── Code signing placeholder (Windows) — Diaktifkan oleh #28 (code signing)
-      # When #28 lands, uncomment this step to materialize the signing cert on
-      # the Windows runner from a base64-encoded PFX secret BEFORE the build, and
-      # uncomment the matching env vars on the tauri-action step below. Leave it
-      # commented out today so the pipeline runs WITHOUT any signing secrets.
+      # ── Code signing (Windows) — Diaktifkan oleh #28 (code signing) ──────────
+      # GUARDED activation: this step (and the two below) only run on the Windows
+      # runner AND only when the signing secret is present. With no secrets set,
+      # the `env.WINDOWS_CERT_PFX_BASE64 != ''` guard short-circuits every signing
+      # step, so the build stays UNSIGNED and the pipeline still goes green for
+      # ordinary dev/QA builds. Self-signed cert workflow: see docs/CODE_SIGNING.md.
       #
-      # - name: Import Windows code-signing certificate
-      #   if: matrix.platform == 'windows-latest' && env.WINDOWS_CERT_PFX_BASE64 != ''
-      #   shell: pwsh
-      #   env:
-      #     WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
-      #     WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-      #   run: |
-      #     # Mask the cert password so it never surfaces in logs (defence-in-depth
-      #     # on top of Actions' own secret redaction).
-      #     Write-Host "::add-mask::$env:WINDOWS_CERT_PASSWORD"
-      #     $pfxBytes = [System.Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64)
-      #     $pfxPath  = Join-Path $env:RUNNER_TEMP "azhura-signing.pfx"
-      #     [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-      #     echo "WINDOWS_CERT_PATH=$pfxPath" >> $env:GITHUB_ENV
-      #   # IMPORTANT (#28): after the build/sign step, delete the materialized PFX
-      #   # so the private key never lingers on the runner. Add a cleanup step with
-      #   # `if: always()` running:
-      #   #   Remove-Item -Force $env:WINDOWS_CERT_PATH -ErrorAction SilentlyContinue
+      # Step 1 — materialize the PFX from the base64 secret and resolve its
+      # Authenticode thumbprint. The thumbprint is exported to $GITHUB_ENV so the
+      # next step can inject it into tauri.conf.json. The job-level
+      # WINDOWS_CERT_PFX_BASE64 env (read in the step body and the `if:` guard)
+      # is the single source of the secret. We import the PFX into the
+      # CurrentUser cert store so signtool (invoked by Tauri) can find the private
+      # key by thumbprint at bundle time.
+      - name: Import code-signing certificate
+        if: runner.os == 'Windows' && env.WINDOWS_CERT_PFX_BASE64 != ''
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          # Fail the step on any error (e.g. a bad Import-PfxCertificate) instead
+          # of silently continuing with an unset thumbprint.
+          $ErrorActionPreference = 'Stop'
+          # Mask the password in logs (defence-in-depth on top of Actions' own
+          # secret redaction). Never Write-Host the password or thumbprint plainly.
+          Write-Host "::add-mask::$env:WINDOWS_CERT_PASSWORD"
+          $pfxBytes = [System.Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64)
+          $pfxPath  = Join-Path $env:RUNNER_TEMP "azhura-signing.pfx"
+          [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+          echo "WINDOWS_CERT_PATH=$pfxPath" >> $env:GITHUB_ENV
+
+          $securePwd = ConvertTo-SecureString $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate `
+            -FilePath $pfxPath `
+            -CertStoreLocation Cert:\CurrentUser\My `
+            -Password $securePwd
+          # The thumbprint is not secret, but mask it anyway so it never helps
+          # correlate logs, then hand it to the next step via $GITHUB_ENV.
+          Write-Host "::add-mask::$($cert.Thumbprint)"
+          echo "WINDOWS_CERT_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+          Write-Host "Code-signing certificate imported (thumbprint masked)."
+
+      # Step 2 — inject the resolved thumbprint into tauri.conf.json so Tauri's
+      # bundler signs the .msi/.exe. tauri.conf.json ships with a null
+      # certificateThumbprint (unsigned default); we only overwrite it when
+      # signing is active. timestampUrl is already set in the config and is left
+      # untouched. Done with ConvertFrom-Json/ConvertTo-Json — no extra tooling.
+      - name: Enable signing in tauri.conf.json
+        if: runner.os == 'Windows' && env.WINDOWS_CERT_PFX_BASE64 != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $confPath = "apps/student/src-tauri/tauri.conf.json"
+          $conf = Get-Content $confPath -Raw | ConvertFrom-Json
+          $conf.bundle.windows.certificateThumbprint = $env:WINDOWS_CERT_THUMBPRINT
+          $conf | ConvertTo-Json -Depth 32 | Set-Content $confPath -Encoding utf8
+          Write-Host "Injected signing thumbprint into $confPath."
 
       # Tag-only: a workflow_dispatch run executes the build/setup steps above as
       # a smoke-test but skips this step, so it never drafts a junk Release named
@@ -158,11 +196,13 @@ jobs:
           # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           #
-          # ── Windows code-signing env — Diaktifkan oleh #28 (code signing) ──
-          # Pair with the "Import Windows code-signing certificate" step above.
-          # tauri reads these to Authenticode-sign the .msi/.exe at bundle time.
-          # WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
-          # WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          # ── Windows code-signing — Diaktifkan oleh #28 (code signing) ──────
+          # Signing is driven entirely by the bundle.windows.certificateThumbprint
+          # injected into tauri.conf.json by the "Enable signing in
+          # tauri.conf.json" step above. Tauri's bundler invokes signtool, which
+          # finds the imported private key by thumbprint in the CurrentUser store
+          # — so no extra env vars are needed here. When no signing secret is set,
+          # certificateThumbprint stays null and the bundles ship unsigned.
         with:
           # Build the student app specifically (monorepo has multiple packages).
           projectPath: apps/student
@@ -182,3 +222,21 @@ jobs:
           # AppImage + .deb on Linux. Kept in the matrix so #28/#49 can later
           # pass e.g. "--bundles msi,nsis" without touching this step.
           args: ${{ matrix.args }}
+
+      # ── Code-signing cleanup (Windows) — Diaktifkan oleh #28 ─────────────────
+      # Always delete the materialized PFX so the private key never lingers on
+      # the runner, even if the build failed. `if: always()` plus the secret
+      # guard; the Remove-Item is a no-op when no PFX was ever written.
+      - name: Clean up code-signing certificate
+        if: always() && runner.os == 'Windows' && env.WINDOWS_CERT_PFX_BASE64 != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:WINDOWS_CERT_PATH) {
+            Remove-Item -Force $env:WINDOWS_CERT_PATH -ErrorAction SilentlyContinue
+          }
+          # Also drop the imported cert from the CurrentUser store by thumbprint.
+          if ($env:WINDOWS_CERT_THUMBPRINT) {
+            Remove-Item -Force "Cert:\CurrentUser\My\$env:WINDOWS_CERT_THUMBPRINT" -ErrorAction SilentlyContinue
+          }
+          Write-Host "Signing material cleaned up."
