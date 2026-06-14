@@ -66,7 +66,10 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
-          # :edge (never :latest) + immutable git SHA. See header re: #174.
+          # Publishes ONLY :edge (the moving newest-off-main) + the immutable
+          # git SHA. This workflow must NEVER push :latest or :stable — :stable
+          # is reachable EXCLUSIVELY via the manual, human-gated promote.yml
+          # (#174), which re-tags a validated :edge → :rc → :stable digest.
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:edge
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.sha }}
