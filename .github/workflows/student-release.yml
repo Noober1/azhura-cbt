@@ -1,0 +1,184 @@
+# Azhura CBT — Student app release pipeline (issue #175)
+#
+# Builds the Tauri 2 student client (apps/student) and publishes a DRAFT GitHub
+# Release with the OS installers attached as assets. The installers are the
+# artifacts that issue #49's LAN self-update proxy will later consume.
+#
+# ── Tag convention ──────────────────────────────────────────────────────────
+#   Releases are cut from an annotated git tag of the form:  student-vX.Y.Z
+#   (e.g. student-v0.1.0, student-v1.2.3). The tag's X.Y.Z MUST match the
+#   `version` field in BOTH:
+#     - apps/student/src-tauri/tauri.conf.json
+#     - apps/student/src-tauri/Cargo.toml
+#   Tauri stamps the installer/file names from tauri.conf.json's version, so a
+#   mismatched tag produces a Release whose assets disagree with the tag name.
+#   See docs/RELEASE_STUDENT.md for the full cut-a-release checklist.
+#
+#   `student-v*` is deliberately namespaced so this pipeline never collides with
+#   any future backend/console release tags.
+#
+# ── What runs ───────────────────────────────────────────────────────────────
+#   Windows is the REQUIRED target (exam workstations are Windows): produces
+#   the WiX `.msi` + NSIS `.exe` (tauri.conf.json bundle.targets = "all").
+#   Linux is best-effort / internal (AppImage + .deb) for QA convenience; if it
+#   ever flakes it must not block the Windows release (fail-fast disabled).
+#
+# Build is delegated to the battle-tested tauri-apps/tauri-action — do NOT
+# hand-roll the cargo/bundler invocation.
+
+name: Student Release
+
+on:
+  push:
+    tags:
+      - "student-v*"
+  # Manual trigger for dry-runs / re-builds. When dispatched without a matching
+  # tag, tauri-action still drafts a Release named from the chosen ref.
+  workflow_dispatch:
+
+# Don't run two releases for the same tag/ref concurrently.
+concurrency:
+  group: student-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & draft release (${{ matrix.platform }})
+    # Scope the Release-creation write to this job only, so any future jobs
+    # added to this workflow don't inherit `contents: write`.
+    permissions:
+      contents: write
+    strategy:
+      # Windows is the required deliverable; a Linux hiccup must not cancel it.
+      fail-fast: false
+      matrix:
+        include:
+          # REQUIRED — exam workstation target. Builds .msi (WiX) + .exe (NSIS).
+          - platform: windows-latest
+            args: ""
+          # OPTIONAL / internal QA — AppImage + .deb. Best-effort.
+          - platform: ubuntu-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      # Fail fast if the pushed tag's version disagrees with tauri.conf.json.
+      # Tauri stamps installer file names from tauri.conf.json's version, so a
+      # mismatch would yield a Release whose assets contradict the tag name.
+      # Tag-only: workflow_dispatch dry-runs have no student-v* ref to check.
+      - name: Verify tag matches tauri.conf.json version
+        if: startsWith(github.ref, 'refs/tags/student-v')
+        shell: bash
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#student-v}"
+          CONF_VERSION=$(jq -r '.version' apps/student/src-tauri/tauri.conf.json)
+          if [ "$TAG_VERSION" != "$CONF_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) != tauri.conf.json version ($CONF_VERSION)"; exit 1
+          fi
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      # Cache the Rust build for the Tauri shell only. Keyed per-OS by the
+      # cache action so the Windows and Linux toolchains never clobber.
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "apps/student/src-tauri -> target"
+
+      # Tauri's Linux bundler needs the WebKitGTK / appindicator / rsvg stack.
+      # Windows + macOS runners ship everything Tauri needs out of the box.
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev
+
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+
+      # ── Code signing placeholder (Windows) — Diaktifkan oleh #28 (code signing)
+      # When #28 lands, uncomment this step to materialize the signing cert on
+      # the Windows runner from a base64-encoded PFX secret BEFORE the build, and
+      # uncomment the matching env vars on the tauri-action step below. Leave it
+      # commented out today so the pipeline runs WITHOUT any signing secrets.
+      #
+      # - name: Import Windows code-signing certificate
+      #   if: matrix.platform == 'windows-latest' && env.WINDOWS_CERT_PFX_BASE64 != ''
+      #   shell: pwsh
+      #   env:
+      #     WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+      #     WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+      #   run: |
+      #     # Mask the cert password so it never surfaces in logs (defence-in-depth
+      #     # on top of Actions' own secret redaction).
+      #     Write-Host "::add-mask::$env:WINDOWS_CERT_PASSWORD"
+      #     $pfxBytes = [System.Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64)
+      #     $pfxPath  = Join-Path $env:RUNNER_TEMP "azhura-signing.pfx"
+      #     [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+      #     echo "WINDOWS_CERT_PATH=$pfxPath" >> $env:GITHUB_ENV
+      #   # IMPORTANT (#28): after the build/sign step, delete the materialized PFX
+      #   # so the private key never lingers on the runner. Add a cleanup step with
+      #   # `if: always()` running:
+      #   #   Remove-Item -Force $env:WINDOWS_CERT_PATH -ErrorAction SilentlyContinue
+
+      # Tag-only: a workflow_dispatch run executes the build/setup steps above as
+      # a smoke-test but skips this step, so it never drafts a junk Release named
+      # after a branch. Real Releases are cut solely from student-v* tags.
+      - name: Build & draft release
+        if: startsWith(github.ref, 'refs/tags/student-v')
+        # Pinned to the current resolution of v0. SHA-pinning
+        # (tauri-apps/tauri-action@<commit-sha>) is the stronger supply-chain
+        # guard; prefer it if you want fully immutable third-party actions.
+        uses: tauri-apps/tauri-action@v0.6.2
+        env:
+          # tauri-action uses this to create the Release + upload assets.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          #
+          # ── Updater signing placeholder — Diaktifkan oleh #49 (self-update) ──
+          # The self-update epic adds the tauri-plugin-updater. Once it does,
+          # uncomment these so tauri-action signs the bundles and emits the
+          # `latest.json` the LAN update proxy serves. Inactive today: without
+          # the updater plugin configured, signing is a no-op and these unset
+          # vars do not affect the build.
+          # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          #
+          # ── Windows code-signing env — Diaktifkan oleh #28 (code signing) ──
+          # Pair with the "Import Windows code-signing certificate" step above.
+          # tauri reads these to Authenticode-sign the .msi/.exe at bundle time.
+          # WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          # WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        with:
+          # Build the student app specifically (monorepo has multiple packages).
+          projectPath: apps/student
+          # Use the pushed tag verbatim (student-vX.Y.Z) as the Release tag.
+          tagName: ${{ github.ref_name }}
+          releaseName: "Azhura Student ${{ github.ref_name }}"
+          releaseBody: |
+            Automated build of the Azhura CBT student client.
+            Installers for each OS are attached below.
+
+            Review, then publish this draft when ready.
+          # Draft so a human verifies installers before the release goes live.
+          releaseDraft: true
+          prerelease: false
+          # Per-OS bundle selection. Empty for both today — tauri.conf.json's
+          # bundle.targets = "all" yields .msi + .exe on Windows and
+          # AppImage + .deb on Linux. Kept in the matrix so #28/#49 can later
+          # pass e.g. "--bundles msi,nsis" without touching this step.
+          args: ${{ matrix.args }}
