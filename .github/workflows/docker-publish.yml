@@ -52,6 +52,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # GHCR repository paths MUST be lowercase, but ${{ github.repository_owner }}
+      # preserves the account's original case (e.g. "Noober1"). Lowercase it once
+      # here so the image tags below are valid. (promote.yml lowercases the same
+      # way via `tr` — keep both in sync.)
+      - name: Compute lowercase owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
       - name: Build and push ${{ matrix.name }}
         uses: docker/build-push-action@v6
         with:
@@ -71,8 +78,8 @@ jobs:
           # is reachable EXCLUSIVELY via the manual, human-gated promote.yml
           # (#174), which re-tags a validated :edge → :rc → :stable digest.
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:edge
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ matrix.image }}:edge
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ matrix.image }}:${{ github.sha }}
           # GitHub Actions layer cache to speed up rebuilds.
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
