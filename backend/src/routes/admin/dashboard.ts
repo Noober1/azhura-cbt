@@ -10,11 +10,12 @@
  */
 
 import { Elysia } from "elysia";
-import { and, eq, gt, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
 import { createLogger } from "../../lib/logger";
+import { gradeQuestion } from "../../lib/exam-scoring";
 import type { DashboardSnapshot, ExamScoreSummary } from "@azhura/shared";
 
 const log = createLogger("AdminDashboard");
@@ -84,25 +85,15 @@ async function computeStats(adminName: string): Promise<DashboardSnapshot> {
       )
       .groupBy(examSessions.submitted),
 
-    // Per-session correct/total for submitted sessions (for min/median/max)
+    // Submitted sessions (examId + sessionId). Scores are graded in JS below via
+    // the shared gradeQuestion so every question type is scored the same way the
+    // recap does — the old SQL only compared selected_option_id to
+    // correctOptionId, silently counting all fill_in_blank/matching/sorting
+    // answers as wrong and diverging from the recap.
     db
-      .select({
-        examId: examSessions.examId,
-        sessionId: examSessions.id,
-        correct: sql<number>`count(case when ${answers.selectedOptionId} = ${questions.correctOptionId} then 1 end)`,
-        total: sql<number>`count(${questions.id})`,
-      })
+      .select({ examId: examSessions.examId, sessionId: examSessions.id })
       .from(examSessions)
-      .innerJoin(questions, eq(questions.examId, examSessions.examId))
-      .leftJoin(
-        answers,
-        and(
-          eq(answers.sessionId, examSessions.id),
-          eq(answers.questionId, questions.id)
-        )
-      )
-      .where(eq(examSessions.submitted, 1))
-      .groupBy(examSessions.id, examSessions.examId),
+      .where(eq(examSessions.submitted, 1)),
 
     // Exam id+title for chart labels
     db.select({ id: exams.id, title: exams.title }).from(exams),
@@ -145,14 +136,63 @@ async function computeStats(adminName: string): Promise<DashboardSnapshot> {
   // ── Exam score summaries ───────────────────────────────────────────────────
   const titleMap = new Map(examTitles.map((e) => [e.id, e.title]));
   const byExam = new Map<string, number[]>();
-  for (const row of scoreRows) {
-    const score =
-      Number(row.total) > 0
-        ? Math.round((Number(row.correct) / Number(row.total)) * 100)
-        : 0;
-    const existing = byExam.get(row.examId);
-    if (existing) existing.push(score);
-    else byExam.set(row.examId, [score]);
+  if (scoreRows.length > 0) {
+    // Grade every submitted session in JS with the shared grader so all question
+    // types are scored identically to the recap (matching/sorting also need the
+    // per-session shuffle, which is impossible to reproduce in SQL).
+    const examIds = [...new Set(scoreRows.map((r) => r.examId))];
+    const sessionIds = scoreRows.map((r) => r.sessionId);
+    const [gradedQuestions, gradedAnswers] = await Promise.all([
+      db
+        .select({
+          id: questions.id,
+          examId: questions.examId,
+          type: questions.type,
+          correctOptionId: questions.correctOptionId,
+          config: questions.config,
+        })
+        .from(questions)
+        .where(inArray(questions.examId, examIds)),
+      db
+        .select({
+          sessionId: answers.sessionId,
+          questionId: answers.questionId,
+          selectedOptionId: answers.selectedOptionId,
+          answerValue: answers.answerValue,
+        })
+        .from(answers)
+        .where(inArray(answers.sessionId, sessionIds)),
+    ]);
+
+    const questionsByExam = new Map<string, typeof gradedQuestions>();
+    for (const q of gradedQuestions) {
+      const bucket = questionsByExam.get(q.examId) ?? [];
+      bucket.push(q);
+      questionsByExam.set(q.examId, bucket);
+    }
+    const answersBySession = new Map<string, Map<string, (typeof gradedAnswers)[number]>>();
+    for (const a of gradedAnswers) {
+      const bucket = answersBySession.get(a.sessionId) ?? new Map();
+      bucket.set(a.questionId, a);
+      answersBySession.set(a.sessionId, bucket);
+    }
+
+    for (const { examId, sessionId } of scoreRows) {
+      const examQuestions = questionsByExam.get(examId) ?? [];
+      const sessionAnswers = answersBySession.get(sessionId) ?? new Map();
+      let correct = 0;
+      for (const q of examQuestions) {
+        const ans = sessionAnswers.get(q.id);
+        if (!ans || (!ans.selectedOptionId && !ans.answerValue)) continue;
+        if (gradeQuestion(q.type ?? "multiple_choice", q.correctOptionId, q.config, ans.selectedOptionId, ans.answerValue, { sessionId, questionId: q.id })) {
+          correct++;
+        }
+      }
+      const score = examQuestions.length > 0 ? Math.round((correct / examQuestions.length) * 100) : 0;
+      const existing = byExam.get(examId);
+      if (existing) existing.push(score);
+      else byExam.set(examId, [score]);
+    }
   }
 
   const examScores: ExamScoreSummary[] = [];
