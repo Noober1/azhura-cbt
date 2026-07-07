@@ -65,12 +65,11 @@ Release (only `student-v*` tag pushes do).
 
 ## What plugs in later
 
-- **Code signing — issue #28.** The Windows `.msi`/`.exe` are currently
-  **unsigned**. A commented placeholder in the workflow shows where to import a
-  base64-encoded PFX (`secrets.WINDOWS_CERT_PFX_BASE64` /
-  `secrets.WINDOWS_CERT_PASSWORD`) and pass the cert to `tauri-action` at bundle
-  time. Marked `Diaktifkan oleh #28 (code signing)`. Until then the pipeline
-  runs without any signing secrets.
+- **Code signing — issue #28.** The Windows `.msi`/`.exe` are Authenticode-signed
+  in CI **when** the `WINDOWS_CERT_PFX_BASE64` / `WINDOWS_CERT_PASSWORD` secrets
+  are set; without them the build ships unsigned but still passes. See
+  **[CODE_SIGNING.md](CODE_SIGNING.md)** for generating the self-signed cert,
+  storing the secrets, and deploying the public `.cer` to school machines.
 - **Self-update — issue #49.** The LAN update-proxy consumes the installer
   assets this workflow attaches. When the updater plugin lands, a commented
   `env` placeholder (`secrets.TAURI_SIGNING_PRIVATE_KEY` /

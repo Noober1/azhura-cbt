@@ -24,6 +24,12 @@ backend/.env
 /.env
 !.env.docker.example
 
+# Code-signing cert/key output files (issue #28) — never commit private keys,
+# public certs, or the base64-encoded PFX blob.
+*.pfx
+*.cer
+*.b64
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
