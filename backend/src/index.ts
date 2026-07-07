@@ -194,6 +194,9 @@ app.compile();
  */
 const MAX_BODY_BYTES = 64 * 1024 * 1024;
 
+/** How often to trim expired persisted logs after boot (24h). */
+const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
 async function handleWithElysia(req: IncomingMessage, res: ServerResponse): Promise<void> {
   // Read body for non-GET/HEAD requests.
   let body: Buffer | undefined;
@@ -285,13 +288,19 @@ httpServer.listen(port, () => {
   log.info(`Socket.io available at ws://localhost:${port}/ws`);
   log.info(`Access/warn/error logs writing to ${logDirectory}`);
 
-  // Self-trim persisted logs on boot (#18) — drops entries older than the
-  // retention window so an on-premise deployment never needs an external cron.
-  void pruneOldLogs().then((deleted) => {
-    if (deleted > 0) {
-      log.info(`Pruned ${deleted} log entries older than ${LOG_RETENTION_DAYS} days`);
-    }
-  });
+  // Self-trim persisted logs (#18) — drops entries older than the retention
+  // window so an on-premise deployment never needs an external cron. Every
+  // request appends an access row, so pruning ONLY at boot let the table grow
+  // unboundedly on a long-lived server; run it on boot and then daily.
+  const prune = () =>
+    void pruneOldLogs().then((deleted) => {
+      if (deleted > 0) {
+        log.info(`Pruned ${deleted} log entries older than ${LOG_RETENTION_DAYS} days`);
+      }
+    });
+  prune();
+  const pruneTimer = setInterval(prune, PRUNE_INTERVAL_MS);
+  pruneTimer.unref?.(); // don't keep the process alive just for pruning
 });
 
 // Release the Redis connection on shutdown so the session registry doesn't leak
