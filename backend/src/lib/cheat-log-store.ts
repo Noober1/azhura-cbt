@@ -94,10 +94,10 @@ export function buildViolationPayload(
     typeof event.details === "string" && event.details.length > 0
       ? event.details.slice(0, MAX_DETAILS)
       : undefined;
-  const timestamp =
-    typeof event.timestamp === "number" && Number.isFinite(event.timestamp)
-      ? event.timestamp
-      : Date.now();
+  // Stamp server time, never the client's: this is an audit record, so a
+  // tampered client must not be able to back-date or future-date a violation in
+  // the supervisor feed. (The `event.timestamp` field is intentionally ignored.)
+  const timestamp = Date.now();
 
   return {
     studentId: data.userId,

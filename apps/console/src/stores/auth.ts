@@ -65,7 +65,13 @@ function readPersisted(): Pick<AuthState, "token" | "user" | "role"> {
   } catch {
     user = null;
   }
-  return { token, user, role: (localStorage.getItem(ROLE_KEY) as UserRole) || claims.role };
+  // Role comes from the signed JWT claim, NOT the mutable localStorage copy:
+  // a user could edit ROLE_KEY to escalate the client-side UI gate. (The backend
+  // enforces the real role per request regardless, but the client must not
+  // present admin surfaces to a supervisor.)
+  const role: UserRole | null =
+    claims.role === "admin" || claims.role === "supervisor" ? claims.role : null;
+  return { token, user, role };
 }
 
 function persist(token: string, user: ConsoleUser, role: UserRole): void {

@@ -72,10 +72,19 @@ export const ExamSidebar = () => {
               btnClass = "bg-blue text-white hover:bg-blue";
             }
 
+            // The fills convey state by colour alone; spell it out for screen
+            // readers and mark the current question with aria-current.
+            const stateLabel = isFlagged
+              ? "ragu-ragu"
+              : isAnswered
+              ? "sudah dijawab"
+              : "belum dijawab";
             return (
               <button
                 key={q.id}
                 onClick={() => handleSelectQuestion(index)}
+                aria-current={isSelected ? "true" : undefined}
+                aria-label={`Soal nomor ${index + 1}, ${stateLabel}`}
                 className={`flex items-center justify-center aspect-square text-base font-bold rounded-xl border-2 border-[var(--nb-ink)] transition-all duration-150 ${btnClass} ${
                   isSelected
                     ? "scale-[1.06] shadow-[2px_2px_0_var(--nb-ink)]"

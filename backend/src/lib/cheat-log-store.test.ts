@@ -38,12 +38,15 @@ describe("parseEventType", () => {
 
 describe("buildViolationPayload", () => {
   it("maps identity from socket data, not from the client event", () => {
+    const before = Date.now();
     const payload = buildViolationPayload(
       DATA,
       { eventType: "focus_loss", details: "Alt+Tab", timestamp: 1000 },
       "focus_loss"
     );
-    expect(payload).toEqual({
+    // Timestamp is server-stamped, never the client's 1000.
+    expect(payload.timestamp).toBeGreaterThanOrEqual(before);
+    expect(payload).toMatchObject({
       studentId: "u-1",
       nis: "12345",
       name: "Ahmad Faisal",
@@ -51,7 +54,6 @@ describe("buildViolationPayload", () => {
       examId: "exam-1",
       eventType: "focus_loss",
       details: "Alt+Tab",
-      timestamp: 1000,
     });
   });
 

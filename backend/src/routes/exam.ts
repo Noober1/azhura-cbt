@@ -789,9 +789,9 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       }
     }
 
-    // Access-token gate (#1): a token-protected exam requires an exact,
-    // case-sensitive, alphanumeric match before a session can be created. The
-    // raw token never leaves the server — only verified here.
+    // Access-token gate (#1): a token-protected exam requires a
+    // case-insensitive (#47), alphanumeric match before a session can be
+    // created. The raw token never leaves the server — only verified here.
     switch (checkExamToken(exam.token, body?.token)) {
       case "missing":
         throw new BadRequestError("Token akses ujian wajib diisi.");
