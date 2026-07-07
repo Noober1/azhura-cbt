@@ -81,14 +81,17 @@ function PlayerControls({ integrity, type }: PlayerControlsProps) {
   const volumeId = useId();
 
   const { limitReached, noSeek, maxPlays, playsRemaining } = integrity;
-  // A play can start only while paused and within budget. Pausing/resuming the
-  // current run is always allowed (resume doesn't start a new play).
-  const startBlocked = paused && limitReached;
+  // A play is counted at the START of a run (see useMediaIntegrity), so the
+  // budget only gates STARTING A NEW run — at the clip's beginning or after it
+  // ended. Resuming a run that is already in progress (paused mid-clip) is
+  // always allowed, otherwise pausing your one allowed play would strand it.
+  const atRunBoundary = currentTime <= 0 || (duration > 0 && currentTime >= duration);
+  const startBlocked = paused && limitReached && atRunBoundary;
   const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
 
   const togglePlay = () => {
     if (paused) {
-      if (limitReached) return;
+      if (limitReached && atRunBoundary) return;
       remote.play();
     } else {
       remote.pause();

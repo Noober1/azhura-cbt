@@ -2,10 +2,13 @@
  * Azhura CBT App — Media exam-integrity gating (#164).
  *
  * Encapsulates the play-count limit for a single audio/video clip. Counts one
- * play each time a clip plays through to the end, reading/writing the persisted
- * count in the exam store (keyed by question + media src) so the budget cannot
- * be reset by navigating away or refreshing. Seek-lock is a passive flag the
- * player honours; it is surfaced here so all integrity state lives in one place.
+ * play each time playback STARTS (not when it reaches the end), reading/writing
+ * the persisted count in the exam store (keyed by question + media src) so the
+ * budget cannot be reset by navigating away or refreshing. Counting at start —
+ * rather than on `ended` — is what makes the limit tamper-resistant: a student
+ * can no longer replay a capped clip for free by seeking back or navigating away
+ * before the clip finishes. Seek-lock is a passive flag the player honours; it
+ * is surfaced here so all integrity state lives in one place.
  */
 
 import { useCallback, useRef } from "react";
@@ -33,9 +36,9 @@ export interface MediaIntegrityState {
   playsRemaining: number | null;
   /** True when the play budget is exhausted (no further plays may start). */
   limitReached: boolean;
-  /** Call when playback starts — arms the next end to be counted. */
+  /** Call when playback starts — counts exactly one play per run. */
   registerPlayStart: () => void;
-  /** Call when a clip plays through to the end — counts exactly one play. */
+  /** Call when a clip reaches the end — re-arms so a genuine replay counts. */
   registerEnded: () => void;
 }
 
@@ -49,20 +52,22 @@ export function useMediaIntegrity({
   const playsUsed = useExamStore((s) => s.mediaPlays[key] ?? 0);
   const recordMediaPlay = useExamStore((s) => s.recordMediaPlay);
 
-  // Counts one play per playthrough. Armed when playback starts and disarmed on
-  // the first `ended`, so a media element that fires `ended` twice (or a
-  // resume-after-pause) never double-counts a single run.
-  const armed = useRef(false);
+  // Counts one play per run at the moment playback starts. `countedThisRun`
+  // guards a pause→resume (and duplicate `play` events) from double-counting a
+  // single run; `ended` clears it so a deliberate replay counts again. Counting
+  // at start (not end) means seeking back or leaving before the clip finishes
+  // cannot dodge the budget.
+  const countedThisRun = useRef(false);
 
   const registerPlayStart = useCallback(() => {
-    armed.current = true;
-  }, []);
-
-  const registerEnded = useCallback(() => {
-    if (!armed.current) return;
-    armed.current = false;
+    if (countedThisRun.current) return;
+    countedThisRun.current = true;
     recordMediaPlay(key);
   }, [key, recordMediaPlay]);
+
+  const registerEnded = useCallback(() => {
+    countedThisRun.current = false;
+  }, []);
 
   const { playsRemaining, limitReached } = computeIntegrity(playsUsed, maxPlays);
 
