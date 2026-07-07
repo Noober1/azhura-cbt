@@ -60,6 +60,24 @@ async function getRestrictedBatches(examId: string): Promise<number[] | null> {
   return rows.length > 0 ? rows.map((r) => Number(r.batch)) : null;
 }
 
+/**
+ * Rejects answers whose questionId does not belong to this exam. Guards against
+ * a client stamping answers for another exam's questions (which the FK would
+ * accept — a valid question id, wrong exam) or for a non-existent question
+ * (which the FK would 500 on). One indexed lookup covers a whole batch.
+ */
+async function assertQuestionsBelongToExam(examId: string, questionIds: string[]): Promise<void> {
+  if (questionIds.length === 0) return;
+  const rows = await db
+    .select({ id: questions.id })
+    .from(questions)
+    .where(and(eq(questions.examId, examId), inArray(questions.id, questionIds)));
+  const valid = new Set(rows.map((r) => r.id));
+  if (questionIds.some((id) => !valid.has(id))) {
+    throw new BadRequestError("Jawaban memuat soal yang bukan milik ujian ini.");
+  }
+}
+
 interface GradableQuestion {
   id: string;
   type: string | null;
@@ -411,6 +429,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       if (Date.now() > session.endTime) {
         throw new GoneError("Waktu ujian sudah habis.");
       }
+      await assertQuestionsBelongToExam(examId, [questionId]);
 
       await db
         .insert(answers)
@@ -478,6 +497,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
       // Collapse duplicates so the transaction never writes a question twice.
       const deduped = dedupeAnswersByQuestion(incoming);
+      await assertQuestionsBelongToExam(examId, deduped.map((a) => a.questionId));
 
       if (deduped.length > 0) {
         await db.transaction(async (tx) => {
