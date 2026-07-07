@@ -27,7 +27,7 @@ import { db, schema, assertDbConnection } from "../../db";
 import { adminQuestionRoutes } from "./questions";
 import { examRoutes } from "../exam";
 
-const { users, exams } = schema;
+const { users, exams, examSessions } = schema;
 
 const app = new Elysia().group("/api", (a) =>
   a.use(adminQuestionRoutes).use(examRoutes)
@@ -158,11 +158,29 @@ if (dbReady) {
     randomizeAnswer: 0,
     expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
   });
+
+  // The student-facing questions endpoint now requires the student to hold a
+  // session for the exam (access control). Seed one so the payload-shape
+  // assertions below can reach the endpoint. It is intentionally EXPIRED
+  // (endTime in the past): the questions authz only checks the session exists
+  // and is unsubmitted, while the admin question-CRUD guard treats only a
+  // still-running session as "active" — so this satisfies the read endpoint
+  // without blocking the CRUD tests that also run on this exam.
+  await db.insert(examSessions).values({
+    id: randomUUID(),
+    examId,
+    userId: seededStudentId,
+    startTime: Date.now() - 60 * 60 * 1000,
+    endTime: Date.now() - 30 * 60 * 1000,
+  });
 }
 
 afterAll(async () => {
   if (!dbReady) return;
-  // Exam delete cascades questions + options; then purge fixture users.
+  // Sessions first — `exam_sessions.exam_id` has no ON DELETE cascade, so the
+  // exam delete would otherwise fail its FK. Exam delete then cascades
+  // questions + options; finally purge fixture users.
+  await db.delete(examSessions).where(eq(examSessions.examId, examId));
   await db.delete(exams).where(eq(exams.id, examId));
   await db.delete(users).where(like(users.nis, `${TEST_NIS_PREFIX}%`));
 });
