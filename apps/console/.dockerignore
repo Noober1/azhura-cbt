@@ -1,0 +1,38 @@
+# NOTE: the console image is built with the REPO ROOT as context (see
+# apps/console/Dockerfile header + docker-compose.yml). Keep in sync with
+# backend/.dockerignore. Paths are matched against the context root.
+
+# Dependencies — reinstalled inside the image from the frozen lockfile.
+node_modules
+**/node_modules
+
+# Secrets / local env — never bake into an image.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Build output — produced inside the image.
+dist
+**/dist
+dist-ssr
+
+# Uploaded media (backend volume) — irrelevant to the console image.
+uploads
+backend/uploads
+**/uploads
+
+# VCS + logs + misc local noise.
+.git
+.gitignore
+**/*.log
+logs
+**/logs
+
+# Tauri native build artifacts (huge, irrelevant here).
+apps/student/src-tauri/target
+
+# Docker / CI files (not needed inside the image).
+docker-compose.yml
+**/Dockerfile
+**/.dockerignore

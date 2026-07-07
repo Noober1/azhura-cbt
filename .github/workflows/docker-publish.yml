@@ -1,0 +1,75 @@
+# Build & publish the on-premise Docker images to GHCR.
+#
+# Publishes TWO images on every push to main (and on manual dispatch):
+#   • ghcr.io/<owner>/azhura-backend
+#   • ghcr.io/<owner>/azhura-console
+#
+# Each is tagged `:edge` (the moving "newest build off main") plus the immutable
+# git SHA. We deliberately NEVER tag `:latest` — production boxes pin `:stable`
+# and Watchtower would auto-pull anything tagged latest. Promotion
+# `:edge → :rc → :stable` is a MANUAL, human-gated step handled by issue #174's
+# promote.yml workflow.
+name: docker-publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+# Minimal permissions: read the repo, write packages (GHCR).
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            image: azhura-backend
+            dockerfile: backend/Dockerfile
+          - name: console
+            image: azhura-console
+            dockerfile: apps/console/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          # Build context is the repo ROOT (workspace lockfile + @azhura/shared).
+          #
+          # NOTE (console only): the console SPA inlines VITE_API_BASE_URL at
+          # BUILD time. CI cannot know each school's LAN IP, so the published
+          # console image carries only the Dockerfile's placeholder URL — it is
+          # for dev/preview, NOT production. Production deploys MUST rebuild the
+          # console on-premise via `docker compose build` so the school's LAN IP
+          # is baked into the bundle. See docs/DEPLOY.md §4.
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          # :edge (never :latest) + immutable git SHA. See header re: #174.
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:edge
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.sha }}
+          # GitHub Actions layer cache to speed up rebuilds.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
