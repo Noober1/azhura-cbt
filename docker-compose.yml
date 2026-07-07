@@ -72,6 +72,15 @@ services:
   mariadb:
     image: mariadb:11.4
     restart: unless-stopped
+    # utf8mb4_unicode_ci as the server default, matching the dev DBs the
+    # migrations were authored against. Without this, migration 0007's
+    # `CONVERT TO CHARACTER SET utf8mb4` is a real column change on a fresh
+    # install and MariaDB rejects it (errno 1832: FK on user_id) — wedging the
+    # first boot mid-migration. With it, tables are created in the target
+    # collation and the CONVERT is a no-op.
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
     # No host port published — internal network only. (If you must inspect from
     # the host, bind to 127.0.0.1 explicitly, never to LAN/WAN.)
     environment:
@@ -143,6 +152,11 @@ services:
   watchtower:
     image: containrrr/watchtower:1.7.1
     restart: unless-stopped
+    environment:
+      # Watchtower 1.7.1 negotiates Docker API 1.25, which Engine ≥ 29 rejects
+      # ("client version 1.25 is too old"). Pin a version every current engine
+      # accepts; remove once watchtower ships a newer client.
+      DOCKER_API_VERSION: "1.44"
     command:
       - --label-enable
       - --cleanup

@@ -27,6 +27,7 @@ COPY packages/shared/package.json ./packages/shared/
 # in the runtime stage; only manifests are needed to install.
 COPY apps/console/package.json ./apps/console/
 COPY apps/student/package.json ./apps/student/
+COPY apps/e2e/package.json ./apps/e2e/
 
 # `--frozen-lockfile` fails the build if bun.lock is out of sync — a safety net.
 RUN bun install --frozen-lockfile

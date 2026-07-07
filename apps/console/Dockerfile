@@ -21,6 +21,7 @@ COPY apps/console/package.json ./apps/console/
 COPY packages/shared/package.json ./packages/shared/
 COPY backend/package.json ./backend/
 COPY apps/student/package.json ./apps/student/
+COPY apps/e2e/package.json ./apps/e2e/
 
 RUN bun install --frozen-lockfile
 

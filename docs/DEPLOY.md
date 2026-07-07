@@ -120,6 +120,15 @@ docker compose exec backend bun run src/seed.ts
 > Untuk menjalankan ulang migrasi secara manual (mis. setelah restore DB):
 > `docker compose exec backend bun run src/migrate.ts`.
 
+> **Pemulihan migrasi macet (backend restart-loop di first boot):** DDL
+> MySQL/MariaDB tidak transaksional — kalau sebuah migrasi gagal di tengah
+> (log backend: `Migration aborted`), tabel yang sudah terlanjur dibuat tetap
+> ada tapi journal `__drizzle_migrations` tidak dicatat, sehingga tiap restart
+> bentrok `table already exists`. Selama belum ada data penting (first boot),
+> reset bersih: `docker compose down -v` (menghapus volume DB) lalu
+> `docker compose up -d`. Jika DB sudah berisi data, perbaiki manual: drop
+> objek yang dibuat migrasi yang gagal, lalu jalankan ulang migrate.
+
 ---
 
 ## 5. Firewall (WAJIB)
