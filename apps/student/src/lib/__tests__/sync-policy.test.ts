@@ -19,8 +19,14 @@ describe("classifyFlushFailure", () => {
     expect(classifyFlushFailure(503)).toBe("retry");
   });
 
-  it("retries on other client errors that are not terminal for the session", () => {
-    expect(classifyFlushFailure(404)).toBe("retry");
+  it("drops the queue on terminal client errors (bad payload, dead session/token)", () => {
+    expect(classifyFlushFailure(400)).toBe("drop");
+    expect(classifyFlushFailure(401)).toBe("drop");
+    expect(classifyFlushFailure(403)).toBe("drop");
+    expect(classifyFlushFailure(404)).toBe("drop");
+  });
+
+  it("retries on transient client errors like rate limiting (429)", () => {
     expect(classifyFlushFailure(429)).toBe("retry");
   });
 });

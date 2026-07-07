@@ -64,10 +64,20 @@ const getDatabase = async (): Promise<TauriDatabase | null> => {
       CREATE TABLE IF NOT EXISTS answers (
         questionId TEXT PRIMARY KEY,
         selectedOptionId TEXT,
+        answerValue TEXT,
         timestamp INTEGER,
         isFlagged INTEGER
       )
     `);
+    // Backfill the column on databases created before answerValue existed —
+    // without it, essay / fill-in-blank / matching / sorting answers are
+    // silently dropped from offline persistence on desktop. ALTER throws if the
+    // column already exists, so swallow that specific case.
+    try {
+      await db.execute("ALTER TABLE answers ADD COLUMN answerValue TEXT");
+    } catch {
+      // Column already present — expected on every run after the first.
+    }
     // Generic key/value store for small persisted flags (e.g. "tour seen").
     // Kept in the same offline DB so a single handle serves both purposes; the
     // web build falls back to localStorage (see {@link getFlag}/{@link setFlag}).
@@ -124,11 +134,12 @@ export const saveAnswerToLocalDb = async (answer: ExamAnswer): Promise<void> => 
   if (database) {
     try {
       await database.execute(
-        `INSERT OR REPLACE INTO answers (questionId, selectedOptionId, timestamp, isFlagged)
-         VALUES ($1, $2, $3, $4)`,
+        `INSERT OR REPLACE INTO answers (questionId, selectedOptionId, answerValue, timestamp, isFlagged)
+         VALUES ($1, $2, $3, $4, $5)`,
         [
           answer.questionId,
           answer.selectedOptionId || "",
+          answer.answerValue ?? null,
           answer.timestamp,
           answer.isFlagged ? 1 : 0,
         ]
@@ -159,6 +170,7 @@ export const getAnswersFromLocalDb = async (): Promise<ExamAnswer[]> => {
         Array<{
           questionId: string;
           selectedOptionId: string;
+          answerValue: string | null;
           timestamp: number;
           isFlagged: number;
         }>
@@ -166,6 +178,7 @@ export const getAnswersFromLocalDb = async (): Promise<ExamAnswer[]> => {
       return rows.map((row) => ({
         questionId: row.questionId,
         selectedOptionId: row.selectedOptionId === "" ? null : row.selectedOptionId,
+        answerValue: row.answerValue ?? null,
         timestamp: row.timestamp,
         isFlagged: row.isFlagged === 1,
       }));

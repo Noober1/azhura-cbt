@@ -14,16 +14,23 @@
 export type FlushOutcome = "drop" | "retry";
 
 /**
- * Maps an HTTP status (from a failed flush) to a {@link FlushOutcome}.
- *
- * - `409 Conflict` — session already submitted (backend `ConflictError`).
- * - `410 Gone`     — exam time expired (backend `GoneError`).
- *
- * Both mean the server will never accept these answers again, so they are
- * dropped. Any other status — including `undefined` (offline / no response) —
- * is retried.
+ * Statuses that mean the server will never accept this batch, so the queue is
+ * dropped rather than retried forever:
+ * - `400 Bad Request`  — malformed batch; the same payload will keep failing.
+ * - `401 Unauthorized` / `403 Forbidden` — the session/token is gone (a 401 also
+ *   logs the student out via the api interceptor); retrying is pointless.
+ * - `404 Not Found`    — the session no longer exists.
+ * - `409 Conflict`     — session already submitted (backend `ConflictError`).
+ * - `410 Gone`         — exam time expired (backend `GoneError`).
+ */
+const TERMINAL_FLUSH_STATUSES = new Set([400, 401, 403, 404, 409, 410]);
+
+/**
+ * Maps an HTTP status (from a failed flush) to a {@link FlushOutcome}. Terminal
+ * client errors (see {@link TERMINAL_FLUSH_STATUSES}) drop the queue; any other
+ * status — including `undefined` (offline / no response) or 5xx — is retried.
  *
  * @param status HTTP status code, or `undefined` when no response was received.
  */
 export const classifyFlushFailure = (status: number | undefined): FlushOutcome =>
-  status === 409 || status === 410 ? "drop" : "retry";
+  status !== undefined && TERMINAL_FLUSH_STATUSES.has(status) ? "drop" : "retry";

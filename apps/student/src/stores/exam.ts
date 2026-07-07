@@ -12,6 +12,7 @@
  */
 
 import { create } from "zustand";
+import { isAxiosError } from "axios";
 import { Question, ExamAnswer, ExamSession, ExamResult } from "../types";
 import { saveAnswerToLocalDb, clearLocalDbAnswers, getAnswersFromLocalDb } from "../lib/storage";
 import { useConnectivityStore } from "./connectivity";
@@ -70,6 +71,12 @@ interface ExamState {
   finalizing: boolean;
   /** Last submission error message, for surfacing/tracing failed submits. */
   submitError: string | null;
+  /**
+   * True when the last submit failed with a NON-retryable status (bad request,
+   * unauthorized, session gone). {@link finalizeExam} stops retrying on this so
+   * the student is not stranded forever behind the Processing overlay.
+   */
+  submitFatal: boolean;
 
   setExamSession: (session: ExamSession & { serverTime?: number }) => Promise<void>;
   /**
@@ -127,6 +134,13 @@ const storedOffset = isBrowser ? readNumber("cbt_server_time_offset") : 0;
 /** Capped exponential backoff (ms) for the finalize/submit retry loop. */
 const FINALIZE_BACKOFF_START_MS = 1000;
 const FINALIZE_BACKOFF_MAX_MS = 15000;
+/**
+ * Backstop on the finalize retry loop so a persistent server error can't lock
+ * the student behind the Processing overlay indefinitely. With exponential
+ * backoff capped at 15s this spans several minutes — long enough to ride out a
+ * transient outage, bounded enough to eventually surface a manual retry.
+ */
+const FINALIZE_MAX_ATTEMPTS = 20;
 
 /** localStorage keys that make up a persisted exam session. */
 const SESSION_KEYS = [
@@ -206,6 +220,7 @@ export const useExamStore = create<ExamState>((set, get) => {
   isSubmitting: false,
   finalizing: false,
   submitError: null,
+  submitFatal: false,
 
   setExamSession: async (session) => {
     // If the incoming session differs from what's locally stored, the saved
@@ -349,12 +364,16 @@ export const useExamStore = create<ExamState>((set, get) => {
       // Clearing the local cache is best-effort and must not fail the submit.
       await clearLocalDbAnswers();
 
-      set({ examResult: result, isSubmitting: false, submitError: null });
+      set({ examResult: result, isSubmitting: false, submitError: null, submitFatal: false });
       return result;
     } catch (error) {
       const context = toErrorContext(error);
-      log.error("Failed to submit exam", error, { examId, examSessionId, ...context });
-      set({ isSubmitting: false, submitError: String(context.message) });
+      const status = isAxiosError(error) ? error.response?.status : undefined;
+      // 400/401/403/404/422 are terminal: retrying never succeeds (bad payload,
+      // dead token, or gone session). 5xx / network errors stay retryable.
+      const fatal = status !== undefined && [400, 401, 403, 404, 422].includes(status);
+      log.error("Failed to submit exam", error, { examId, examSessionId, status, ...context });
+      set({ isSubmitting: false, submitError: String(context.message), submitFatal: fatal });
       return null;
     }
   },
@@ -365,7 +384,7 @@ export const useExamStore = create<ExamState>((set, get) => {
     if (get().examResult) return get().examResult;
     if (get().finalizing) return null;
 
-    set({ finalizing: true });
+    set({ finalizing: true, submitFatal: false });
     let delay = FINALIZE_BACKOFF_START_MS;
 
     // Retry until the server accepts the submit. The submit is idempotent
@@ -373,16 +392,22 @@ export const useExamStore = create<ExamState>((set, get) => {
     // score), so retrying after a timeout/offline window — or even after a
     // server-side finalize race — converges safely without double-scoring.
     // The Processing overlay keeps the UI locked for the whole loop.
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    for (let attempt = 0; attempt < FINALIZE_MAX_ATTEMPTS; attempt++) {
       const result = await get().submitExam();
       if (result) {
         set({ finalizing: false });
         return result;
       }
+      // A non-retryable failure (bad request, dead token, gone session) will
+      // never succeed — stop so the student isn't locked behind the overlay
+      // forever. The overlay surfaces submitError and a manual retry instead.
+      if (get().submitFatal) break;
       await new Promise((resolve) => setTimeout(resolve, delay));
       delay = Math.min(delay * 2, FINALIZE_BACKOFF_MAX_MS);
     }
+
+    set({ finalizing: false });
+    return null;
   },
 
   applyTimeChange: (endTime, serverTime) => {
@@ -419,6 +444,10 @@ export const useExamStore = create<ExamState>((set, get) => {
 
   resetExam: () => {
     answerSyncDebouncer.cancelAll();
+    // Drop any queued offline answers too: they belong to the session being
+    // torn down (logout / kick / session change), so leaving them would let
+    // them flush into a different participant's or attempt's session (#10).
+    useConnectivityStore.getState().clearPendingAnswers();
     if (isBrowser) {
       SESSION_KEYS.forEach((k) => localStorage.removeItem(k));
     }
@@ -440,6 +469,7 @@ export const useExamStore = create<ExamState>((set, get) => {
       isSubmitting: false,
       finalizing: false,
       submitError: null,
+      submitFatal: false,
     });
   },
 

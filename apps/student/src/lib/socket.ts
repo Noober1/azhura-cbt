@@ -26,6 +26,7 @@ import { useSocketStore } from "../stores/socket";
 import { useExamStore } from "../stores/exam";
 import { useConnectivityStore } from "../stores/connectivity";
 import { useAuthStore } from "../stores/auth";
+import { useConfigStore } from "../stores/config";
 import { useChatStore } from "../stores/chat";
 import { toast } from "sonner";
 import api from "./api";
@@ -34,9 +35,18 @@ import { toErrorContext } from "./errors";
 
 const log = createLogger("Socket");
 
-const SOCKET_URL = new URL(
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api"
-).origin;
+/**
+ * Resolves the realtime server origin at connect time. Mirrors the HTTP client
+ * (`lib/api.ts`): the wizard-configured `serverUrl` (#43/#42) wins over the
+ * build-time `VITE_API_BASE_URL` default — otherwise a configured desktop
+ * install would talk HTTP to the right server but open its socket against the
+ * baked-in default, silently disabling proctoring and the reconnect sync flush.
+ */
+const resolveSocketUrl = (): string => {
+  const { serverUrl } = useConfigStore.getState();
+  const base = serverUrl ? `${serverUrl}/api` : import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+  return new URL(base).origin;
+};
 
 /** The active socket connection, or `null` when disconnected. */
 export let socket: Socket | null = null;
@@ -50,7 +60,7 @@ export let socket: Socket | null = null;
 export const connectSocket = (token: string): void => {
   if (socket) return;
 
-  socket = io(SOCKET_URL, {
+  socket = io(resolveSocketUrl(), {
     auth: { token },
     autoConnect: true,
     path: "/ws",
