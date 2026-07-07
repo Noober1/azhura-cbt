@@ -16,7 +16,7 @@ import { setExamListBroadcaster } from "./lib/exam-events";
 import { setRosterBroadcaster, notifyRosterPatch } from "./lib/roster-events";
 import { buildRosterParticipant, hasActiveExam } from "./lib/roster";
 import { sessionRegistry } from "./lib/session-registry";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "./db";
 import { createHeartbeatTracker } from "./lib/heartbeat";
 import { resolveBroadcast } from "./lib/broadcast";
@@ -249,6 +249,32 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     // Guards async work (chat setup below, single-session heartbeat further down)
     // that may resolve after a fast disconnect — set true in the disconnect handler.
     let disconnected = false;
+
+    // Resolve the student's active EXAM session (#126). Anti-cheat violations
+    // persist into `cheat_logs`, whose `session_id` FK points at
+    // `exam_sessions.id` — NOT the login/single-session jti carried on the JWT.
+    // Resolve it once here so the violation handler stamps rows that actually
+    // satisfy the FK (previously every insert failed the FK and was swallowed).
+    if (role === "student") {
+      void (async () => {
+        try {
+          const active = await db
+            .select({ id: schema.examSessions.id, examId: schema.examSessions.examId })
+            .from(schema.examSessions)
+            .where(and(eq(schema.examSessions.userId, userId), eq(schema.examSessions.submitted, 0)))
+            .orderBy(desc(schema.examSessions.createdAt))
+            .limit(1);
+          if (disconnected) return;
+          socket.data.examSessionId = active[0]?.id ?? "";
+          socket.data.examId = active[0]?.examId ?? null;
+        } catch (error) {
+          log.warn("Failed to resolve active exam session for anti-cheat log", {
+            nis,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })();
+    }
 
     // Public chat (#17): tell the client whether chat is on, and — if it is —
     // pull this socket into the room with history + presence. Students join only

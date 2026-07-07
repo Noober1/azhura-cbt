@@ -18,7 +18,8 @@ const DATA: ViolationSocketData = {
   userId: "u-1",
   nis: "12345",
   name: "Ahmad Faisal",
-  sessionId: "sess-1",
+  examSessionId: "exam-sess-1",
+  examId: "exam-1",
 };
 
 describe("parseEventType", () => {
@@ -46,16 +47,28 @@ describe("buildViolationPayload", () => {
       studentId: "u-1",
       nis: "12345",
       name: "Ahmad Faisal",
-      sessionId: "sess-1",
-      examId: null,
+      sessionId: "exam-sess-1",
+      examId: "exam-1",
       eventType: "focus_loss",
       details: "Alt+Tab",
       timestamp: 1000,
     });
   });
 
-  it("always sets examId to null (never trusted from the client)", () => {
-    expect(buildViolationPayload(DATA, { timestamp: 1 }, "focus_loss").examId).toBeNull();
+  it("carries the server-resolved exam session id and exam id (FK-satisfying)", () => {
+    const payload = buildViolationPayload(DATA, { timestamp: 1 }, "focus_loss");
+    expect(payload.sessionId).toBe("exam-sess-1");
+    expect(payload.examId).toBe("exam-1");
+  });
+
+  it("defaults examId to null and session to empty when not mid-exam", () => {
+    const payload = buildViolationPayload(
+      { userId: "u-3", nis: "111" },
+      { timestamp: 1 },
+      "focus_loss"
+    );
+    expect(payload.examId).toBeNull();
+    expect(payload.sessionId).toBe("");
   });
 
   it("falls back to empty name and session when socket data omits them", () => {
