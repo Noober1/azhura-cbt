@@ -107,6 +107,10 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
   const { settings } = useSettings(open && !isEdit);
   const [form, setForm] = useState<FormState>(() => initialState(exam));
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  // False while an edit-from-summary is still fetching its group detail — saving
+  // is blocked until then so the real allowedGroups can't be wiped by an empty
+  // in-flight selection.
+  const [groupsReady, setGroupsReady] = useState(true);
   // Allowed batch numbers (#76). Empty = open to all batches.
   const [selectedBatches, setSelectedBatches] = useState<number[]>([]);
   // groupId -> active participant count, for groups locked because students are
@@ -151,19 +155,32 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
     if (!exam) {
       setSelectedGroupIds([]);
       setLockedGroups({});
+      setGroupsReady(true);
     } else if ("allowedGroups" in exam) {
       applyAllowed(exam.allowedGroups);
+      setGroupsReady(true);
     } else {
-      // Editing from a list row (summary, no group detail) — fetch it.
+      // Editing from a list row (summary, no group detail) — fetch it. Until it
+      // resolves the current selection is unknown, so block saving: otherwise a
+      // save before the prefill lands (or a failed prefill) would submit an empty
+      // allowedGroups and silently wipe every group assignment.
       setSelectedGroupIds([]);
       setLockedGroups({});
+      setGroupsReady(false);
       examsApi
         .get(exam.id)
         .then((detail) => {
-          if (!cancelled) applyAllowed(detail.allowedGroups);
+          if (!cancelled) {
+            applyAllowed(detail.allowedGroups);
+            setGroupsReady(true);
+          }
         })
         .catch(() => {
-          /* leave empty; the list still saves other fields fine */
+          if (!cancelled) {
+            // Keep saving blocked and tell the user to retry — never silently
+            // save an empty group set over the real one.
+            toast.error("Gagal memuat kelas ujian. Tutup dan buka kembali dialog untuk mencoba lagi.");
+          }
         });
     }
     return () => {
@@ -210,6 +227,10 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!groupsReady) {
+      toast.error("Kelas ujian masih dimuat. Tunggu sebentar lalu simpan lagi.");
+      return;
+    }
     const found = validate(form);
     if (Object.keys(found).length > 0) {
       setErrors(found);
@@ -265,7 +286,7 @@ export function ExamFormModal({ open, exam, onClose, onSaved }: ExamFormModalPro
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Batal
           </Button>
-          <Button type="submit" form="exam-form" busy={busy}>
+          <Button type="submit" form="exam-form" busy={busy} disabled={!groupsReady}>
             {isEdit ? "Simpan perubahan" : "Buat ujian"}
           </Button>
         </>
