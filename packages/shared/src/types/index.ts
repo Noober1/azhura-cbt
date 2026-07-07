@@ -57,7 +57,37 @@ export interface SortingConfig {
   correctOrder: number[];
 }
 
+/**
+ * Matching config as sent to the student client. The left/right columns are
+ * DECOUPLED (no pairing) and the right column is shuffled server-side with a
+ * secret per-session permutation, so the payload no longer leaks the answer
+ * key and a blind "identity" submission can no longer score full marks. The
+ * student submits `[leftIndex, rightDisplayIndex]` pairs; the server grades
+ * them against the permutation it kept.
+ */
+export interface MatchingStudentConfig {
+  left: string[];
+  right: string[];
+}
+
+/**
+ * Sorting config as sent to the student client. `items` is shuffled
+ * server-side with a secret per-session permutation (so "already sorted" is no
+ * longer the answer); `correctOrder` is never sent. The student submits the
+ * arrangement as display-index positions; the server grades against the
+ * permutation it kept.
+ */
+export interface SortingStudentConfig {
+  items: string[];
+}
+
 export type QuestionConfig = FillInBlankConfig | MatchingConfig | SortingConfig;
+
+/** Type-specific data as delivered to the student client (answer key removed). */
+export type StudentQuestionConfig =
+  | FillInBlankConfig
+  | MatchingStudentConfig
+  | SortingStudentConfig;
 
 export interface Question {
   id: string;

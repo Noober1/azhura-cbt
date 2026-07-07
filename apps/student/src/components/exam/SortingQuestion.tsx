@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Question, SortingConfig } from "../../types";
+import type { Question, SortingStudentConfig } from "../../types";
 import { useExamStore } from "../../stores/exam";
 import { RichContent } from "./RichContent";
 
@@ -55,33 +55,25 @@ function SortableItem({ id, label }: SortableItemProps) {
   );
 }
 
-/** Deterministic Fisher-Yates shuffle seeded from a string (question id). */
-function shuffledIndices(n: number, seed: string): number[] {
-  const indices = Array.from({ length: n }, (_, i) => i);
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  for (let i = n - 1; i > 0; i--) {
-    h = (Math.imul(h, 1664525) + 1013904223) | 0;
-    const j = (h >>> 0) % (i + 1);
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  return indices;
-}
-
 export function SortingQuestion({ question, questionNumber }: Props) {
   const { answers, submitAnswer, questions } = useExamStore();
-  const items = ((question.config as SortingConfig)?.items) ?? [];
+  // The server sends `items` already shuffled by a secret per-session
+  // permutation, so the correct order is never pre-shown and "already sorted"
+  // is not the answer. The client works purely in display-index space and
+  // submits its arrangement of display indices; the server grades against the
+  // permutation it kept.
+  const items = ((question.config as SortingStudentConfig)?.items) ?? [];
 
-  // `order` holds the CURRENT order of original indices.
-  // e.g. order = [2, 0, 1] means item originally at index 2 is now first, etc.
-  // Default: deterministic shuffle (not sequential) so correct order is never pre-shown.
+  // `order` holds the CURRENT arrangement of display indices.
+  // e.g. order = [2, 0, 1] means the item shown at display position 2 is now
+  // first, etc. Default: identity (the server-shuffled order as received).
   const savedOrder = (() => {
     try {
       const v = answers[question.id]?.answerValue;
-      if (!v) return shuffledIndices(items.length, question.id);
+      if (!v) return items.map((_, i) => i);
       return JSON.parse(v) as number[];
     } catch {
-      return shuffledIndices(items.length, question.id);
+      return items.map((_, i) => i);
     }
   })();
 

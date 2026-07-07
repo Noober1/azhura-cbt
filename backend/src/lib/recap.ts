@@ -121,7 +121,8 @@ function gradeSession(
         q.correctOptionId,
         q.config,
         ans.selectedOptionId,
-        ans.answerValue
+        ans.answerValue,
+        { sessionId, questionId: q.id }
       )
     ) {
       totalCorrect++;

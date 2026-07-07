@@ -28,6 +28,7 @@ import { writeEventLog } from "../lib/log-files";
 import { findActiveSession, finalizeSession, gradeQuestion } from "../lib/exam-scoring";
 import { checkExamToken } from "../lib/exam-token";
 import { mergeAnswer, isEmptyAnswer, type StoredAnswer } from "../lib/answer-merge";
+import { sessionPermutation } from "../lib/session-shuffle";
 import { notifyRosterPatch } from "../lib/roster-events";
 import { buildRosterParticipant } from "../lib/roster";
 import { shuffle, applyQuestionOrder } from "../lib/question-order";
@@ -72,6 +73,7 @@ interface GradableQuestion {
  * the expired-finalize, and the normal submit paths so they can never diverge.
  */
 function gradeStored(
+  sessionId: string,
   gradable: GradableQuestion[],
   answerByQuestion: Map<string, StoredAnswer>
 ): { score: number; totalCorrect: number; totalWrong: number; totalEmpty: number } {
@@ -84,7 +86,7 @@ function gradeStored(
       totalEmpty++;
       continue;
     }
-    gradeQuestion(q.type ?? "multiple_choice", q.correctOptionId, q.config, ans?.selectedOptionId ?? null, ans?.answerValue ?? null)
+    gradeQuestion(q.type ?? "multiple_choice", q.correctOptionId, q.config, ans?.selectedOptionId ?? null, ans?.answerValue ?? null, { sessionId, questionId: q.id })
       ? totalCorrect++
       : totalWrong++;
   }
@@ -323,8 +325,18 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       optionsByQuestion.set(o.questionId, bucket);
     }
 
-    // correctOptionId intentionally excluded.
-    // config is sanitized per type: fill_in_blank answer stripped, sorting correctOrder stripped.
+    // correctOptionId intentionally excluded. config is sanitized per type so
+    // the answer key never reaches the client:
+    // - matching: left/right columns decoupled and the right column shuffled by
+    //   a secret per-session permutation (the pairing is the answer key, so it
+    //   must not be sent paired, and the identity mapping must not win).
+    // - sorting:  items shuffled by the same per-session permutation and
+    //   correctOrder stripped (authored order is the answer, so "already sorted"
+    //   must not win).
+    // - fill_in_blank: config omitted entirely (just a text input).
+    // The permutation is keyed to this student's session so grading (which
+    // re-derives it) matches; supervisors/admins previewing without a session
+    // see the unshuffled identity order (they never submit answers).
     return orderedIds.map((id) => {
       const q = questionById.get(id)!;
       const opts = optionsByQuestion.get(id) ?? [];
@@ -335,12 +347,21 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
 
       let studentConfig: unknown = null;
       if (qType === "matching" && rawConfig) {
-        studentConfig = { pairs: rawConfig.pairs ?? [] };
+        const pairs = (rawConfig.pairs ?? []) as { left: string; right: string }[];
+        const perm = session
+          ? sessionPermutation(session.id, id, pairs.length)
+          : pairs.map((_, i) => i);
+        studentConfig = {
+          left: pairs.map((p) => p.left),
+          right: perm.map((k) => pairs[k].right),
+        };
       } else if (qType === "sorting" && rawConfig) {
-        // Strip correctOrder — only items needed for display; grading stays server-side.
-        studentConfig = { items: rawConfig.items ?? [] };
+        const items = (rawConfig.items ?? []) as string[];
+        const perm = session
+          ? sessionPermutation(session.id, id, items.length)
+          : items.map((_, i) => i);
+        studentConfig = { items: perm.map((k) => items[k]) };
       }
-      // fill_in_blank: config not needed by student (just a text input); answer must not be exposed.
 
       return {
         id,
@@ -546,7 +567,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       // and return the same score instead of erroring. The stored answers are
       // authoritative (the exam is over), so this is deterministic.
       if (session.submitted) {
-        const graded = gradeStored(allQuestions, storedByQuestion);
+        const graded = gradeStored(sessionId, allQuestions, storedByQuestion);
         log.info("Idempotent re-submit served from stored answers", { examId, sessionId, userId: user.userId });
         return { ...graded, passingGrade };
       }
@@ -597,7 +618,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       }
 
       // Grade from the effective (merged) answers.
-      const result = gradeStored(allQuestions, effectiveByQuestion);
+      const result = gradeStored(sessionId, allQuestions, effectiveByQuestion);
 
       log.info("Exam submitted", {
         examId,

@@ -11,20 +11,35 @@ import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "../db";
 import { createLogger } from "./logger";
 import { gradeFillInBlank, gradeMatching, gradeSorting } from "./grading";
+import { sessionPermutation } from "./session-shuffle";
 import type { FillInBlankConfig, MatchingConfig, SortingConfig } from "@azhura/shared";
 
 const { exams, questions, examSessions, answers } = schema;
 
 /**
+ * Identifies which session/question is being graded so matching/sorting can
+ * re-derive the secret per-session permutation the questions endpoint used
+ * (see {@link sessionPermutation}). Required for matching/sorting; unused for
+ * MC/fill-in-blank.
+ */
+export interface GradeContext {
+  sessionId: string;
+  questionId: string;
+}
+
+/**
  * Grade a single question by type. Returns true if correct, false otherwise.
- * Handles MC, fill_in_blank, matching, and sorting.
+ * Handles MC, fill_in_blank, matching, and sorting. Matching/sorting need
+ * `ctx` to re-derive their per-session shuffle; without it they cannot be
+ * graded and return false (never a false pass).
  */
 export function gradeQuestion(
   type: string,
   correctOptionId: string | null,
   config: unknown,
   selectedOptionId: string | null,
-  answerValue: string | null
+  answerValue: string | null,
+  ctx?: GradeContext
 ): boolean {
   // MariaDB returns JSON columns as raw strings — parse before use.
   let cfg: unknown = config;
@@ -45,17 +60,21 @@ export function gradeQuestion(
       return gradeFillInBlank(answerValue, cfg as FillInBlankConfig);
     }
     case "matching": {
-      if (!answerValue || !cfg) return false;
+      if (!answerValue || !cfg || !ctx) return false;
       try {
-        return gradeMatching(JSON.parse(answerValue) as [number, number][], cfg as MatchingConfig);
+        const pairs = (cfg as MatchingConfig).pairs ?? [];
+        const perm = sessionPermutation(ctx.sessionId, ctx.questionId, pairs.length);
+        return gradeMatching(JSON.parse(answerValue) as [number, number][], perm);
       } catch {
         return false;
       }
     }
     case "sorting": {
-      if (!answerValue || !cfg) return false;
+      if (!answerValue || !cfg || !ctx) return false;
       try {
-        return gradeSorting(JSON.parse(answerValue) as number[], cfg as SortingConfig);
+        const items = (cfg as SortingConfig).items ?? [];
+        const perm = sessionPermutation(ctx.sessionId, ctx.questionId, items.length);
+        return gradeSorting(JSON.parse(answerValue) as number[], cfg as SortingConfig, perm);
       } catch {
         return false;
       }
@@ -224,7 +243,8 @@ export const finalizeSession = async (session: {
         q.correctOptionId,
         q.config,
         stored?.selectedOptionId ?? null,
-        stored?.answerValue ?? null
+        stored?.answerValue ?? null,
+        { sessionId: session.id, questionId: q.id }
       )
     ) {
       totalCorrect++;
