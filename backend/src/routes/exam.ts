@@ -749,6 +749,15 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
         );
       }
       await finalizeSession(inProgress);
+      // If the just-finalized expired session was THIS exam, it is now complete —
+      // block the retake. The `alreadyCompleted` check above ran before this
+      // finalize, so without this a student whose session for this exam expired
+      // unsubmitted could start a fresh attempt.
+      if (inProgress.examId === examId) {
+        throw new ConflictError(
+          "Anda sudah menyelesaikan ujian ini dan tidak dapat mengulanginya."
+        );
+      }
     }
 
     // Students may only start exams allowed for their group. The listing in

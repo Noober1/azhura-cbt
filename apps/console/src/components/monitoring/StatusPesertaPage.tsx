@@ -171,19 +171,21 @@ export function StatusPesertaPage() {
 
   const { dashboard, examSections } = useMemo(() => {
     const dash: RosterParticipant[] = [];
-    const byExam = new Map<string, RosterParticipant[]>();
+    // Group by examId, NOT title: two distinct exams that happen to share a title
+    // must stay separate sections (grouping by title merged them).
+    const byExam = new Map<string, { title: string; rows: RosterParticipant[] }>();
     for (const p of participants) {
       if (!p.exam) {
         dash.push(p);
       } else {
-        const list = byExam.get(p.exam.examTitle) ?? [];
-        list.push(p);
-        byExam.set(p.exam.examTitle, list);
+        const section = byExam.get(p.exam.examId) ?? { title: p.exam.examTitle, rows: [] };
+        section.rows.push(p);
+        byExam.set(p.exam.examId, section);
       }
     }
     return {
       dashboard: dash,
-      examSections: [...byExam.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+      examSections: [...byExam.entries()].sort((a, b) => a[1].title.localeCompare(b[1].title)),
     };
   }, [participants]);
 
@@ -364,8 +366,8 @@ export function StatusPesertaPage() {
           )}
 
           {/* One section per exam */}
-          {examSections.map(([title, rows]) => (
-            <section key={title} className="overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
+          {examSections.map(([examId, { title, rows }]) => (
+            <section key={examId} className="overflow-hidden rounded-[var(--radius-card)] border-[2.5px] border-[var(--nb-ink)] bg-surface shadow-[3px_3px_0_var(--nb-ink)]">
               <SectionHeader title={title} count={rows.length} />
               <table className="w-full border-t border-line text-sm">
                 <thead>
