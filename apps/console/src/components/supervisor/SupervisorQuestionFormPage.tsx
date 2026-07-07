@@ -156,8 +156,11 @@ export function SupervisorQuestionFormPage() {
   }
 
   function validate(): string | null {
+    // A media-only stem (image/audio/video question) has no text but must still
+    // be saveable — accept text OR embedded media.
     const textStripped = questionText.replace(/<[^>]*>/g, "").trim();
-    if (!textStripped) return "Teks soal tidak boleh kosong.";
+    const hasMedia = /<(img|audio|video|source|iframe)\b/i.test(questionText) || questionText.includes("/uploads/");
+    if (!textStripped && !hasMedia) return "Teks soal tidak boleh kosong.";
     if (questionType === "multiple_choice") {
       for (let i = 0; i < options.length; i++) {
         // An option with an attached image may have empty text ("pilih gambar
@@ -194,11 +197,20 @@ export function SupervisorQuestionFormPage() {
     if (!examId) return;
 
     const base = { text: questionText, type: questionType };
+    // Drop blank alternative answers so a whitespace-only student answer can't
+    // match a persisted empty candidate.
+    const cleanedFillInBlank = (() => {
+      const candidates = [fillInBlankConfig.answer, ...(fillInBlankConfig.answers ?? [])]
+        .map((a) => a.trim())
+        .filter((a) => a.length > 0);
+      const unique = [...new Set(candidates)];
+      return { answer: unique[0] ?? "", answers: unique };
+    })();
     const input =
       questionType === "multiple_choice"
         ? { ...base, options: toOptionPayload(options), correctOptionIndex: correctIndex }
         : questionType === "fill_in_blank"
-        ? { ...base, config: fillInBlankConfig }
+        ? { ...base, config: cleanedFillInBlank }
         : questionType === "matching"
         ? { ...base, config: matchingConfig }
         : { ...base, config: sortingConfig };

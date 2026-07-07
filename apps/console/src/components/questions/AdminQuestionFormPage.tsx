@@ -191,7 +191,12 @@ export function AdminQuestionFormPage() {
   }
 
   function validate(): string | null {
-    if (!questionText.replace(/<[^>]*>/g, "").trim()) return "Teks soal tidak boleh kosong.";
+    // A stem is valid when it has text OR embedded media — a media-only stem
+    // (image/audio/video question) has no text content but must still be
+    // saveable, so don't reject purely because tag-stripping leaves it empty.
+    const stemText = questionText.replace(/<[^>]*>/g, "").trim();
+    const hasMedia = /<(img|audio|video|source|iframe)\b/i.test(questionText) || questionText.includes("/uploads/");
+    if (!stemText && !hasMedia) return "Teks soal tidak boleh kosong.";
     if (questionType === "multiple_choice") {
       for (let i = 0; i < options.length; i++) {
         // An option with an attached image may have empty text ("pilih gambar
@@ -228,11 +233,20 @@ export function AdminQuestionFormPage() {
     if (!examId) return;
 
     const base = { text: questionText, type: questionType };
+    // Strip blank/whitespace alternative answers before saving: a persisted
+    // empty answer makes a whitespace-only student answer grade as correct.
+    const cleanedFillInBlank = (() => {
+      const candidates = [fillInBlankConfig.answer, ...(fillInBlankConfig.answers ?? [])]
+        .map((a) => a.trim())
+        .filter((a) => a.length > 0);
+      const unique = [...new Set(candidates)];
+      return { answer: unique[0] ?? "", answers: unique };
+    })();
     const input =
       questionType === "multiple_choice"
         ? { ...base, options: toOptionPayload(options), correctOptionIndex: correctIndex }
         : questionType === "fill_in_blank"
-        ? { ...base, config: fillInBlankConfig }
+        ? { ...base, config: cleanedFillInBlank }
         : questionType === "matching"
         ? { ...base, config: matchingConfig }
         : { ...base, config: sortingConfig };
