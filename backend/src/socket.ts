@@ -16,7 +16,7 @@ import { setExamListBroadcaster } from "./lib/exam-events";
 import { setRosterBroadcaster, notifyRosterPatch } from "./lib/roster-events";
 import { buildRosterParticipant, hasActiveExam } from "./lib/roster";
 import { sessionRegistry } from "./lib/session-registry";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "./db";
 import { createHeartbeatTracker } from "./lib/heartbeat";
 import { resolveBroadcast } from "./lib/broadcast";
@@ -160,13 +160,23 @@ export function initSocket(httpServer: HttpServer): SocketServer {
   // room. Either way, tell every client so the UI shows/hides the chat surface.
   setChatConfigApplier(async (enabled) => {
     if (enabled) {
-      const sockets = await io.fetchSockets();
-      for (const s of sockets) {
+      // Iterate the real local sockets (not fetchSockets' RemoteSocket
+      // snapshots) so identity written to `s.data` below persists on the actual
+      // socket that presence and message-send read from.
+      for (const s of io.sockets.sockets.values()) {
         const role = s.data.role as string;
         const userId = s.data.userId as string;
         if (role === "supervisor" || role === "admin") {
           s.join(CHAT_ROOM);
         } else if (role === "student" && !(await hasActiveExam(userId))) {
+          // Load chat identity the same way the initial-connect path does —
+          // otherwise presence shows a blank name and this student's messages are
+          // stamped with their NIS instead of their name.
+          if (!s.data.name) {
+            const identity = await getChatIdentity(userId);
+            s.data.name = identity?.name ?? (s.data.nis as string);
+            s.data.groupName = identity?.groupName ?? null;
+          }
           s.join(CHAT_ROOM);
           // Re-lock the composer for a student who was muted while chat was off,
           // so it doesn't look usable until their first send is rejected.
@@ -249,6 +259,32 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     // Guards async work (chat setup below, single-session heartbeat further down)
     // that may resolve after a fast disconnect — set true in the disconnect handler.
     let disconnected = false;
+
+    // Resolve the student's active EXAM session (#126). Anti-cheat violations
+    // persist into `cheat_logs`, whose `session_id` FK points at
+    // `exam_sessions.id` — NOT the login/single-session jti carried on the JWT.
+    // Resolve it once here so the violation handler stamps rows that actually
+    // satisfy the FK (previously every insert failed the FK and was swallowed).
+    if (role === "student") {
+      void (async () => {
+        try {
+          const active = await db
+            .select({ id: schema.examSessions.id, examId: schema.examSessions.examId })
+            .from(schema.examSessions)
+            .where(and(eq(schema.examSessions.userId, userId), eq(schema.examSessions.submitted, 0)))
+            .orderBy(desc(schema.examSessions.createdAt))
+            .limit(1);
+          if (disconnected) return;
+          socket.data.examSessionId = active[0]?.id ?? "";
+          socket.data.examId = active[0]?.examId ?? null;
+        } catch (error) {
+          log.warn("Failed to resolve active exam session for anti-cheat log", {
+            nis,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })();
+    }
 
     // Public chat (#17): tell the client whether chat is on, and — if it is —
     // pull this socket into the room with history + presence. Students join only
@@ -483,7 +519,15 @@ export function initSocket(httpServer: HttpServer): SocketServer {
           }
           socket.emit("heartbeat:ping");
         }, heartbeatPingIntervalMs);
-      })();
+      })().catch((error) => {
+        // A Redis outage at connect must not become an unhandled rejection; the
+        // socket simply runs without heartbeat/roster wiring until it retries.
+        log.warn("Socket connect wiring failed (session registry unreachable?)", {
+          nis,
+          socketId: socket.id,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      });
     }
 
     socket.on("disconnect", (reason) => {
@@ -506,10 +550,34 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       // Start the grace window: a reconnect with the same sessionId refreshes the
       // TTL back; otherwise the key expires and the account becomes free again.
       if (role === "student" && sessionId) {
+        void (async () => {
+        // Only the socket that currently owns the session may apply disconnect
+        // side effects. After a normal reconnect the OLD socket's late
+        // disconnect must NOT run these: the new socket shares the same
+        // sessionId, so startGrace/pausedAt/roster-disconnect would mark the
+        // now-live student offline and shrink the TTL the new socket keeps alive.
+        try {
+          const active = await sessionRegistry.getActive(userId);
+          if (active?.socketId && active.socketId !== socket.id) {
+            log.info("Stale socket disconnect ignored; session owned by a newer socket", {
+              nis,
+              socketId: socket.id,
+              ownerSocketId: active.socketId,
+            });
+            return;
+          }
+        } catch (error) {
+          // Best-effort: if the ownership check fails, fall through and apply the
+          // side effects (safer to over-report a disconnect than to strand state).
+          log.warn("Disconnect ownership check failed; proceeding", {
+            nis,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
         // Roster (#7): an exam-taker who drops stays visible as `disconnected`
         // (proctoring needs to see mid-exam drops); a dashboard student who
         // drops is simply removed from the list.
-        void hasActiveExam(userId)
+        await hasActiveExam(userId)
           .then((inExam) => {
             notifyRosterPatch(
               inExam
@@ -543,12 +611,13 @@ export function initSocket(httpServer: HttpServer): SocketServer {
               reason: error instanceof Error ? error.message : String(error),
             });
           });
-        void sessionRegistry.startGrace(userId, sessionId).catch((error) => {
+        await sessionRegistry.startGrace(userId, sessionId).catch((error) => {
           log.warn("Failed to start session grace period", {
             nis,
             reason: error instanceof Error ? error.message : String(error),
           });
         });
+        })();
       }
     });
   });

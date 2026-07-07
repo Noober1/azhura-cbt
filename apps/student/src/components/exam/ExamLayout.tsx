@@ -74,6 +74,11 @@ export const ExamLayout = ({ onExamSubmitted }: ExamLayoutProps) => {
   useEffect(() => {
     // 1. Dynamically restore session on mount (prevents WebView initialization race condition)
     useExamStore.getState().restoreSession();
+    // Reload answers persisted locally (offline-first): restoreSession only
+    // restores session metadata + questions, so without this a mid-exam refresh
+    // would show every question blank and a subsequent submit would wipe the
+    // answers already synced to the server.
+    void useExamStore.getState().loadPersistedAnswers();
 
     // 2. Connect websocket
     if (token) {

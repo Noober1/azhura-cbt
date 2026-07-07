@@ -31,10 +31,12 @@ const requireEnv = (name: string): string => {
   return value;
 };
 
-/** Reads an optional env var, returning `fallback` when unset/empty. */
+/** Reads an optional env var, returning `fallback` when unset OR set-but-empty. */
 const optionalEnv = (name: string, fallback: string): string => {
   const value = process.env[name];
-  return value === undefined || value.trim() === "" ? value ?? fallback : value;
+  // `"" ?? fallback` is "", so an empty var (e.g. `CORS_ORIGIN=`) previously
+  // slipped through as an empty string instead of using the fallback.
+  return value === undefined || value.trim() === "" ? fallback : value;
 };
 
 /** Parses a numeric env var, throwing if present but not a valid number. */

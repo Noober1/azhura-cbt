@@ -21,17 +21,22 @@ interface QuestionRendererProps {
 export const QuestionRenderer = ({ question, questionNumber }: QuestionRendererProps) => {
   const type = question.type ?? "multiple_choice";
 
+  // key={question.id} forces a remount when navigating between two questions of
+  // the same type. Without it React reuses the component instance and its local
+  // useState (pairing / order / input value) initialized from the PREVIOUS
+  // question bleeds into the next one — corrupting saved answers or crashing
+  // when the item counts differ.
   if (type === "fill_in_blank") {
-    return <FillInBlankQuestion question={question} questionNumber={questionNumber} />;
+    return <FillInBlankQuestion key={question.id} question={question} questionNumber={questionNumber} />;
   }
   if (type === "matching") {
-    return <MatchingQuestion question={question} questionNumber={questionNumber} />;
+    return <MatchingQuestion key={question.id} question={question} questionNumber={questionNumber} />;
   }
   if (type === "sorting") {
-    return <SortingQuestion question={question} questionNumber={questionNumber} />;
+    return <SortingQuestion key={question.id} question={question} questionNumber={questionNumber} />;
   }
 
-  return <MultipleChoiceQuestion question={question} questionNumber={questionNumber} />;
+  return <MultipleChoiceQuestion key={question.id} question={question} questionNumber={questionNumber} />;
 };
 
 function MultipleChoiceQuestion({ question, questionNumber }: QuestionRendererProps) {

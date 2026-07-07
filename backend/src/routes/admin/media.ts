@@ -13,17 +13,17 @@
 
 import { Elysia, t } from "elysia";
 import { randomUUID } from "crypto";
-import { and, desc, eq, like, sql } from "drizzle-orm";
+import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { db, schema } from "../../db";
 import { authPlugin } from "../../middleware/requireAuth";
 import { requireAdmin } from "../../middleware/requireAdmin";
-import { BadRequestError, NotFoundError } from "../../lib/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors";
 import { validateAndSave, deleteUploadFile } from "../../lib/upload";
 import { rehostExternalUrl, type RehostFailureReason } from "../../lib/rehost-media";
 import { createLogger } from "../../lib/logger";
 import type { MediaType } from "@azhura/shared";
 
-const { media } = schema;
+const { media, questions, options } = schema;
 
 const log = createLogger("AdminMedia");
 
@@ -211,8 +211,27 @@ export const adminMediaRoutes = new Elysia({ prefix: "/admin" })
     });
     if (!row) throw new NotFoundError("Media tidak ditemukan.");
 
-    await deleteUploadFile(row.filename, row.type);
+    // Refuse to delete media still embedded in a question stem or option, which
+    // would leave a broken image/audio/video in a live exam. The URL is stored
+    // relative, so match on it directly.
+    const pattern = `%${row.url}%`;
+    const [inStem, inOption] = await Promise.all([
+      db.select({ id: questions.id }).from(questions).where(like(questions.text, pattern)).limit(1),
+      db.select({ id: options.id }).from(options).where(
+        or(like(options.text, pattern), eq(options.imageUrl, row.url))
+      ).limit(1),
+    ]);
+    if (inStem.length > 0 || inOption.length > 0) {
+      throw new ConflictError(
+        "Media masih digunakan pada soal. Lepas media dari soal tersebut sebelum menghapusnya."
+      );
+    }
+
+    // Delete the DB row first, then the file: if the file removal fails we leave
+    // an orphan file (harmless, cleanable) rather than a DB row pointing at a
+    // file that no longer exists.
     await db.delete(media).where(eq(media.id, id));
+    await deleteUploadFile(row.filename, row.type);
 
     log.info("Media deleted", { id, filename: row.filename });
     return { success: true };

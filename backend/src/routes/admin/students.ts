@@ -331,22 +331,40 @@ export const adminStudentRoutes = new Elysia({ prefix: "/admin" })
         return { row: rowNum, nis, nama, grup: grupCode, batch, groupId, status: "valid" } as StudentImportRow;
       });
 
-      const validRows = rows.filter((r) => r.status === "valid");
+      let validRows = rows.filter((r) => r.status === "valid");
 
-      // Determine which valid NIS already exist in the DB (insert vs update).
+      // Look up existing users by NIS across ALL roles — NIS is globally unique.
+      // Filtering to students (as before) hid a NIS already taken by a supervisor
+      // or admin: the row previewed as a clean insert, then the confirm
+      // transaction 500'd on the unique-NIS constraint. A collision with a
+      // student is an update; a collision with a non-student is a hard error.
       const validNis = validRows.map((r) => r.nis);
       const existingUsers =
         validNis.length > 0
           ? await db
-              .select({ id: users.id, nis: users.nis })
+              .select({ id: users.id, nis: users.nis, role: users.role })
               .from(users)
-              .where(and(inArray(users.nis, validNis), eq(users.role, STUDENT_ROLE)))
+              .where(inArray(users.nis, validNis))
           : [];
-      const existingByNis = new Map(existingUsers.map((u) => [u.nis, u.id]));
+      const studentByNis = new Map(
+        existingUsers.filter((u) => u.role === STUDENT_ROLE).map((u) => [u.nis, u.id])
+      );
+      const nonStudentNis = new Set(
+        existingUsers.filter((u) => u.role !== STUDENT_ROLE).map((u) => u.nis)
+      );
+
+      // Reclassify rows whose NIS belongs to a non-student account as errors.
+      for (const row of validRows) {
+        if (nonStudentNis.has(row.nis)) {
+          row.status = "error";
+          row.error = `NIS '${row.nis}' sudah dipakai akun non-siswa (admin/pengawas).`;
+        }
+      }
+      validRows = validRows.filter((r) => r.status === "valid");
 
       // Pre-hash passwords for new students (avoid doing this in the confirm step).
       for (const row of validRows) {
-        row.isUpdate = existingByNis.has(row.nis);
+        row.isUpdate = studentByNis.has(row.nis);
         if (!row.isUpdate) {
           row.newId = randomUUID();
           row.plainPassword = generatePassword();

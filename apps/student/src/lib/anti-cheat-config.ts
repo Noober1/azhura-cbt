@@ -66,6 +66,14 @@ export const startInputHardening = (): (() => void) => {
     toast.error(`Pintasan terlarang diblokir: ${blocked}`);
   };
 
+  // True when the event originated inside a text-entry field, where selection
+  // and clipboard use are legitimate (the student's own answer input).
+  const isEditableTarget = (target: EventTarget | null): boolean => {
+    const el = target as HTMLElement | null;
+    if (!el || typeof el.closest !== "function") return false;
+    return el.closest("input, textarea, [contenteditable=''], [contenteditable='true']") !== null;
+  };
+
   // Block right-click context menu everywhere while anti-cheat is on.
   const handleContextMenu = (e: MouseEvent) => {
     if (!getConfig().enabled) return;
@@ -73,10 +81,14 @@ export const startInputHardening = (): (() => void) => {
   };
 
   // Block clipboard / selection / drag to prevent copying questions out or
-  // pasting prepared answers in.
+  // pasting prepared answers in — EXCEPT inside an editable field. A student
+  // must be able to type and select within their own answer input (fill-in-
+  // blank) and the setup/login fields; blocking `selectstart` there broke normal
+  // text selection and logged a false-positive violation on every attempt.
   const handleClipboard = (e: Event) => {
     const config = getConfig();
     if (!config.enabled || !config.blockShortcuts) return;
+    if (isEditableTarget(e.target)) return;
     e.preventDefault();
     logEvent("clipboard_blocked", `Aksi clipboard/seleksi diblokir: ${e.type}`);
   };
@@ -196,6 +208,8 @@ export function matchBlockedShortcut(e: ShortcutLike, key: string | undefined): 
     if (key === "i") return "Ctrl+Shift+I (DevTools)";
     if (key === "j") return "Ctrl+Shift+J (Console)";
     if (key === "c") return "Ctrl+Shift+C (Inspect)";
+    // Hard reload — must be blocked too, else it defeats the F5/Ctrl+R block.
+    if (key === "r") return "Ctrl+Shift+R (Hard Refresh)";
   }
 
   if (e.ctrlKey && !e.shiftKey && !e.altKey) {

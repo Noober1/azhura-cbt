@@ -13,6 +13,7 @@
 import axios from "axios";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
+import { useExamStore } from "../stores/exam";
 import { createLogger } from "./logger";
 import { toErrorContext } from "./errors";
 import { toast } from "sonner";
@@ -66,8 +67,13 @@ api.interceptors.response.use(
       const wasAuthenticated = Boolean(useAuthStore.getState().token);
       const isLoginAttempt = requestUrl.includes("/auth/login");
 
+      // An involuntary 401 mid-exam (transient token blip, single-session kick)
+      // must not wipe the offline answer cache — the student may resume. A fresh
+      // attempt clears it at session start, so isolation is still guaranteed.
+      const midExam = Boolean(useExamStore.getState().examSessionId);
+
       log.warn("Unauthorized response — logging out", toErrorContext(error));
-      await useAuthStore.getState().logout();
+      await useAuthStore.getState().logout({ preserveOfflineAnswers: midExam });
 
       if (wasAuthenticated && !isLoginAttempt) {
         toast.error(

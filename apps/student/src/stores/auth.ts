@@ -47,8 +47,14 @@ interface AuthState {
   initialized: boolean;
   /** Authenticates with NIS + password. @returns `true` on success. */
   login: (nis: string, password: string) => Promise<boolean>;
-  /** Clears all session state and persisted credentials. */
-  logout: () => Promise<void>;
+  /**
+   * Clears session state and persisted credentials. By default also purges the
+   * offline answer cache (shared-workstation isolation). Pass
+   * `preserveOfflineAnswers` for an involuntary mid-exam logout (a stray 401) so
+   * the student's in-progress answers survive a re-login; a genuinely new
+   * attempt clears them at session start (see {@link setExamSession}).
+   */
+  logout: (opts?: { preserveOfflineAnswers?: boolean }) => Promise<void>;
   /** Verifies the stored token with the server; auto-logs-out if invalid. */
   validateToken: () => Promise<boolean>;
   /**
@@ -160,7 +166,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: async () => {
+  logout: async (opts) => {
     set({ isLoading: true });
     try {
       // Disconnect the socket before clearing credentials so the backend's
@@ -175,8 +181,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       // Purge offline answer cache so the next participant on this machine
-      // starts with a clean slate (no cross-participant answer leakage).
-      await clearLocalDbAnswers();
+      // starts with a clean slate (no cross-participant answer leakage). Skipped
+      // on an involuntary mid-exam logout so a stray 401 doesn't blank the
+      // student's work — a genuinely new attempt clears it at session start.
+      if (!opts?.preserveOfflineAnswers) {
+        await clearLocalDbAnswers();
+      }
       clearPersistedAuth();
 
       set({

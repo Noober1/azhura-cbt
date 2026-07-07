@@ -15,7 +15,7 @@
  */
 
 import type { RosterParticipant, RosterSnapshot } from "@azhura/shared";
-import { and, eq, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { db, schema } from "../db";
 import { sessionRegistry, type ActiveSessionWithUser } from "./session-registry";
 import { toLiveness } from "./roster-liveness";
@@ -46,9 +46,13 @@ interface ExamRow extends StudentMeta {
 async function loadExamRows(userId?: string): Promise<ExamRow[]> {
   const conditions = [
     eq(examSessions.submitted, 0),
-    // Include paused sessions even if endTime is technically in the past —
-    // the timer resumes on reconnect, so they must stay visible on the roster.
-    or(gt(examSessions.endTime, Date.now()), isNotNull(examSessions.pausedAt)),
+    // Only sessions with genuine time remaining. Pausing (socket disconnect)
+    // sets `pausedAt` but does NOT freeze the clock — the reconnect path leaves
+    // `endTime` unchanged and the server clock keeps running — so once `endTime`
+    // has passed the exam is over regardless of pause. Keying off `pausedAt`
+    // here (as before) left a permanent ghost exam-taker on the roster for any
+    // student who dropped mid-exam and never returned.
+    gt(examSessions.endTime, Date.now()),
   ];
   if (userId) conditions.push(eq(examSessions.userId, userId));
 
@@ -118,8 +122,9 @@ export async function hasActiveExam(userId: string): Promise<boolean> {
       and(
         eq(examSessions.userId, userId),
         eq(examSessions.submitted, 0),
-        // A paused session counts as active — its timer resumes on reconnect.
-        or(gt(examSessions.endTime, Date.now()), isNotNull(examSessions.pausedAt))
+        // Active = genuine time remaining. Pause does not freeze the clock (see
+        // loadExamRows), so a paused session past endTime is over, not active.
+        gt(examSessions.endTime, Date.now())
       )
     );
   return Number(count) > 0;

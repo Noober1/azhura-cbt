@@ -12,6 +12,9 @@ node_modules
 dist
 dist-ssr
 
+# Runtime-uploaded exam media (user content, per-deployment — never commit)
+/backend/uploads/
+
 # Env files dengan kredensial nyata — jangan di-commit
 *.local
 backend/.env

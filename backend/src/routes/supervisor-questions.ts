@@ -26,7 +26,7 @@ import { findExternalMediaSrc } from "../lib/question-content";
 import { notifyExamListChanged } from "../lib/exam-events";
 import { createLogger } from "../lib/logger";
 
-const { exams, examGroups, examSessions, examSupervisors, groups, questions, options } = schema;
+const { exams, examGroups, examSessions, examSupervisors, groups, questions, options, answers } = schema;
 
 const log = createLogger("SupervisorQuestion");
 
@@ -361,8 +361,18 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
           if (body.correctOptionIndex >= body.options.length) {
             throw new BadRequestError("correctOptionIndex di luar jangkauan daftar opsi.");
           }
+          // Preserve option IDs positionally when the count is unchanged so
+          // already-recorded answers (which store selected_option_id, no FK)
+          // stay attached and historical recaps don't silently re-grade.
+          const oldOpts = await tx
+            .select({ id: options.id })
+            .from(options)
+            .where(eq(options.questionId, questionId))
+            .orderBy(asc(options.orderIndex));
+          const reuseIds = oldOpts.length === body.options.length;
           const newOptionRows = body.options.map((o, index) => ({
-            id: randomUUID(), questionId, text: o.text, orderIndex: index,
+            id: reuseIds ? oldOpts[index].id : randomUUID(),
+            questionId, text: o.text, orderIndex: index,
             imageUrl: o.imageUrl ?? null,
           }));
           const correctOptionId = newOptionRows[body.correctOptionIndex].id;
@@ -403,7 +413,10 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
   /**
    * DELETE /api/supervisor/exams/:examId/questions/:questionId
    *
-   * Deletes a question; its options cascade via FK. Blocked during active sessions.
+   * Deletes a question. Options cascade via FK, but answers do NOT
+   * (`answers.question_id` is ON DELETE NO ACTION), so recorded answers are
+   * removed first — otherwise the delete fails the FK with a 500. Blocked
+   * during active sessions.
    */
   .delete("/exams/:examId/questions/:questionId", async ({ params, user }) => {
     const { examId, questionId } = params;
@@ -429,6 +442,7 @@ export const supervisorQuestionRoutes = new Elysia({ prefix: "/supervisor" })
         .limit(1);
       if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
 
+      await tx.delete(answers).where(eq(answers.questionId, questionId));
       await tx.delete(questions).where(eq(questions.id, questionId));
     });
 

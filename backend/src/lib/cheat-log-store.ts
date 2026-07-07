@@ -48,8 +48,15 @@ export interface ViolationSocketData {
   nis: string;
   /** Set during chat setup; may be absent → empty string in the payload. */
   name?: string;
-  /** Active-session jti bound at handshake; "" when unbound. */
-  sessionId?: string;
+  /**
+   * The student's active **exam** session id (`exam_sessions.id`), resolved at
+   * socket connect. This — NOT the login/single-session jti — is what
+   * `cheat_logs.session_id` foreign-keys to; empty when the student is not
+   * mid-exam (violation is still broadcast live, just not persisted).
+   */
+  examSessionId?: string;
+  /** The exam being taken, for the supervisor feed; null when not mid-exam. */
+  examId?: string | null;
 }
 
 /** The raw, untrusted inbound event from a student client. */
@@ -87,19 +94,19 @@ export function buildViolationPayload(
     typeof event.details === "string" && event.details.length > 0
       ? event.details.slice(0, MAX_DETAILS)
       : undefined;
-  const timestamp =
-    typeof event.timestamp === "number" && Number.isFinite(event.timestamp)
-      ? event.timestamp
-      : Date.now();
+  // Stamp server time, never the client's: this is an audit record, so a
+  // tampered client must not be able to back-date or future-date a violation in
+  // the supervisor feed. (The `event.timestamp` field is intentionally ignored.)
+  const timestamp = Date.now();
 
   return {
     studentId: data.userId,
     nis: data.nis,
     name: data.name ?? "",
-    sessionId: data.sessionId ?? "",
-    // Not trusted from the client; the supervisor feed attributes by session.
-    // (A server-side sessionId→exam lookup could populate this later if needed.)
-    examId: null,
+    // The exam session id (resolved server-side at connect) — the value
+    // `cheat_logs.session_id` foreign-keys to, so the audit insert succeeds.
+    sessionId: data.examSessionId ?? "",
+    examId: data.examId ?? null,
     eventType,
     details,
     timestamp,

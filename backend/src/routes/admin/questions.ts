@@ -30,7 +30,7 @@ import { BadRequestError, ConflictError, NotFoundError } from "../../lib/errors"
 import { notifyExamListChanged } from "../../lib/exam-events";
 import { createLogger } from "../../lib/logger";
 
-const { exams, examGroups, examSessions, questions, options } = schema;
+const { exams, examGroups, examSessions, questions, options, answers } = schema;
 
 const log = createLogger("AdminQuestion");
 
@@ -263,19 +263,15 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       if (!existing) throw new NotFoundError("Soal tidak ditemukan.");
 
       const replacingOptions = body.options !== undefined;
-      let newOptionRows: {
-        id: string;
-        questionId: string;
-        text: string;
-        orderIndex: number;
-        imageUrl: string | null;
-      }[] = [];
-      let newCorrectOptionId: string | undefined;
-
       if (replacingOptions) {
         if (body.correctOptionIndex === undefined) {
           throw new BadRequestError(
             "correctOptionIndex wajib diisi saat mengganti opsi."
+          );
+        }
+        if (body.options!.length < 2) {
+          throw new BadRequestError(
+            "Soal pilihan ganda harus memiliki minimal 2 opsi."
           );
         }
         if (body.correctOptionIndex >= body.options!.length) {
@@ -283,14 +279,6 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
             "correctOptionIndex di luar jangkauan daftar opsi."
           );
         }
-        newOptionRows = body.options!.map((o, index) => ({
-          id: randomUUID(),
-          questionId: qid,
-          text: o.text,
-          orderIndex: index,
-          imageUrl: o.imageUrl ?? null,
-        }));
-        newCorrectOptionId = newOptionRows[body.correctOptionIndex].id;
       }
 
       if (body.text !== undefined && findExternalMediaSrc(body.text) !== null) {
@@ -304,8 +292,6 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
       if (body.orderIndex !== undefined) patch.orderIndex = body.orderIndex;
       if (body.type !== undefined) patch.type = body.type;
       if (body.config !== undefined) patch.config = body.config;
-      if (newCorrectOptionId !== undefined)
-        patch.correctOptionId = newCorrectOptionId;
 
       await db.transaction(async (tx) => {
         const [active] = await tx
@@ -315,12 +301,33 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
           .limit(1);
         if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
 
+        if (replacingOptions) {
+          // Preserve option IDs positionally when the option count is unchanged.
+          // Answers store `selected_option_id` (which has no FK), so regenerating
+          // IDs on every edit silently orphaned already-recorded answers and
+          // retroactively zeroed historical recap scores. Reusing the existing
+          // IDs in order keeps those answers attached across a text / correct-
+          // answer edit; IDs are only minted for a genuinely resized option set.
+          const oldOpts = await tx
+            .select({ id: options.id })
+            .from(options)
+            .where(eq(options.questionId, qid))
+            .orderBy(asc(options.orderIndex));
+          const reuseIds = oldOpts.length === body.options!.length;
+          const rows = body.options!.map((o, index) => ({
+            id: reuseIds ? oldOpts[index].id : randomUUID(),
+            questionId: qid,
+            text: o.text,
+            orderIndex: index,
+            imageUrl: o.imageUrl ?? null,
+          }));
+          patch.correctOptionId = rows[body.correctOptionIndex!].id;
+          await tx.delete(options).where(eq(options.questionId, qid));
+          await tx.insert(options).values(rows);
+        }
+
         if (Object.keys(patch).length > 0) {
           await tx.update(questions).set(patch).where(eq(questions.id, qid));
-        }
-        if (replacingOptions) {
-          await tx.delete(options).where(eq(options.questionId, qid));
-          await tx.insert(options).values(newOptionRows);
         }
       });
 
@@ -353,7 +360,10 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
 
   /**
    * DELETE /api/admin/exams/:examId/questions/:qid
-   * Deletes a question; its options cascade via FK.
+   * Deletes a question. Its options cascade via FK, but its answers do NOT
+   * (`answers.question_id` is ON DELETE NO ACTION), so any already-recorded
+   * answers are removed first — otherwise the delete fails the FK with an opaque
+   * 500. Blocked while a session is live (answers are still being written).
    * @throws {NotFoundError} when the question does not exist on this exam.
    */
   .delete("/exams/:examId/questions/:qid", async ({ params }) => {
@@ -372,6 +382,9 @@ export const adminQuestionRoutes = new Elysia({ prefix: "/admin" })
         .limit(1);
       if (active) throw new ConflictError(ACTIVE_SESSIONS_ERROR);
 
+      // Remove recorded answers for this question first (no cascade on the FK),
+      // then the question itself (options cascade automatically).
+      await tx.delete(answers).where(eq(answers.questionId, qid));
       await tx.delete(questions).where(eq(questions.id, qid));
     });
 

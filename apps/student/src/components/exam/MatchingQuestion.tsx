@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Question, MatchingConfig } from "../../types";
+import type { Question, MatchingStudentConfig } from "../../types";
 import { useExamStore } from "../../stores/exam";
 import { RichContent } from "./RichContent";
 
@@ -8,9 +8,9 @@ interface Props {
   questionNumber: number;
 }
 
-/** Left column item: index into config.pairs */
+/** Left column item: index into the `left` array (authored order). */
 type LeftIdx = number;
-/** Right column item: index into config.pairs */
+/** Right column item: index into the `right` array (server-shuffled display order). */
 type RightIdx = number;
 
 /** Color palette for visualizing pairs */
@@ -23,28 +23,17 @@ const PAIR_COLORS = [
   "border-cyan-400 bg-cyan-50",
 ];
 
-function shuffleIndices(n: number, seed: string): number[] {
-  const indices = Array.from({ length: n }, (_, i) => i);
-  // Deterministic shuffle based on question id so order is stable across renders.
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  for (let i = n - 1; i > 0; i--) {
-    h = (Math.imul(h, 1664525) + 1013904223) | 0;
-    const j = ((h >>> 0) % (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  return indices;
-}
-
 export function MatchingQuestion({ question, questionNumber }: Props) {
   const { answers, submitAnswer } = useExamStore();
-  const pairs = ((question.config as MatchingConfig)?.pairs) ?? [];
+  // The server sends the two columns decoupled, with `right` already shuffled by
+  // a secret per-session permutation — the client no longer shuffles (or ever
+  // sees the correct pairing). The student submits [leftIndex, rightDisplayIndex]
+  // pairs and the server grades them against the permutation it kept.
+  const config = question.config as MatchingStudentConfig | null;
+  const left = config?.left ?? [];
+  const right = config?.right ?? [];
 
-  // pairs[i].left matched to pairs[shuffledRight[j]].right where pairing[i] = j
-  // The right column is shown in shuffled order.
-  const [shuffledRight] = useState(() => shuffleIndices(pairs.length, question.id));
-
-  // pairing: leftIdx → rightIdx (real index in pairs, not shuffled position)
+  // pairing: leftIdx → rightDisplayIdx
   const savedPairing = (() => {
     try {
       const v = answers[question.id]?.answerValue;
@@ -64,27 +53,25 @@ export function MatchingQuestion({ question, questionNumber }: Props) {
     return leftIdx % PAIR_COLORS.length;
   }
 
-  function getRightColorIndex(realRightIdx: RightIdx): number | null {
-    const leftIdx = Object.entries(pairing).find(([, r]) => r === realRightIdx)?.[0];
+  function getRightColorIndex(rightIdx: RightIdx): number | null {
+    const leftIdx = Object.entries(pairing).find(([, r]) => r === rightIdx)?.[0];
     if (leftIdx === undefined) return null;
     return parseInt(leftIdx) % PAIR_COLORS.length;
   }
 
-  async function handleLeftClick(leftIdx: LeftIdx) {
+  function handleLeftClick(leftIdx: LeftIdx) {
     if (selectedLeft === leftIdx) {
       setSelectedLeft(null);
       return;
     }
     setSelectedLeft(leftIdx);
-    // If this left was already paired, unpair it to allow re-pairing.
   }
 
-  async function handleRightClick(shuffledPos: number) {
-    const realRightIdx = shuffledRight[shuffledPos];
+  async function handleRightClick(rightIdx: RightIdx) {
     if (selectedLeft === null) {
       // Click right without selecting left: unpair whatever was paired here.
       const leftIdx = parseInt(
-        Object.entries(pairing).find(([, r]) => r === realRightIdx)?.[0] ?? "-1"
+        Object.entries(pairing).find(([, r]) => r === rightIdx)?.[0] ?? "-1"
       );
       if (leftIdx >= 0) {
         const newPairing = { ...pairing };
@@ -94,15 +81,15 @@ export function MatchingQuestion({ question, questionNumber }: Props) {
       }
       return;
     }
-    // Complete a pairing: left → realRightIdx.
+    // Complete a pairing: left → rightIdx.
     const newPairing = { ...pairing };
     // Remove any existing pairing for this left and any existing pairing to this right.
     delete newPairing[selectedLeft];
     const prevLeft = parseInt(
-      Object.entries(newPairing).find(([, r]) => r === realRightIdx)?.[0] ?? "-1"
+      Object.entries(newPairing).find(([, r]) => r === rightIdx)?.[0] ?? "-1"
     );
     if (prevLeft >= 0) delete newPairing[prevLeft];
-    newPairing[selectedLeft] = realRightIdx;
+    newPairing[selectedLeft] = rightIdx;
     setPairing(newPairing);
     setSelectedLeft(null);
     await persist(newPairing);
@@ -133,14 +120,14 @@ export function MatchingQuestion({ question, questionNumber }: Props) {
       />
 
       <div className="text-xs text-muted-foreground">
-        Klik item di Kolom A, lalu klik pasangannya di Kolom B. ({pairedCount}/{pairs.length} dipasangkan)
+        Klik item di Kolom A, lalu klik pasangannya di Kolom B. ({pairedCount}/{left.length} dipasangkan)
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         {/* Left column */}
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kolom A</p>
-          {pairs.map((pair, leftIdx) => {
+          {left.map((label, leftIdx) => {
             const colorIdx = getColorIndex(leftIdx);
             const isSelected = selectedLeft === leftIdx;
             return (
@@ -156,29 +143,29 @@ export function MatchingQuestion({ question, questionNumber }: Props) {
                     : "border-soft bg-muted/50 text-foreground hover:border-soft dark:text-muted-foreground"
                 }`}
               >
-                {pair.left}
+                {label}
               </button>
             );
           })}
         </div>
 
-        {/* Right column (shuffled) */}
+        {/* Right column (server-shuffled) */}
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kolom B</p>
-          {shuffledRight.map((realRightIdx, shuffledPos) => {
-            const colorIdx = getRightColorIndex(realRightIdx);
+          {right.map((label, rightIdx) => {
+            const colorIdx = getRightColorIndex(rightIdx);
             return (
               <button
-                key={shuffledPos}
+                key={rightIdx}
                 type="button"
-                onClick={() => handleRightClick(shuffledPos)}
+                onClick={() => handleRightClick(rightIdx)}
                 className={`rounded-xl border-2 px-3 py-2.5 text-sm text-left font-medium transition-all ${
                   colorIdx !== null
                     ? `${PAIR_COLORS[colorIdx]} text-foreground`
                     : "border-soft bg-muted/50 text-foreground hover:border-primary/30 hover:border-2 dark:border-soft dark:text-muted-foreground"
                 } ${selectedLeft !== null ? "cursor-pointer hover:border-primary/50" : ""}`}
               >
-                {pairs[realRightIdx].right}
+                {label}
               </button>
             );
           })}

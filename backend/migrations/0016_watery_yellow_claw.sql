@@ -1,0 +1,1 @@
+ALTER TABLE `exam_sessions` ADD CONSTRAINT `uq_user_exam_session` UNIQUE(`user_id`,`exam_id`);

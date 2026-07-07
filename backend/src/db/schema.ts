@@ -181,23 +181,34 @@ export const options = mysqlTable("options", {
   imageUrl: varchar("image_url", { length: 500 }),
 });
 
-/** A single student's timed attempt at an exam. */
-export const examSessions = mysqlTable("exam_sessions", {
-  id: varchar("id", { length: 36 }).primaryKey(),
-  examId: varchar("exam_id", { length: 36 })
-    .notNull()
-    .references(() => exams.id),
-  userId: varchar("user_id", { length: 36 })
-    .notNull()
-    .references(() => users.id),
-  /** Epoch ms (matches frontend `Date.now()`). */
-  startTime: bigint("start_time", { mode: "number" }).notNull(),
-  endTime: bigint("end_time", { mode: "number" }).notNull(),
-  submitted: tinyint("submitted").notNull().default(0),
-  /** Set on socket disconnect mid-exam; cleared on reconnect. Remaining = endTime − pausedAt. */
-  pausedAt: bigint("paused_at", { mode: "number" }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+/**
+ * A single student's timed attempt at an exam. A user may have at most ONE
+ * session per exam — retakes are not allowed (an expired session is finalized in
+ * place, never replaced) — enforced by the `(user_id, exam_id)` unique index so
+ * a concurrent double-start cannot create two active sessions for one student.
+ */
+export const examSessions = mysqlTable(
+  "exam_sessions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    examId: varchar("exam_id", { length: 36 })
+      .notNull()
+      .references(() => exams.id),
+    userId: varchar("user_id", { length: 36 })
+      .notNull()
+      .references(() => users.id),
+    /** Epoch ms (matches frontend `Date.now()`). */
+    startTime: bigint("start_time", { mode: "number" }).notNull(),
+    endTime: bigint("end_time", { mode: "number" }).notNull(),
+    submitted: tinyint("submitted").notNull().default(0),
+    /** Set on socket disconnect mid-exam; cleared on reconnect. Remaining = endTime − pausedAt. */
+    pausedAt: bigint("paused_at", { mode: "number" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    userExamUnique: uniqueIndex("uq_user_exam_session").on(table.userId, table.examId),
+  })
+);
 
 /**
  * Per-session persisted question order (#2 randomization). When an exam has

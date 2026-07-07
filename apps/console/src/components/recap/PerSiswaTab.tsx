@@ -6,7 +6,7 @@
  * session-start range, paginated. Source: `GET /admin/recap/students/:id`.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { studentsApi } from "../../lib/students-api";
 import { examsApi } from "../../lib/exams-api";
 import { recapApi } from "../../lib/recap-api";
@@ -115,11 +115,17 @@ export function PerSiswaTab() {
     };
   }, [debouncedSearch, selected]);
 
+  // Monotonic request id: a filter change fires load twice (once directly, once
+  // via the page reset) and there is no cancellation, so an out-of-order
+  // response could paint a stale page. Only the newest request applies its
+  // result; older ones are discarded.
+  const loadReqId = useRef(0);
   const load = useCallback(async () => {
     if (!selected) {
       setData(null);
       return;
     }
+    const reqId = ++loadReqId.current;
     setLoading(true);
     setError(null);
     try {
@@ -130,12 +136,14 @@ export function PerSiswaTab() {
         page,
         limit: PAGE_SIZE,
       });
-      setData(res);
+      if (reqId === loadReqId.current) setData(res);
     } catch (err) {
-      setError(getErrorMessage(err, "Gagal memuat rekap siswa."));
-      setData(null);
+      if (reqId === loadReqId.current) {
+        setError(getErrorMessage(err, "Gagal memuat rekap siswa."));
+        setData(null);
+      }
     } finally {
-      setLoading(false);
+      if (reqId === loadReqId.current) setLoading(false);
     }
   }, [selected, examId, from, to, page]);
 

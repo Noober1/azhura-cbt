@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Azhura CBT** is a secure, offline-capable Computer-Based Test (CBT) system for Indonesian schools. It is a **Bun-workspaces monorepo** containing two frontends and a backend:
 
 - **`apps/student`** — the exam client: **Tauri 2.x** (desktop) + **React 19** + **TypeScript** + **Zustand**, locked-down (anti-cheat, fullscreen, offline-first, encrypted credential storage). Installed on exam workstations.
-- **`apps/console`** — the admin + supervisor web app (Vite + React 19, role-gated). Currently a scaffold; real features land via the admin epic (#6) and proctoring work (Fase 4).
+- **`apps/console`** — the admin + supervisor web app (Vite + React 19, role-gated): question authoring, imports, recaps, live proctoring, and settings. Further features continue under the admin epic (#6) and proctoring work (Fase 4).
 - **`packages/shared`** — shared domain types (and, going forward, zod schemas, api-client, socket-client). Single source of truth so the two frontends never drift.
 - **`backend`** — **Elysia + Bun** API: MySQL/MariaDB via **Drizzle ORM**, **Socket.io** realtime, **JWT** auth (`@elysiajs/jwt`), bcrypt.
 
@@ -24,7 +24,7 @@ azhura-exam/                       # workspace root — bun workspaces, orchestr
 │   │   ├── index.html, vite.config.ts, tsconfig*.json
 │   │   ├── components.json        # shadcn/ui config
 │   │   └── .env, .env.example, .env.local
-│   └── console/                   # pkg: azhura-console  (admin + supervisor web app — scaffold)
+│   └── console/                   # pkg: azhura-console  (admin + supervisor web app)
 │       ├── src/                   # App.tsx, main.tsx, index.css
 │       ├── index.html, vite.config.ts (dev port 1430), tsconfig*.json
 ├── packages/
@@ -114,7 +114,7 @@ Domain models (`User`, `Question`, `QuestionOption`, `ExamAnswer`, `ExamSession`
 3. **Real Backend (Elysia)**: The client talks to the `backend` API over HTTP (`lib/api.ts`) and Socket.io (`lib/socket.ts`). _(Run `bun run backend:dev` for data.)_
 4. **Protected Routes**: `routes/index.tsx` defines a `<ProtectedRoute>` wrapper redirecting unauthenticated users to `/login`.
 5. **Real-time Events via Socket.io**: The `socket` store subscribes to supervisor events (`alert-message`, `force-submit`, `kick`) from `backend/src/socket.ts`.
-6. **Anti-Cheat Engine**: Configurable via `.env`. Monitors keyboard shortcuts (F12, Ctrl+R, …), fullscreen state, focus loss (Alt+Tab), and optionally multi-monitor. OS-level lockdown (kiosk window, low-level keyboard hook) is planned in epic #24.
+6. **Anti-Cheat Engine**: Configurable via `.env`. Monitors keyboard shortcuts (F12, Ctrl+R, Ctrl+Shift+R, …), fullscreen state, focus loss (Alt+Tab), and optionally multi-monitor; violations broadcast to supervisors and persist to `cheat_logs`. OS-level lockdown (kiosk window `lib/kiosk.ts` #26, low-level keyboard hook `lib/kbd-lock.ts` #27) is implemented; code signing (#28) is pending.
 
 ## Routing & Pages (student)
 
@@ -227,11 +227,11 @@ Each app has its own `tsconfig.json` with `@/* → ./src/*`. Cross-package code 
 
 ## Important Caveats & TODOs
 
-1. **Stronghold Integration** (`auth.ts`): Token encryption in Tauri is stubbed (`// TODO`). Production should integrate `@tauri-apps/plugin-stronghold` to store JWTs securely.
-2. **Connectivity Queue** (`connectivity.ts`): Wired (#10). `submitAnswer()` saves locally immediately and debounces a per-answer push to the server; failures/offline enqueue in `pendingAnswers`. The queue flushes as one idempotent **batch** (`POST /exams/:examId/answers/batch`) on three triggers — browser `online`, socket reconnect (`lib/socket.ts`), and an exponential-backoff retry. Terminal failures (session submitted → 409, exam expired → 410) drop the queue instead of retrying. Final submit reconciles the in-memory superset and clears the queue.
-3. **Anti-Cheat Logging**: Violations are logged to the `anti-cheat` store but not uploaded to the server. Production should push violation logs to a supervisor endpoint.
-4. **Console is a scaffold**: `apps/console` only proves the workspace wiring. Real admin/supervisor features are tracked in GitHub issues (epic #6 + Fase 4).
-5. **OS-level lockdown** (epic #24): kiosk window (#26) + Windows low-level keyboard hook (#27) + code signing (#28) are planned, not yet implemented.
+1. **Stronghold Integration** (`lib/secure-store.ts`, #129): Implemented. On Tauri the JWT + identity are stored encrypted-at-rest in Stronghold (never localStorage); web falls back to plaintext localStorage. `auth.ts` migrates a pre-Stronghold native token out of localStorage on first run.
+2. **Connectivity Queue** (`connectivity.ts`): Wired (#10). `submitAnswer()` saves locally immediately and debounces a per-answer push to the server; failures/offline enqueue in `pendingAnswers`. The queue flushes as one idempotent **batch** (`POST /exams/:examId/answers/batch`) on three triggers — browser `online`, socket reconnect (`lib/socket.ts`), and an exponential-backoff retry. Terminal failures (400/401/403/404 dead session/token, 409 submitted, 410 expired) drop the queue instead of retrying. Final submit reconciles the in-memory superset and clears the queue.
+3. **Anti-Cheat Logging** (#126): Implemented. Violations are logged to the `anti-cheat` store, pushed to supervisors live over Socket.io, and persisted to `cheat_logs` (keyed to the student's exam session). Configurable via `.env`.
+4. **Console is a real app**: `apps/console` is the working admin + supervisor web app (question authoring, imports, recaps, live proctoring, settings). Further features continue under epic #6 + Fase 4.
+5. **OS-level lockdown** (epic #24): kiosk window (`lib/kiosk.ts`, #26) and the low-level keyboard hook (`lib/kbd-lock.ts`, #27) are implemented. **Code signing (#28) remains open.**
 
 ## Debugging Tips
 
