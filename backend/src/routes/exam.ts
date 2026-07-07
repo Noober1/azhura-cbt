@@ -27,6 +27,7 @@ import { createLogger } from "../lib/logger";
 import { writeEventLog } from "../lib/log-files";
 import { findActiveSession, finalizeSession, gradeQuestion } from "../lib/exam-scoring";
 import { checkExamToken } from "../lib/exam-token";
+import { mergeAnswer, isEmptyAnswer, type StoredAnswer } from "../lib/answer-merge";
 import { notifyRosterPatch } from "../lib/roster-events";
 import { buildRosterParticipant } from "../lib/roster";
 import { shuffle, applyQuestionOrder } from "../lib/question-order";
@@ -56,6 +57,44 @@ async function getRestrictedBatches(examId: string): Promise<number[] | null> {
     .from(examBatches)
     .where(eq(examBatches.examId, examId));
   return rows.length > 0 ? rows.map((r) => Number(r.batch)) : null;
+}
+
+interface GradableQuestion {
+  id: string;
+  type: string | null;
+  correctOptionId: string | null;
+  config: unknown;
+}
+
+/**
+ * Grades a set of questions against a map of effective answers (stored and/or
+ * merged), returning the score envelope. Shared by the idempotent re-submit,
+ * the expired-finalize, and the normal submit paths so they can never diverge.
+ */
+function gradeStored(
+  gradable: GradableQuestion[],
+  answerByQuestion: Map<string, StoredAnswer>
+): { score: number; totalCorrect: number; totalWrong: number; totalEmpty: number } {
+  let totalCorrect = 0;
+  let totalWrong = 0;
+  let totalEmpty = 0;
+  for (const q of gradable) {
+    const ans = answerByQuestion.get(q.id);
+    if (isEmptyAnswer(ans)) {
+      totalEmpty++;
+      continue;
+    }
+    gradeQuestion(q.type ?? "multiple_choice", q.correctOptionId, q.config, ans?.selectedOptionId ?? null, ans?.answerValue ?? null)
+      ? totalCorrect++
+      : totalWrong++;
+  }
+  const total = gradable.length;
+  return {
+    score: total > 0 ? Math.round((totalCorrect / total) * 100) : 0,
+    totalCorrect,
+    totalWrong,
+    totalEmpty,
+  };
 }
 
 export const examRoutes = new Elysia({ prefix: "/exams" })
@@ -235,6 +274,20 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       ),
       orderBy: (s, { desc }) => desc(s.createdAt),
     });
+
+    // Access control: a student may only read an exam's questions while they
+    // hold an in-progress session for it. Session creation is where the group,
+    // batch, active-window, and access-token gates are enforced (see POST
+    // /sessions) — without this check any authenticated student could pull the
+    // full question content of any exam straight from the API, bypassing the
+    // token gate entirely. Supervisors/admins are exempt (content preview).
+    if (user.role === "student" && !session) {
+      log.warn("Blocked questions read: no active session for student", {
+        examId,
+        userId: user.userId,
+      });
+      throw new ForbiddenError("Anda belum memulai ujian ini.");
+    }
 
     let orderedIds = canonicalIds;
     if (session) {
@@ -456,7 +509,7 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       const { answers: submitted, sessionId } = body;
 
       const session = await db.query.examSessions.findFirst({
-        columns: { id: true, submitted: true },
+        columns: { id: true, submitted: true, endTime: true },
         where: and(
           eq(examSessions.id, sessionId),
           eq(examSessions.userId, user.userId),
@@ -472,84 +525,79 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       });
       const passingGrade = exam?.passingGrade ?? 0;
 
-      // Idempotent re-submit (#8): a retry — or a race with server-side
-      // finalization (expiry/kick) — must not 409 the client into a stuck retry
-      // loop. When the session is already submitted, re-grade the answers already
-      // stored for it and return the same score instead of erroring. The stored
-      // answers are authoritative (the exam is over), so this is deterministic.
-      // Idempotent re-submit: re-grade from stored answers.
-      if (session.submitted) {
-        const storedQs = await db
-          .select({ id: questions.id, type: questions.type, correctOptionId: questions.correctOptionId, config: questions.config })
-          .from(questions)
-          .where(eq(questions.examId, examId));
-        const storedAnswers = await db
-          .select({ questionId: answers.questionId, selectedOptionId: answers.selectedOptionId, answerValue: answers.answerValue })
-          .from(answers)
-          .where(eq(answers.sessionId, sessionId));
-        const aMap = new Map(storedAnswers.map((a) => [a.questionId, a]));
-        let tc = 0, tw = 0, te = 0;
-        for (const q of storedQs) {
-          const a = aMap.get(q.id);
-          if (!a || (!a.selectedOptionId && !a.answerValue)) { te++; continue; }
-          gradeQuestion(q.type ?? "multiple_choice", q.correctOptionId, q.config, a.selectedOptionId ?? null, a.answerValue ?? null) ? tc++ : tw++;
-        }
-        const total = storedQs.length;
-        log.info("Idempotent re-submit served from stored answers", { examId, sessionId, userId: user.userId });
-        return { score: total > 0 ? Math.round((tc / total) * 100) : 0, totalCorrect: tc, totalWrong: tw, totalEmpty: te, passingGrade };
-      }
-
-      // Fetch all questions with type + config (answer key must never come from client).
+      // Fetch all questions (with type + config — the answer key must never come
+      // from the client) and the answers already stored server-side. Both feed
+      // every branch below, so load them once.
       const allQuestions = await db
         .select({ id: questions.id, type: questions.type, correctOptionId: questions.correctOptionId, config: questions.config })
         .from(questions)
         .where(eq(questions.examId, examId));
+      const storedRows = await db
+        .select({ questionId: answers.questionId, selectedOptionId: answers.selectedOptionId, answerValue: answers.answerValue })
+        .from(answers)
+        .where(eq(answers.sessionId, sessionId));
+      const storedByQuestion = new Map<string, StoredAnswer>(
+        storedRows.map((a) => [a.questionId, { selectedOptionId: a.selectedOptionId ?? null, answerValue: a.answerValue ?? null }])
+      );
 
-      const answerByQuestion = new Map(submitted.map((a) => [a.questionId, a]));
-
-      // Persist all answers and mark submitted atomically.
-      try {
-        await db.transaction(async (tx) => {
-          for (const q of allQuestions) {
-            const ans = answerByQuestion.get(q.id);
-            await tx
-              .insert(answers)
-              .values({
-                id: randomUUID(),
-                sessionId,
-                questionId: q.id,
-                selectedOptionId: ans?.selectedOptionId ?? null,
-                answerValue: ans?.answerValue ?? null,
-                timestamp: ans?.timestamp ?? Date.now(),
-                isFlagged: ans?.isFlagged ? 1 : 0,
-              })
-              .onDuplicateKeyUpdate({
-                set: {
-                  selectedOptionId: ans?.selectedOptionId ?? null,
-                  answerValue: ans?.answerValue ?? null,
-                  timestamp: ans?.timestamp ?? Date.now(),
-                  isFlagged: ans?.isFlagged ? 1 : 0,
-                },
-              });
-          }
-          await tx.update(examSessions).set({ submitted: 1 }).where(eq(examSessions.id, sessionId));
-        });
-      } catch (error) {
-        log.error("Exam submission transaction failed — rolled back", error, { examId, sessionId, userId: user.userId });
-        throw error;
+      // Idempotent re-submit (#8): a retry — or a race with server-side
+      // finalization (expiry/kick) — must not 409 the client into a stuck retry
+      // loop. When the session is already submitted, re-grade the stored answers
+      // and return the same score instead of erroring. The stored answers are
+      // authoritative (the exam is over), so this is deterministic.
+      if (session.submitted) {
+        const graded = gradeStored(allQuestions, storedByQuestion);
+        log.info("Idempotent re-submit served from stored answers", { examId, sessionId, userId: user.userId });
+        return { ...graded, passingGrade };
       }
 
-      // Grade all questions by type.
-      let totalCorrect = 0, totalWrong = 0, totalEmpty = 0;
-      for (const q of allQuestions) {
-        const ans = answerByQuestion.get(q.id);
-        const isEmpty = !ans || (!ans.selectedOptionId && !ans.answerValue);
-        if (isEmpty) { totalEmpty++; continue; }
-        gradeQuestion(q.type ?? "multiple_choice", q.correctOptionId, q.config, ans?.selectedOptionId ?? null, ans?.answerValue ?? null)
-          ? totalCorrect++ : totalWrong++;
+      // The effective answer per question = the merge of the client payload over
+      // the stored answers. A question the client omits keeps its autosaved
+      // answer — the final submit must never wipe already-synced work.
+      const effectiveByQuestion = new Map<string, StoredAnswer>();
+
+      const expired = Date.now() > session.endTime;
+      if (expired) {
+        // Time is up: do NOT accept late client writes (the /answer endpoint
+        // already rejects them). Finalize authoritatively from the stored
+        // answers and mark the session submitted. This closes the window in
+        // which a client could keep changing answers after the timer ran out.
+        for (const q of allQuestions) {
+          effectiveByQuestion.set(q.id, storedByQuestion.get(q.id) ?? { selectedOptionId: null, answerValue: null });
+        }
+        await db.update(examSessions).set({ submitted: 1 }).where(eq(examSessions.id, sessionId));
+        log.info("Late submit finalized from stored answers (time expired)", { examId, sessionId, userId: user.userId });
+      } else {
+        // Persist only fresh client answers (merge, never null-overwrite) and
+        // mark submitted atomically.
+        const submittedByQuestion = new Map(submitted.map((a) => [a.questionId, a] as const));
+        try {
+          await db.transaction(async (tx) => {
+            for (const q of allQuestions) {
+              const { effective, toPersist } = mergeAnswer(submittedByQuestion.get(q.id), storedByQuestion.get(q.id));
+              effectiveByQuestion.set(q.id, effective);
+              if (!toPersist) continue;
+              const row = {
+                selectedOptionId: toPersist.selectedOptionId ?? null,
+                answerValue: toPersist.answerValue ?? null,
+                timestamp: toPersist.timestamp ?? Date.now(),
+                isFlagged: toPersist.isFlagged ? 1 : 0,
+              };
+              await tx
+                .insert(answers)
+                .values({ id: randomUUID(), sessionId, questionId: q.id, ...row })
+                .onDuplicateKeyUpdate({ set: row });
+            }
+            await tx.update(examSessions).set({ submitted: 1 }).where(eq(examSessions.id, sessionId));
+          });
+        } catch (error) {
+          log.error("Exam submission transaction failed — rolled back", error, { examId, sessionId, userId: user.userId });
+          throw error;
+        }
       }
-      const total = allQuestions.length;
-      const result = { score: total > 0 ? Math.round((totalCorrect / total) * 100) : 0, totalCorrect, totalWrong, totalEmpty };
+
+      // Grade from the effective (merged) answers.
+      const result = gradeStored(allQuestions, effectiveByQuestion);
 
       log.info("Exam submitted", {
         examId,
