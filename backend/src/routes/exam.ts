@@ -137,7 +137,15 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
       .select(projection)
       .from(exams)
       .leftJoin(questions, eq(questions.examId, exams.id))
-      .leftJoin(examSessions, eq(examSessions.examId, exams.id));
+      // Scope the session join to THIS caller. Without the userId predicate the
+      // join multiplied every exam's questions by every student's sessions
+      // (questions × all sessions) before the aggregate collapsed them — a large
+      // intermediate result on a busy exam. Only the caller's own submitted
+      // session matters for the `completed` flag.
+      .leftJoin(
+        examSessions,
+        and(eq(examSessions.examId, exams.id), eq(examSessions.userId, user.userId))
+      );
 
     const scoped = restrictGroupId
       ? base.innerJoin(
