@@ -202,6 +202,12 @@ export function RichTextEditor({
     editorRef.current = editor;
   }, [editor]);
 
+  // `editable` is only read at creation, so react to later `disabled` changes —
+  // otherwise the editor stayed editable while the form was submitting.
+  useEffect(() => {
+    editor?.setEditable(!disabled);
+  }, [editor, disabled]);
+
   // Sync external value → editor only when value changes from outside (edit mode load,
   // form reset). useEffect ensures this never runs mid-render, avoiding infinite loops.
   useEffect(() => {

@@ -160,13 +160,23 @@ export function initSocket(httpServer: HttpServer): SocketServer {
   // room. Either way, tell every client so the UI shows/hides the chat surface.
   setChatConfigApplier(async (enabled) => {
     if (enabled) {
-      const sockets = await io.fetchSockets();
-      for (const s of sockets) {
+      // Iterate the real local sockets (not fetchSockets' RemoteSocket
+      // snapshots) so identity written to `s.data` below persists on the actual
+      // socket that presence and message-send read from.
+      for (const s of io.sockets.sockets.values()) {
         const role = s.data.role as string;
         const userId = s.data.userId as string;
         if (role === "supervisor" || role === "admin") {
           s.join(CHAT_ROOM);
         } else if (role === "student" && !(await hasActiveExam(userId))) {
+          // Load chat identity the same way the initial-connect path does —
+          // otherwise presence shows a blank name and this student's messages are
+          // stamped with their NIS instead of their name.
+          if (!s.data.name) {
+            const identity = await getChatIdentity(userId);
+            s.data.name = identity?.name ?? (s.data.nis as string);
+            s.data.groupName = identity?.groupName ?? null;
+          }
           s.join(CHAT_ROOM);
           // Re-lock the composer for a student who was muted while chat was off,
           // so it doesn't look usable until their first send is rejected.
