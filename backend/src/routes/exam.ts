@@ -85,6 +85,16 @@ interface GradableQuestion {
   config: unknown;
 }
 
+/** True for a MySQL/MariaDB unique-constraint violation (ER_DUP_ENTRY / 1062). */
+function isDuplicateKeyError(error: unknown): boolean {
+  const e = error as { code?: string; errno?: number; message?: string };
+  return (
+    e?.code === "ER_DUP_ENTRY" ||
+    e?.errno === 1062 ||
+    (typeof e?.message === "string" && e.message.includes("Duplicate entry"))
+  );
+}
+
 /**
  * Grades a set of questions against a map of effective answers (stored and/or
  * merged), returning the score envelope. Shared by the idempotent re-submit,
@@ -834,26 +844,61 @@ export const examRoutes = new Elysia({ prefix: "/exams" })
     // order atomically: a session must never exist without the order it was
     // created with, so relogin always replays the same sequence.
     const persistQuestionOrder = exam.randomizeQuestion === 1 && questionIds.length > 0;
-    await db.transaction(async (tx) => {
-      await tx.insert(examSessions).values({
-        id: sessionId,
-        examId,
-        userId: user.userId,
-        startTime: now,
-        endTime,
-      });
+    try {
+      await db.transaction(async (tx) => {
+        await tx.insert(examSessions).values({
+          id: sessionId,
+          examId,
+          userId: user.userId,
+          startTime: now,
+          endTime,
+        });
 
-      if (persistQuestionOrder) {
-        const shuffled = shuffle(questionIds);
-        await tx.insert(sessionQuestions).values(
-          shuffled.map((questionId, index) => ({
-            sessionId,
-            questionId,
-            orderIndex: index,
-          }))
-        );
+        if (persistQuestionOrder) {
+          const shuffled = shuffle(questionIds);
+          await tx.insert(sessionQuestions).values(
+            shuffled.map((questionId, index) => ({
+              sessionId,
+              questionId,
+              orderIndex: index,
+            }))
+          );
+        }
+      });
+    } catch (error) {
+      // A concurrent double-start hit the (user_id, exam_id) unique index. Collapse
+      // to the session that won the race: return it if still open, or block as
+      // completed if it was already submitted — never surface a raw 500.
+      if (isDuplicateKeyError(error)) {
+        const existing = await db.query.examSessions.findFirst({
+          columns: { id: true, startTime: true, endTime: true, submitted: true },
+          where: and(eq(examSessions.userId, user.userId), eq(examSessions.examId, examId)),
+        });
+        if (existing?.submitted) {
+          throw new ConflictError(
+            "Anda sudah menyelesaikan ujian ini dan tidak dapat mengulanginya."
+          );
+        }
+        if (existing) {
+          log.info("Concurrent session start collapsed to the winning session", {
+            examId,
+            userId: user.userId,
+            sessionId: existing.id,
+          });
+          return {
+            id: existing.id,
+            examId: exam.id,
+            userId: user.userId,
+            examTitle: exam.title,
+            totalQuestions: questionIds.length,
+            startTime: existing.startTime,
+            endTime: existing.endTime,
+            serverTime: Date.now(),
+          };
+        }
       }
-    });
+      throw error;
+    }
 
     log.info("Exam session created", {
       examId,
