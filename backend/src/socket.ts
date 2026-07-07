@@ -509,7 +509,15 @@ export function initSocket(httpServer: HttpServer): SocketServer {
           }
           socket.emit("heartbeat:ping");
         }, heartbeatPingIntervalMs);
-      })();
+      })().catch((error) => {
+        // A Redis outage at connect must not become an unhandled rejection; the
+        // socket simply runs without heartbeat/roster wiring until it retries.
+        log.warn("Socket connect wiring failed (session registry unreachable?)", {
+          nis,
+          socketId: socket.id,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      });
     }
 
     socket.on("disconnect", (reason) => {
@@ -532,10 +540,34 @@ export function initSocket(httpServer: HttpServer): SocketServer {
       // Start the grace window: a reconnect with the same sessionId refreshes the
       // TTL back; otherwise the key expires and the account becomes free again.
       if (role === "student" && sessionId) {
+        void (async () => {
+        // Only the socket that currently owns the session may apply disconnect
+        // side effects. After a normal reconnect the OLD socket's late
+        // disconnect must NOT run these: the new socket shares the same
+        // sessionId, so startGrace/pausedAt/roster-disconnect would mark the
+        // now-live student offline and shrink the TTL the new socket keeps alive.
+        try {
+          const active = await sessionRegistry.getActive(userId);
+          if (active?.socketId && active.socketId !== socket.id) {
+            log.info("Stale socket disconnect ignored; session owned by a newer socket", {
+              nis,
+              socketId: socket.id,
+              ownerSocketId: active.socketId,
+            });
+            return;
+          }
+        } catch (error) {
+          // Best-effort: if the ownership check fails, fall through and apply the
+          // side effects (safer to over-report a disconnect than to strand state).
+          log.warn("Disconnect ownership check failed; proceeding", {
+            nis,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
         // Roster (#7): an exam-taker who drops stays visible as `disconnected`
         // (proctoring needs to see mid-exam drops); a dashboard student who
         // drops is simply removed from the list.
-        void hasActiveExam(userId)
+        await hasActiveExam(userId)
           .then((inExam) => {
             notifyRosterPatch(
               inExam
@@ -569,12 +601,13 @@ export function initSocket(httpServer: HttpServer): SocketServer {
               reason: error instanceof Error ? error.message : String(error),
             });
           });
-        void sessionRegistry.startGrace(userId, sessionId).catch((error) => {
+        await sessionRegistry.startGrace(userId, sessionId).catch((error) => {
           log.warn("Failed to start session grace period", {
             nis,
             reason: error instanceof Error ? error.message : String(error),
           });
         });
+        })();
       }
     });
   });
