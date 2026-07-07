@@ -1,0 +1,186 @@
+# Manual release-channel promotion (issue #174).
+#
+# ── CHANNEL MODEL ────────────────────────────────────────────────────────────
+# Channels are TAGS on ONE registry (GHCR), not separate environments:
+#   • :edge    — filled AUTOMATICALLY by every push to main (docker-publish.yml).
+#   • :rc      — manual promotion of a validated :edge digest → one canary school.
+#   • :stable  — manual promotion of a validated :rc digest → all production
+#                schools. Production Watchtower tracks :stable ONLY.
+#
+# Promotion = RE-TAG THE SAME IMAGE DIGEST. We do NOT rebuild. `docker buildx
+# imagetools create` copies the existing manifest under a new tag, so the bytes
+# are byte-for-byte identical to what was validated — zero drift, no surprise
+# rebuild pulling newer base layers.
+#
+# The :stable target is gated behind the GitHub Environment `production`, so a
+# promotion to stable requires whatever approval / protection rules are
+# configured on that environment in repo settings before it runs.
+# ─────────────────────────────────────────────────────────────────────────────
+name: promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Which image(s) to promote"
+        type: choice
+        required: true
+        default: both
+        options:
+          - azhura-backend
+          - azhura-console
+          - both
+      from_channel:
+        description: "Source channel to promote FROM"
+        type: choice
+        required: true
+        default: edge
+        options:
+          - edge
+          - rc
+      to_channel:
+        description: "Target channel to promote TO"
+        type: choice
+        required: true
+        default: rc
+        options:
+          - rc
+          - stable
+      source_digest:
+        description: "Optional exact digest (sha256:...). If empty, resolves the current digest of from_channel."
+        type: string
+        required: false
+        default: ""
+
+# Minimal permissions: write packages (GHCR re-tag). No checkout step, so no
+# repo read is needed.
+permissions:
+  packages: write
+  # all other permissions default to none
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    # Gate :stable promotions behind the `production` environment so its manual
+    # approval / protection rules apply. Promotions to :rc resolve to no
+    # environment (empty string) and run without that gate.
+    environment: ${{ inputs.to_channel == 'stable' && 'production' || '' }}
+
+    steps:
+      - name: Validate inputs
+        env:
+          IMAGE_INPUT: ${{ inputs.image }}
+          FROM_CHANNEL: ${{ inputs.from_channel }}
+          TO_CHANNEL: ${{ inputs.to_channel }}
+          SOURCE_DIGEST: ${{ inputs.source_digest }}
+        run: |
+          set -euo pipefail
+
+          # Allow-list the image input (defense against injected/unexpected values).
+          case "$IMAGE_INPUT" in
+            azhura-backend|azhura-console|both) : ;;
+            *) echo "::error::invalid image: $IMAGE_INPUT"; exit 1 ;;
+          esac
+
+          # Enforce the directional ladder: edge → rc → stable only.
+          if [ "$FROM_CHANNEL" = "$TO_CHANNEL" ]; then
+            echo "::error::from_channel and to_channel must differ"
+            exit 1
+          fi
+          case "${FROM_CHANNEL}->${TO_CHANNEL}" in
+            "edge->rc"|"rc->stable") : ;;
+            *)
+              echo "::error::invalid promotion ${FROM_CHANNEL} -> ${TO_CHANNEL} (allowed: edge->rc, rc->stable)"
+              exit 1
+              ;;
+          esac
+
+          # If a digest was supplied, it must be a well-formed sha256 digest.
+          if [ -n "$SOURCE_DIGEST" ]; then
+            if ! printf '%s' "$SOURCE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
+              echo "::error::source_digest must match ^sha256:[a-f0-9]{64}$"
+              exit 1
+            fi
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote (re-tag digest, no rebuild)
+        env:
+          OWNER: ${{ github.repository_owner }}
+          IMAGE_INPUT: ${{ inputs.image }}
+          FROM_CHANNEL: ${{ inputs.from_channel }}
+          TO_CHANNEL: ${{ inputs.to_channel }}
+          SOURCE_DIGEST: ${{ inputs.source_digest }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+
+          # Owner must be lowercased for GHCR repository paths.
+          owner_lc="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+
+          # Expand the `both` convenience option into the concrete image list.
+          # Use an explicit array so iteration never word-splits or globs.
+          if [ "$IMAGE_INPUT" = "both" ]; then
+            images=(azhura-backend azhura-console)
+          else
+            images=("$IMAGE_INPUT")
+          fi
+
+          {
+            echo "## Release promotion"
+            echo ""
+            echo "- **Actor:** \`${ACTOR}\`"
+            echo "- **When:** $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- **Direction:** \`${FROM_CHANNEL}\` → \`${TO_CHANNEL}\`"
+            echo ""
+            echo "| Image | Digest | Result |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for image in "${images[@]}"; do
+            repo="${REGISTRY}/${owner_lc}/${image}"
+
+            # Resolve the digest to promote: either the explicit input, or the
+            # current digest the source channel tag points at.
+            if [ -n "$SOURCE_DIGEST" ]; then
+              digest="$SOURCE_DIGEST"
+            else
+              echo "Resolving current digest of ${repo}:${FROM_CHANNEL} ..."
+              digest="$(docker buildx imagetools inspect "${repo}:${FROM_CHANNEL}" \
+                --format '{{json .Manifest.Digest}}' | tr -d '"')"
+            fi
+
+            if ! printf '%s' "$digest" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
+              echo "::error::could not resolve a valid digest for ${repo}:${FROM_CHANNEL} (got '${digest}')"
+              exit 1
+            fi
+
+            # Defense-in-depth: confirm the digest actually exists under OUR repo
+            # namespace before re-tagging. This fails for any foreign/unknown
+            # digest, so an arbitrary source_digest can't be promoted into ours.
+            if ! docker buildx imagetools inspect "${repo}@${digest}" > /dev/null; then
+              echo "::error::digest ${digest} not found under ${repo}; refusing to promote"
+              exit 1
+            fi
+
+            echo "Promoting ${repo}@${digest} -> ${repo}:${TO_CHANNEL}"
+            # Re-tag by digest: copies the manifest, NO rebuild. The new tag
+            # points at the exact same bytes that were validated upstream.
+            docker buildx imagetools create \
+              --tag "${repo}:${TO_CHANNEL}" \
+              "${repo}@${digest}"
+
+            echo "| \`${image}\` | \`${digest}\` | \`:${TO_CHANNEL}\` updated |" >> "$GITHUB_STEP_SUMMARY"
+          done

@@ -203,9 +203,127 @@ docker compose up -d
 
 ---
 
-## Release Channels (lihat #174)
+## 8. Release Channels (edge → rc → stable)
 
-> Stub — diisi oleh issue #174. Ringkasnya: CI mem-publish `:edge` tiap push ke
-> `main`; promosi `:edge → :rc → :stable` bersifat manual dan dikontrol manusia.
-> Server produksi selalu pin `:stable`, dan Watchtower hanya menarik image
-> dengan label `watchtower.enable=true` (backend & console) pada tag `:stable`.
+Channel = **tag** pada satu registry (GHCR), **bukan** environment terpisah.
+Promosi antar-channel = **re-tag digest image yang sama** (bukan rebuild) — jadi
+byte-nya identik dengan yang sudah divalidasi, tanpa drift dan tanpa risiko
+build ulang menarik base layer baru.
+
+| Channel | Diisi oleh | Tujuan | Watchtower produksi |
+|---------|-----------|--------|---------------------|
+| `:edge` | **Otomatis** — tiap push ke `main` (`.github/workflows/docker-publish.yml`). | Build terbaru off-`main`, untuk uji internal. | **Tidak** ditrack. |
+| `:rc` | **Manual** — promosi dari digest `:edge` yang sudah divalidasi. | Satu sekolah **canary** (uji lapangan terbatas). | **Tidak** ditrack. |
+| `:stable` | **Manual** — promosi dari digest `:rc` yang sudah divalidasi. | **Semua** sekolah produksi. | **Ya** — hanya ini yang ditrack. |
+
+Server produksi selalu pin `:stable` (lihat `docker-compose.yml`), dan Watchtower
+hanya menyentuh service berlabel `watchtower.enable=true` (backend & console).
+Watchtower **tidak pernah** mentrack `:latest` atau `:edge`. Jadi produksi hanya
+menerima image yang sudah **sengaja dipromosikan manusia** ke `:stable`.
+
+### 8.1 Cara Promosi
+
+Promosi dijalankan lewat workflow **`promote.yml`** (Actions → `promote` → "Run
+workflow"). Karena ini re-tag **digest** (bukan rebuild), image yang masuk ke
+`:rc`/`:stable` byte-identik dengan yang sudah divalidasi.
+
+Input `workflow_dispatch`:
+
+| Input | Tipe | Keterangan |
+|-------|------|------------|
+| `image` | choice | `azhura-backend`, `azhura-console`, atau `both`. |
+| `from_channel` | choice | Channel sumber: `edge` atau `rc`. |
+| `to_channel` | choice | Channel target: `rc` atau `stable`. |
+| `source_digest` | string (opsional) | Jika diisi (`sha256:...`), promosikan **digest itu persis**. Jika kosong, resolusi otomatis ke digest yang sedang ditunjuk `from_channel`. |
+
+Hanya arah ladder yang valid: **`edge → rc`** dan **`rc → stable`** (workflow
+menolak arah lain). Alur normal:
+
+1. **`edge → rc`** — setelah build `:edge` lolos uji internal, jalankan
+   `promote` dengan `from_channel: edge`, `to_channel: rc`. Pasang `:rc` di
+   sekolah canary, amati satu siklus ujian.
+2. **`rc → stable`** — setelah canary stabil, jalankan `promote` dengan
+   `from_channel: rc`, `to_channel: stable`. Watchtower di tiap sekolah akan
+   menarik `:stable` baru pada poll berikutnya.
+
+> ⚠️ **PRASYARAT WAJIB — buat Environment `production` SEBELUM memakai workflow
+> ini.** Gate promosi `:stable` **hanya** ditegakkan oleh GitHub Environment
+> bernama **`production`**. Kamu **WAJIB** membuat Environment itu di repo
+> **Settings → Environments** dengan **minimal satu Required Reviewer** SEBELUM
+> workflow `promote.yml` dipakai. Tanpa Environment ini, GitHub menjalankan job
+> **tanpa gate sama sekali** — siapa pun aktor dengan izin `actions: write` bisa
+> mendorong digest apa pun ke `:stable` dan otomatis men-deploy ke **semua
+> sekolah**. Disarankan juga mengaktifkan **"Prevent self-review"** agar pengaju
+> tidak bisa meng-approve promosinya sendiri.
+>
+> **Gate `:stable`.** Job promosi ke `:stable` terikat pada GitHub Environment
+> bernama **`production`**. Atur *required reviewers* / protection rules pada
+> environment itu (Settings → Environments → `production`) supaya promosi ke
+> `:stable` **wajib di-approve manual** sebelum berjalan. Promosi ke `:rc` tidak
+> melewati gate ini. Setiap run mencatat *actor* + *timestamp* + digest di job
+> summary (siapa mempromosikan digest apa, dari channel mana ke mana).
+
+> **Catat digest yang dipromosikan.** Simpan changelog kecil (mis. di issue
+> rilis atau file) berisi digest tiap promosi ke `:stable`. Ini yang dipakai
+> saat rollback.
+
+### 8.2 Rollback
+
+Rollback = pin `:stable` kembali ke **digest stabil sebelumnya yang
+known-good**. Caranya jalankan ulang `promote` dengan `source_digest` eksplisit:
+
+- `image`: image yang bermasalah (atau `both`),
+- `from_channel`: `rc` — tidak dipakai untuk resolusi digest saat
+  `source_digest` diisi, TAPI validasi arah tetap berjalan, jadi pilih `rc` agar
+  lolos ke `stable`,
+- `to_channel`: `stable`,
+- `source_digest`: `sha256:<digest stable lama yang known-good>`.
+
+Karena `source_digest` diisi, workflow tidak meresolusi channel sumber — ia
+langsung re-tag digest lama itu menjadi `:stable`. Watchtower lalu "turun" ke
+image lama tersebut pada poll berikutnya.
+
+Mencari digest stabil sebelumnya:
+
+```bash
+# Digest yang sedang ditunjuk :stable sekarang
+docker buildx imagetools inspect \
+  ghcr.io/<owner>/azhura-backend:stable --format '{{.Manifest.Digest}}'
+```
+
+Jika tidak punya changelog digest, digest lama bisa ditemukan dari riwayat
+job summary `promote.yml` di tab Actions (tiap promosi mencatat digest-nya),
+atau dari daftar versi package di GHCR. **Disarankan** menyimpan changelog
+digest tiap promosi `:stable` agar rollback cepat dan tidak menebak.
+
+### 8.3 Jangan Update Saat Ujian Berlangsung
+
+**Promosi ke `:stable` TIDAK BOLEH dilakukan selama jendela ujian aktif.** Saat
+`:stable` berubah, Watchtower di sekolah akan menarik image baru dan
+**me-restart** container backend/console — ini bisa memutus sesi ujian siswa
+yang sedang berjalan (backend menyimpan sesi/heartbeat di redis & DB; restart
+backend = koneksi socket putus, siswa terganggu).
+
+Aturan operasional:
+
+- **Jadwalkan promosi `:stable` di luar jam ujian** (mis. malam / akhir pekan).
+- **Pause Watchtower selama jendela ujian** di tiap sekolah agar tidak ada
+  auto-pull/restart tak terduga:
+
+  ```bash
+  # Sebelum ujian mulai — bekukan auto-update
+  docker pause azhura-exam-watchtower-1        # atau: docker compose stop watchtower
+
+  # Setelah ujian selesai — aktifkan lagi
+  docker unpause azhura-exam-watchtower-1      # atau: docker compose start watchtower
+  ```
+
+  (Nama container = `<project>-watchtower-1`; cek dengan `docker ps`.)
+
+- Alternatif: naikkan `WATCHTOWER_POLL_INTERVAL` agar poll jarang, dan/atau
+  andalkan gate approval `production` sehingga promosi `:stable` tidak pernah
+  terjadi tanpa persetujuan manual yang sengaja dijadwalkan di luar jam ujian.
+
+> **Koordinasi dengan sesi aktif.** Selalu konfirmasi tidak ada sesi ujian aktif
+> (cek dashboard supervisor / data sesi di backend) sebelum mempromosikan ke
+> `:stable` dan sebelum meng-`unpause` Watchtower.
