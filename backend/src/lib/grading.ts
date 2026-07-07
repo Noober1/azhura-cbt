@@ -10,12 +10,13 @@ import type { FillInBlankConfig, SortingConfig } from "@azhura/shared";
 export function gradeFillInBlank(answer: string, config: FillInBlankConfig): boolean {
   if (!answer) return false;
   const normalized = answer.trim().toLowerCase();
-  const candidates = config.answers?.length
+  const list = Array.isArray(config.answers) && config.answers.length
     ? config.answers
     : config.answer
     ? [config.answer]
     : [];
-  return candidates.some((c) => c.trim().toLowerCase() === normalized);
+  // Tolerate a malformed config: only compare string candidates.
+  return list.some((c) => typeof c === "string" && c.trim().toLowerCase() === normalized);
 }
 
 /**

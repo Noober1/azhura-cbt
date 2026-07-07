@@ -57,7 +57,14 @@ export function gradeQuestion(
       return !!correctOptionId && selectedOptionId === correctOptionId;
     case "fill_in_blank": {
       if (!answerValue || !cfg) return false;
-      return gradeFillInBlank(answerValue, cfg as FillInBlankConfig);
+      try {
+        return gradeFillInBlank(answerValue, cfg as FillInBlankConfig);
+      } catch {
+        // A malformed config (e.g. `answers` not an array) must not throw — that
+        // would 500 submit/finalize/recap for the whole exam. Treat as wrong.
+        log.warn("fill_in_blank grading failed on malformed config", { config: cfg });
+        return false;
+      }
     }
     case "matching": {
       if (!answerValue || !cfg || !ctx) return false;
