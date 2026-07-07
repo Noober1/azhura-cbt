@@ -314,16 +314,21 @@ export const useExamStore = create<ExamState>((set, get) => {
       flaggedQuestions: { ...state.flaggedQuestions, [questionId]: isCurrentlyFlagged },
     }));
 
+    // Persist the flag by writing (or updating) the answer row. For an
+    // as-yet-unanswered question there is no row, so an empty one carries the
+    // flag — otherwise flagging a blank "ragu-ragu" question was lost on any
+    // restore. An empty answer stays empty for grading and is never null-wiped
+    // by the merge on final submit.
     const existingAnswer = get().answers[questionId];
-    if (existingAnswer) {
-      const updatedAnswer = {
-        ...existingAnswer,
-        isFlagged: isCurrentlyFlagged,
-        timestamp: Date.now(),
-      };
-      set((state) => ({ answers: { ...state.answers, [questionId]: updatedAnswer } }));
-      await saveAnswerToLocalDb(updatedAnswer);
-    }
+    const updatedAnswer: ExamAnswer = {
+      questionId,
+      selectedOptionId: existingAnswer?.selectedOptionId ?? null,
+      answerValue: existingAnswer?.answerValue ?? null,
+      isFlagged: isCurrentlyFlagged,
+      timestamp: Date.now(),
+    };
+    set((state) => ({ answers: { ...state.answers, [questionId]: updatedAnswer } }));
+    await saveAnswerToLocalDb(updatedAnswer);
   },
 
   recordMediaPlay: (key) => {
