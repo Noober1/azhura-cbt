@@ -59,9 +59,8 @@ jobs:
       matrix:
         include:
           # REQUIRED — exam workstation target. Builds .msi (WiX) + .exe (NSIS).
-          # --verbose temporarily surfaces signtool's real error on signing failures.
           - platform: windows-latest
-            args: "--verbose"
+            args: ""
           # OPTIONAL / internal QA — AppImage + .deb. Best-effort.
           - platform: ubuntu-latest
             args: ""
