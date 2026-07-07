@@ -10,7 +10,7 @@
  */
 
 import { Elysia, t } from "elysia";
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db, schema } from "../db";
 import { authPlugin } from "../middleware/requireAuth";
 import { supervisorActions } from "../socket";
@@ -30,9 +30,24 @@ import { readSettings } from "../lib/settings-service";
 import { createLogger } from "../lib/logger";
 import { writeEventLog } from "../lib/log-files";
 
-const { groups } = schema;
+const { groups, users } = schema;
 
 const log = createLogger("Supervisor");
+
+/**
+ * Guards a proctor action's target: kick / force-submit / dashboard-logout may
+ * only ever act on a student. Without this a supervisor could pass another
+ * admin's or supervisor's userId and kick or log them out.
+ */
+async function assertStudentTarget(userId: string): Promise<void> {
+  const target = await db.query.users.findFirst({
+    columns: { role: true },
+    where: eq(users.id, userId),
+  });
+  if (!target || target.role !== "student") {
+    throw new BadRequestError("Aksi ini hanya dapat dilakukan terhadap peserta ujian.");
+  }
+}
 
 /**
  * Shared Elysia schema for a broadcast/time-change target: one student, one or
@@ -299,7 +314,8 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
    */
   .post(
     "/force-submit",
-    ({ body, user }) => {
+    async ({ body, user }) => {
+      await assertStudentTarget(body.userId);
       supervisorActions.forceSubmitUser(body.userId, body.reason);
       log.info("Force submit", { target: body.userId, by: user.userId });
       writeEventLog(
@@ -328,6 +344,7 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
   .post(
     "/kick",
     async ({ body, user }) => {
+      await assertStudentTarget(body.userId);
       const reason = body.reason?.trim() || DEFAULT_KICK_REASON;
       const { finalized } = await kickStudent(body.userId, reason);
       log.info("Kick", { target: body.userId, by: user.userId, finalized });
@@ -368,6 +385,7 @@ export const supervisorRoutes = new Elysia({ prefix: "/supervisor" })
       const reason = body.reason?.trim() || DEFAULT_LOGOUT_REASON;
 
       if (body.userId) {
+        await assertStudentTarget(body.userId);
         const ok = await logoutDashboardUser(body.userId, reason);
         if (!ok) {
           throw new BadRequestError(

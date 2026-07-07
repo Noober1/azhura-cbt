@@ -19,10 +19,26 @@ import { AuthError, ConflictError } from "../lib/errors";
 import { createLogger } from "../lib/logger";
 import { writeEventLog } from "../lib/log-files";
 import { sessionRegistry } from "../lib/session-registry";
+import { createErrorReportRateLimiter } from "../lib/error-report-rate-limiter";
 
 const { users, groups } = schema;
 
 const log = createLogger("Auth");
+
+/**
+ * Brute-force guard on login, keyed per NIS (not per IP): a whole computer lab
+ * commonly logs in from a single NAT address, so an IP cap would lock out
+ * legitimate students, whereas capping attempts against one account stops
+ * credential brute-forcing without that false-positive. A generic sliding-window
+ * limiter (the same one the error-report ingest uses). ~15 attempts / 5 min is
+ * far above any honest student's need.
+ */
+const LOGIN_WINDOW_MS = 5 * 60 * 1000;
+const LOGIN_MAX_PER_WINDOW = 15;
+const loginLimiter = createErrorReportRateLimiter({
+  windowMs: LOGIN_WINDOW_MS,
+  maxInWindow: LOGIN_MAX_PER_WINDOW,
+});
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
   .use(
@@ -41,6 +57,14 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     "/login",
     async ({ jwt, body, set }) => {
       const { nis, password } = body;
+
+      // Throttle repeated attempts against a single account before touching the
+      // DB or bcrypt (which is deliberately slow).
+      if (!loginLimiter.check(nis, Date.now()).allowed) {
+        log.warn("Login throttled: too many attempts for NIS", { nis });
+        set.status = 429;
+        return { message: "Terlalu banyak percobaan masuk untuk akun ini. Coba lagi beberapa menit lagi." };
+      }
 
       const record = await db.query.users.findFirst({
         columns: {
